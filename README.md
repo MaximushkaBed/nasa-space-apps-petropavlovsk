@@ -10,6 +10,10 @@ The repository includes a Python downloader for NASA FIRMS hotspot observations.
 
 The initial study area is **North Kazakhstan Region (Северо-Казахстанская область, СКО)**.
 
+## Research
+
+[MODIS and VIIRS harmonization research and findings (RU)](docs/modis-viirs-research.md) covers FIRMS data access, the June 2023 Semey Ormany case study, and a proposed validation and MVP plan for North Kazakhstan Region.
+
 ## Next steps
 
 1. Register each participant on the official Space Apps website and select the local event.
