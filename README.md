@@ -16,6 +16,8 @@ From the repository root, run `python -m http.server 8000 --bind 127.0.0.1 --dir
 
 ## Research
 
+[Full Russian translation of the challenge and explanatory video](docs/challenge/README.md) includes the team's original DOCX and implementation notes.
+
 [MODIS and VIIRS harmonization research and findings (RU)](docs/modis-viirs-research.md) covers FIRMS data access, the June 2023 Semey Ormany case study, and a proposed validation and MVP plan for North Kazakhstan Region.
 
 [North Kazakhstan validation, 2020–2025 (RU)](docs/sko-validation/README.md) reports out-of-sample errors for two VIIRS platforms, the effect of documented outages, and how to reproduce the results.
