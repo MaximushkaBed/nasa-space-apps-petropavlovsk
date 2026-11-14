@@ -8,10 +8,11 @@
   <title>Пожары СКО · Спутниковый календарь</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=sko-atlas">
+  <link rel="stylesheet" href="styles.css?v=sko-burn-case">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=sko-atlas" type="module"></script>
+  <script src="app.js?v=sko-burn-case" type="module"></script>
   <script src="correlations.js?v=sko-layers" type="module"></script>
+  <script src="burn-case.js?v=2025-04-12" type="module"></script>
 </head>
 <body>
   <header class="topbar">
@@ -24,6 +25,7 @@
         <a href="#observations">Карта</a>
         <a href="#season-calendar">Календарь</a>
         <a href="#correlations">Что связано с огнём</a>
+        <a href="#kishkenekol-case">Кейс</a>
       </nav>
       <button class="quiet-button" id="open-method" type="button">
         <span class="info-icon" aria-hidden="true">i</span> Методика
@@ -51,6 +53,7 @@
           <div>
             <h2 id="map-title">Карта наблюдений</h2>
             <p id="map-subtitle">Сетка 2 × 2 км</p>
+            <a class="case-jump" href="#kishkenekol-case">Кейс у Кишкенеколя ↓</a>
           </div>
           <div class="map-filters">
             <label class="source-field">
@@ -248,6 +251,38 @@
         <p><strong>Облачность и наводнения.</strong> Облачность — средняя суточная по ERA5, отдельно от облачности в момент пролёта. Затопление — доля обследованных ячеек 500 м со спутниковым сигналом затопления по Sentinel‑1. В расчёте участвуют даты с покрытием от 25% площади СКО. Даты без покрытия исключаются. События NASA EONET доступны на мировой карте по датам сообщений. <a href="https://orbit.eodc.eu/dataset/GFM">Copernicus GFM</a> · <a href="https://eonet.gsfc.nasa.gov/docs/v3">NASA EONET</a></p>
         <p>Рельеф получен из Copernicus WorldDEM‑90 © DLR e.V. 2010–2014 и © Airbus Defence and Space GmbH 2014–2018, предоставленного в рамках Copernicus ЕС и ESA. Карта покрова содержит производные данные ESA WorldCover 2021 © ESA WorldCover consortium. Расстояния рассчитаны по данным GeoNames, CC BY.</p>
       </details>
+    </section>
+
+    <section id="kishkenekol-case" class="panel burn-case" aria-labelledby="burn-case-title">
+      <div class="panel-heading">
+        <div>
+          <h2 id="burn-case-title">Что произошло к юго-западу от Кишкенеколя</h2>
+          <p>12 апреля 2025 · Северо-Казахстанская область</p>
+        </div>
+        <button type="button" class="quiet-button" id="case-atlas" hidden>Детекции в атласе ↑</button>
+      </div>
+      <p class="case-result" id="case-result">Загрузка сравнения Sentinel‑2…</p>
+      <div class="case-layout" id="case-layout" hidden>
+        <div>
+          <div class="case-map" id="case-map" tabindex="0" aria-label="Сравнение спутниковых снимков и кадастровых участков"></div>
+          <label class="case-slider">
+            <span>6 апреля · До</span>
+            <input id="case-swipe" type="range" min="0" max="100" value="50" aria-label="Граница сравнения снимков до и после">
+            <span>16 апреля · После</span>
+          </label>
+        </div>
+        <div class="case-controls">
+          <fieldset>
+            <legend>Наложения на снимки</legend>
+            <label><input type="checkbox" id="case-scar" checked><i class="case-scar-key"></i> Вероятная гарь</label>
+            <label><input type="checkbox" id="case-parcels" checked><i class="case-parcel-key"></i> Участки ЕГКН</label>
+            <label><input type="checkbox" id="case-detections"><i class="case-fire-key"></i> Детекции VIIRS · 12 апреля</label>
+          </fieldset>
+          <p id="case-overlap"></p>
+          <p>Причина горения пока неизвестна. Пересечение рассчитано по контурам ЕГКН на дату выгрузки в ноябре 2026 года.</p>
+          <p class="case-credit">Снимки Sentinel‑2 в условных цветах. Содержит изменённые данные Copernicus Sentinel (2025), данные ЕГКН и подложку NASA GIBS. <a href="https://map.gov4c.kz/egkn/">Кадастровая карта</a> · <a href="https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/blob/main/docs/kishkenekol-case.md">Методика</a></p>
+        </div>
+      </div>
     </section>
 
     <footer class="workspace-footer">

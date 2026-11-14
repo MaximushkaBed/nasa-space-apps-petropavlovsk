@@ -610,6 +610,22 @@ async function start() {
   });
   $('activity-view').addEventListener('click', () => { mode = 'activity'; renderCalendar(); });
   $('deviation-view').addEventListener('click', () => { mode = 'deviation'; renderCalendar(); });
+  const caseMonth = calendar.months.findIndex((row) => row.month === '2025-04');
+  const caseButton = $('case-atlas');
+  if (mapAvailable && caseMonth >= 0) {
+    caseButton.hidden = false;
+    caseButton.addEventListener('click', async () => {
+      stopPlayback();
+      if ($('world-view').getAttribute('aria-pressed') === 'true') $('reset-map').click();
+      source = '2';
+      $('source').value = source;
+      $('fire-layer').checked = true;
+      await chooseMonth(caseMonth);
+      showDay(12);
+      map.fitBounds([[53.035, 71.68], [53.346, 72.013]], { padding: [22, 22], animate: false });
+      $('observations').scrollIntoView();
+    });
+  }
   $('app-status').hidden = true;
   const initial = calendar.months.findIndex((row) => row.month === '2025-04');
   await chooseMonth(initial < 0 ? 0 : initial);

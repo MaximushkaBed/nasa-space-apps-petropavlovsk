@@ -1,0 +1,26 @@
+{
+  "areaKm2": 168.1504,
+  "overlapKm2": 113.42301676695736,
+  "overlapPercent": 67.45331368046544,
+  "intersectingParcels": 9,
+  "bounds": [
+    [
+      53.035,
+      71.68
+    ],
+    [
+      53.346,
+      72.013
+    ]
+  ],
+  "clearPercent": 72.6,
+  "parcels": 21,
+  "detectionCount": 167,
+  "nearbyDetections": 163,
+  "sourceScenes": [
+    "S2C_42UXE_20250406_0_L2A",
+    "S2C_42UXD_20250406_0_L2A",
+    "S2C_42UXE_20250416_0_L2A",
+    "S2C_42UXD_20250416_0_L2A"
+  ]
+}
