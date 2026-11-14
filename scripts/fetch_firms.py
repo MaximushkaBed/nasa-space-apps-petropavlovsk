@@ -5,6 +5,7 @@ import argparse
 import csv
 from datetime import date, timedelta
 import io
+import json
 import math
 import os
 from pathlib import Path
@@ -24,6 +25,7 @@ SOURCES = (
     "VIIRS_NOAA20_SP", "VIIRS_NOAA20_NRT",
     "VIIRS_NOAA21_SP", "VIIRS_NOAA21_NRT",
 )
+REGIONS = {"sko": PROJECT_ROOT / "data/boundaries/north-kazakhstan.geojson"}
 
 
 class FirmsError(Exception):
@@ -53,6 +55,81 @@ def parse_date(value):
         return date.fromisoformat(value)
     except ValueError:
         raise argparse.ArgumentTypeError("Use a valid date: YYYY-MM-DD.") from None
+
+
+def load_region(name):
+    try:
+        feature = json.loads(REGIONS[name].read_text(encoding="utf-8"))
+        geometry = feature["geometry"]
+        geometry_polygons(geometry)
+        return geometry
+    except (KeyError, TypeError, json.JSONDecodeError):
+        raise FirmsError(f"Invalid boundary file for region {name}.") from None
+
+
+def geometry_polygons(geometry):
+    if geometry["type"] == "Polygon":
+        return [geometry["coordinates"]]
+    if geometry["type"] == "MultiPolygon":
+        return geometry["coordinates"]
+    raise FirmsError("Region geometry must be a Polygon or MultiPolygon.")
+
+
+def geometry_bbox(geometry):
+    points = [
+        point for polygon in geometry_polygons(geometry)
+        for ring in polygon for point in ring
+    ]
+    return parse_bbox(
+        f"{min(point[0] for point in points)},{min(point[1] for point in points)},"
+        f"{max(point[0] for point in points)},{max(point[1] for point in points)}"
+    )
+
+
+def ring_location(longitude, latitude, ring):
+    """Return 0 outside, 1 inside, or 2 on the boundary of a closed ring."""
+    inside = False
+    for (x1, y1), (x2, y2) in zip(ring, ring[1:]):
+        cross = (longitude - x1) * (y2 - y1) - (latitude - y1) * (x2 - x1)
+        if (
+            math.isclose(cross, 0.0, abs_tol=1e-10)
+            and min(x1, x2) <= longitude <= max(x1, x2)
+            and min(y1, y2) <= latitude <= max(y1, y2)
+        ):
+            return 2
+        if (y1 > latitude) != (y2 > latitude):
+            intersection = x1 + (latitude - y1) * (x2 - x1) / (y2 - y1)
+            if longitude < intersection:
+                inside = not inside
+    return int(inside)
+
+
+def contains_point(geometry, longitude, latitude):
+    """Include polygon boundaries, exclude hole interiors, and support islands."""
+    for polygon in geometry_polygons(geometry):
+        outer = ring_location(longitude, latitude, polygon[0])
+        if outer == 0:
+            continue
+        if outer == 2:
+            return True
+        holes = [ring_location(longitude, latitude, ring) for ring in polygon[1:]]
+        if 2 in holes or 1 not in holes:
+            return True
+    return False
+
+
+def filter_region(rows, geometry):
+    result = []
+    for row in rows:
+        try:
+            longitude, latitude = float(row["longitude"]), float(row["latitude"])
+        except (ValueError, TypeError):
+            raise FirmsError("FIRMS returned invalid observation coordinates.") from None
+        if not (math.isfinite(longitude) and math.isfinite(latitude)):
+            raise FirmsError("FIRMS returned invalid observation coordinates.")
+        if contains_point(geometry, longitude, latitude):
+            result.append(row)
+    return result
 
 
 def read_map_key(env_file):
@@ -144,31 +221,43 @@ def write_csv(path, columns, rows):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--bbox", required=True, type=parse_bbox, help="west,south,east,north")
+    area = parser.add_mutually_exclusive_group(required=True)
+    area.add_argument("--bbox", type=parse_bbox, help="west,south,east,north")
+    area.add_argument("--region", choices=REGIONS, help="Administrative boundary: sko = North Kazakhstan")
     parser.add_argument("--start", required=True, type=parse_date, help="First date, inclusive")
     parser.add_argument("--end", required=True, type=parse_date, help="Last date, inclusive")
     parser.add_argument(
         "--sources", nargs="+", choices=SOURCES, default=["MODIS_SP", "VIIRS_SNPP_SP"],
     )
-    parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "data/raw/firms")
+    parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args(argv)
     if args.start > args.end:
         parser.error("--start must be on or before --end.")
 
     try:
         map_key = read_map_key(PROJECT_ROOT / ".env")
+        geometry = load_region(args.region) if args.region else None
+        bbox = geometry_bbox(geometry) if geometry else args.bbox
+        output_dir = args.output_dir or PROJECT_ROOT / "data/raw/firms"
+        if args.region and args.output_dir is None:
+            output_dir /= args.region
         for source in dict.fromkeys(args.sources):
             columns = None
             observations = []
             for start, days in date_windows(args.start, args.end):
-                header, rows = fetch_csv(map_key, source, args.bbox, start, days)
+                header, rows = fetch_csv(map_key, source, bbox, start, days)
                 if columns is not None and header != columns:
                     raise FirmsError(f"CSV columns changed between requests for {source}.")
                 columns = header
                 observations.extend(rows)
-            path = args.output_dir / f"{source}_{args.start}_{args.end}.csv"
+            downloaded_count = len(observations)
+            if geometry:
+                observations = filter_region(observations, geometry)
+            path = output_dir / f"{source}_{args.start}_{args.end}.csv"
             write_csv(path, columns, observations)
             print(f"{source}: {len(observations)} observations saved to {path}")
+            if geometry:
+                print(f"  Excluded {downloaded_count - len(observations)} observations outside {args.region}.")
     except (FirmsError, OSError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1

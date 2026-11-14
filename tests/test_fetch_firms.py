@@ -18,6 +18,57 @@ OBSERVATION = "54.9,69.2,2024-07-01,1045,Terra\n"
 
 
 class FetchFirmsTests(unittest.TestCase):
+    def test_polygon_filter_handles_holes_islands_and_boundary_points(self):
+        geometry = {"type": "MultiPolygon", "coordinates": [
+            [
+                [[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]],
+                [[1, 1], [3, 1], [3, 3], [1, 3], [1, 1]],
+            ],
+            [[[6, 0], [7, 0], [7, 1], [6, 1], [6, 0]]],
+        ]}
+        self.assertTrue(firms.contains_point(geometry, 0.5, 0.5))
+        self.assertFalse(firms.contains_point(geometry, 2, 2))
+        self.assertTrue(firms.contains_point(geometry, 0, 2))
+        self.assertTrue(firms.contains_point(geometry, 1, 2))
+        self.assertTrue(firms.contains_point(geometry, 6.5, 0.5))
+        self.assertFalse(firms.contains_point(geometry, 5, 2))
+        self.assertEqual(firms.geometry_bbox(geometry), "0,0,7,4")
+
+    def test_sko_boundary_includes_petropavlovsk_and_excludes_omsk(self):
+        geometry = firms.load_region("sko")
+        self.assertTrue(firms.contains_point(geometry, 69.15, 54.87))
+        self.assertFalse(firms.contains_point(geometry, 73.37, 54.99))
+
+    def test_region_cli_clips_bbox_results_and_uses_separate_output_directory(self):
+        geometry = {"type": "Polygon", "coordinates": [
+            [[0, 0], [4, 0], [0, 4], [0, 0]],
+        ]}
+        payload = HEADER + "1,1,2024-07-01,1045,Terra\n3,3,2024-07-01,1045,Terra\n"
+        with tempfile.TemporaryDirectory() as directory, patch.object(firms, "urlopen") as request:
+            request.return_value.__enter__.return_value.read.return_value = payload.encode()
+            with patch.dict(os.environ, {"FIRMS_MAP_KEY": "test-key"}), patch.object(
+                firms, "load_region", return_value=geometry,
+            ), patch.object(firms, "PROJECT_ROOT", Path(directory)), redirect_stdout(io.StringIO()):
+                result = firms.main([
+                    "--region", "sko", "--start", "2024-07-01", "--end", "2024-07-01",
+                    "--sources", "MODIS_SP",
+                ])
+            self.assertEqual(result, 0)
+            self.assertIn("/MODIS_SP/0,0,4,4/1/2024-07-01", request.call_args.args[0].full_url)
+            path = Path(directory) / "data/raw/firms/sko/MODIS_SP_2024-07-01_2024-07-01.csv"
+            with path.open(newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["longitude"], "1")
+
+    def test_region_filter_rejects_invalid_coordinates(self):
+        geometry = {"type": "Polygon", "coordinates": [
+            [[0, 0], [4, 0], [0, 4], [0, 0]],
+        ]}
+        for longitude in ("nan", "inf", "invalid"):
+            with self.subTest(longitude=longitude), self.assertRaises(firms.FirmsError):
+                firms.filter_region([{"longitude": longitude, "latitude": "1"}], geometry)
+
     def test_date_windows_cover_inclusive_period_without_overlap(self):
         self.assertEqual(
             list(firms.date_windows(date(2024, 7, 1), date(2024, 7, 12))),
