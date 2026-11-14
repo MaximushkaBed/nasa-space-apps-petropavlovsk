@@ -1,4 +1,4 @@
-export function createFireOverlay(map, platformNames, number, withinRegion) {
+export function createFireOverlay(map, platformNames, number, withinRegion, allowPopup) {
   const canvas = L.DomUtil.create('canvas', 'fire-canvas', map.getPane('activity-cells'));
   const heat = document.createElement('canvas');
   const dot = document.createElement('canvas');
@@ -28,6 +28,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion) {
   let points = [];
   let regionalCount = 0;
   let mode = 'points';
+  let visible = true;
   let bins = new Map();
   let input;
 
@@ -58,7 +59,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion) {
   }
 
   function draw() {
-    canvas.hidden = points.length === 0;
+    canvas.hidden = !visible || points.length === 0;
     if (canvas.hidden) {
       bins.clear();
       return;
@@ -114,7 +115,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion) {
 
   map.on('moveend resize', draw);
   map.on('click', ({ containerPoint, latlng }) => {
-    if (mode !== 'points') return;
+    if (!allowPopup() || mode !== 'points') return;
     let selected;
     let nearest = 9;
     for (const bin of bins.values()) {
@@ -136,13 +137,14 @@ export function createFireOverlay(map, platformNames, number, withinRegion) {
     L.popup().setLatLng(latlng).setContent(content).openOn(map);
   });
 
-  return (data, display) => {
+  return (data, display, show = true) => {
     if (input !== data) {
       points = mercatorPoints(data);
-      regionalCount = points.filter((point) => point.regional).length;
+      regionalCount = points.reduce((total, point) => total + (point.regional ? point.weight : 0), 0);
     }
     input = data;
     mode = display;
+    visible = show;
     draw();
     return regionalCount;
   };

@@ -20,6 +20,7 @@ const timeFactors = [
   ['Наводнения в СКО', 'Затопления', 'Больше обследованных ячеек с сигналом затопления', 'Сравниваются только даты с достаточным радарным покрытием СКО. Площадь и расположение покрытия меняются по датам.'],
   ['Вулканическая активность', 'Вулканы', 'Больше сообщений о вулканической активности', 'Архив NASA EONET показан на мировой карте. Для корреляции нужны сопоставимые локальные наблюдения по датам.'],
   ['Другие природные события', 'Другие события', 'Больше сообщений о природных событиях', 'Штормы, землетрясения и другие события доступны на мировой карте. Для корреляции нужны сопоставимые локальные наблюдения по датам.'],
+  ['Индекс растительности NDVI', 'NDVI', 'Выше средний NDVI по СКО', 'Приближённая оценка Terra MODIS по цветовым интервалам NASA GIBS. Использован предыдущий завершённый 16-дневный композит. Значение повторяется для дней, которым соответствует один композит.'],
 ];
 const spaceFactors = [
   ['Плотность тепловых точек', 'Сигналы/км²', 'Больше ячейко-дней с сигналом на км²'],
@@ -93,7 +94,8 @@ function render() {
     : `До ${count.format(data.days)} суток · ${mode === 'within'
       ? 'дни сравниваются внутри отдельных месяцев каждого года.'
       : 'все даты сравниваются вместе, включая сезонные различия.'}`;
-  byId('factor-scope').textContent = spatial ? base : `${base} Наводнения: ${data.coverage.flood} совместимых дат.`;
+  byId('factor-scope').textContent = spatial ? base
+    : `${base} NDVI · ${count.format(data.coverage.ndvi)} дат. Наводнения · ${data.coverage.flood} совместимые даты.`;
   table.style.minWidth = spatial ? '' : '790px';
   table.replaceChildren();
   const headers = table.createTHead().insertRow();
@@ -138,7 +140,7 @@ function render() {
 }
 
 try {
-  const response = await fetch('data/correlations.json?v=sko-layers');
+  const response = await fetch('data/correlations.json?v=ndvi');
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   data = await response.json();
   for (const button of buttons) {

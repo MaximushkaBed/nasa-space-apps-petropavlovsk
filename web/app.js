@@ -1,8 +1,10 @@
 'use strict';
 
-import { createExtraLayers } from './map-layers.js?v=esri-imagery';
+import { createExtraLayers } from './map-layers.js?v=area-tools';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
-import { createFireOverlay } from './fire-overlay.js?v=atlas-workspace';
+import { createFireOverlay } from './fire-overlay.js?v=area-tools';
+import { createAreaAnalysis, inRing } from './area-analysis.js?v=area-tools';
+import { addDays, createPeriodPicker, daysBetween } from './period-picker.js?v=atlas-periods';
 
 const $ = (id) => document.getElementById(id);
 const sources = ['Aqua / MODIS', 'Suomi NPP / VIIRS', 'NOAA-20 / VIIRS'];
@@ -23,11 +25,15 @@ let calendar;
 let map;
 let weatherOverlay;
 let fireOverlay;
+let areaAnalysis;
 let fireDisplay = 'points';
 let worldArchive;
 let worldFrame;
 let worldRequest;
-let pendingDay;
+let pendingFrame;
+let activePeriod;
+let inspectionPeriod;
+let dailySatellite = '';
 let playbackTimer;
 let layerRequest = 0;
 let renderExtraLayers;
@@ -108,15 +114,6 @@ function createWorldOverview() {
     maxNativeZoom: 2, maxZoom: atlasMaxZoom, zIndex: 1,
     attribution: '<a href="https://nasa-gibs.github.io/gibs-api-docs/">Blue Marble · NASA GIBS</a>',
   });
-}
-
-function inRing(ring, lon, lat) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [aLon, aLat] = ring[i], [bLon, bLat] = ring[j];
-    if ((aLat > lat) !== (bLat > lat) && lon < (bLon - aLon) * (lat - aLat) / (bLat - aLat) + aLon) inside = !inside;
-  }
-  return inside;
 }
 
 function createMap(basemap, boundary) {
@@ -208,7 +205,8 @@ function createMap(basemap, boundary) {
   setBasemap(true);
   const activityPane = map.createPane('activity-cells');
   activityPane.style.zIndex = 415;
-  fireOverlay = createFireOverlay(map, () => worldArchive?.platforms ?? [], number, withinRegion);
+  fireOverlay = createFireOverlay(map, () => worldArchive?.platforms ?? [], number, withinRegion, () => $('area-panel').hidden);
+  areaAnalysis = createAreaAnalysis(map, () => !$('area-panel').hidden, getJSON, boundary.geometry);
   weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)));
 
   const labelPane = map.createPane('city-labels');
@@ -305,6 +303,7 @@ async function renderLayers() {
   const [, events] = await Promise.all([renderWeather(date, request), renderExtraLayers?.(month, date)]);
   if (request !== layerRequest) return;
   const items = (events ?? []).filter(Boolean);
+  if (activePeriod?.start !== activePeriod?.end && items.length) items.unshift(`Дата спутниковых слоёв и погоды · ${date} UTC`);
   const summary = $('visible-layer-summary');
   summary.replaceChildren(...items.map((item) => element('li', item)));
   summary.hidden = items.length === 0;
@@ -318,64 +317,121 @@ function showWorldFrame() {
   const selected = $('world-satellite').value;
   const points = worldFrame?.points ?? [];
   const selectedPoints = selected === '' ? points : points.filter((point) => point[2] === Number(selected));
-  const regionalCount = fireOverlay(visible ? selectedPoints : [], fireDisplay);
+  const drawnRegionalCount = fireOverlay(selectedPoints, fireDisplay, visible);
+  const regionalCount = worldFrame?.regionalCount ?? drawnRegionalCount;
+  const approximate = Boolean(worldFrame?.approximate);
+  const frameLabel = approximate ? $('frame-date').textContent : $('world-date').value;
+  areaAnalysis.render({ date: frameLabel, points: worldFrame ? selectedPoints : undefined,
+    platforms: worldArchive.platforms, approximate, cellDegrees: worldFrame?.cellDegrees,
+    regionalByPlatform: worldFrame?.regionalByPlatform, regionalExact: worldFrame?.regionalExact });
   $('map-summary').textContent = !visible ? 'Слой выключен'
-    : worldFrame ? `Мир · ${number.format(selectedPoints.length)} детекций` : 'Загрузка детекций…';
-  $('regional-count').textContent = visible && worldFrame ? `СКО · ${number.format(regionalCount)}` : '';
-  if (visible && worldFrame && !selectedPoints.length) {
-    mapStatus('За эту дату нет записей выбранных спутников. Покрытие неизвестно.');
+    : worldFrame ? `Мир · ${number.format(worldFrame.total ?? selectedPoints.length)} детекций` : 'Загрузка детекций…';
+  const regionalPrefix = approximate && !worldFrame.regionalExact ? '≈ ' : '';
+  $('regional-count').textContent = visible && worldFrame ? `СКО · ${regionalPrefix}${number.format(regionalCount)}` : '';
+  $('world-point-legend').lastChild.textContent = approximate ? ' Группы детекций за период' : ' Тепловые детекции';
+  $('sko-example').hidden = !visible || !worldFrame || regionalCount > 0 || approximate
+    || kishkenekolDay < worldArchive.first || kishkenekolDay > worldArchive.last;
+  if (worldFrame?.method === 'publisher') {
+    const through = worldFrame.coveredEnd;
+    const missing = worldFrame.missing?.reduce((days, gap) => days + 1 + daysBetween(gap.start, gap.end), 0) ?? 0;
+    $('archive-caption').textContent = `Архивные сводки без фильтра качества${through ? ` · до ${shortDate.format(new Date(through))}` : ''}${missing ? ` · пропусков: ${missing} дн.` : ''}`;
+  }
+  if (visible && worldFrame && (worldFrame.total ?? selectedPoints.length) === 0) {
+    mapStatus('За выбранное время нет записей выбранных спутников. Покрытие неизвестно.');
   }
 }
 
 async function loadWorldFrame() {
-  const day = $('world-date').value;
-  if (!worldArchive || !day) return;
-  if (worldFrame?.date === day) {
+  if (!worldArchive || !activePeriod) return;
+  const { start, end } = activePeriod;
+  const range = start !== end;
+  const params = new URLSearchParams({ start, end });
+  const satellite = $('world-satellite').value;
+  if (satellite !== '') params.set('satellite', satellite);
+  const path = range ? `/api/fires/period?${params}` : `/api/fires/${start}`;
+  if (worldFrame?.path === path) {
     showWorldFrame();
     return;
   }
-  if (pendingDay === day) return;
+  if (pendingFrame === path) return;
   worldRequest?.abort();
   const request = new AbortController();
   worldRequest = request;
-  pendingDay = day;
+  pendingFrame = path;
   worldFrame = undefined;
   showWorldFrame();
   try {
-    const response = await fetch(`/api/fires/${day}`, { signal: request.signal });
+    const response = await fetch(path, { signal: request.signal });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const frame = await response.json();
     if (request.signal.aborted) return;
-    worldFrame = frame;
+    worldFrame = { ...frame, path };
     showWorldFrame();
   } catch (error) {
     if (request.signal.aborted) return;
+    areaAnalysis.render({ date: $('frame-date').textContent, failed: true });
     $('regional-count').textContent = '';
+    $('sko-example').hidden = true;
     $('map-summary').textContent = 'Данные мира недоступны';
-    mapStatus('Мировые детекции за этот день не загрузились. Выберите другую дату или повторите попытку.');
+    mapStatus(range ? 'Не удалось загрузить сводку. Повторите попытку или выберите меньший период.'
+      : 'Мировые детекции за этот день не загрузились. Выберите другую дату или повторите попытку.');
   } finally {
-    if (worldRequest === request) pendingDay = undefined;
+    if (worldRequest === request) pendingFrame = undefined;
   }
 }
 
-function setWorldDate(day) {
-  if (day < worldArchive.first || day > worldArchive.last) return;
-  map.closePopup();
-  $('world-date').value = day;
-  $('frame-date').textContent = dayFormatter.format(new Date(day));
+const shortDate = new Intl.DateTimeFormat('ru', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
+
+function sliderRange(day) {
+  if (inspectionPeriod) return [inspectionPeriod.start, inspectionPeriod.end];
   const month = day.slice(0, 7);
+  const first = month === worldArchive.first.slice(0, 7) ? worldArchive.first : `${month}-01`;
+  const last = month === worldArchive.last.slice(0, 7) ? worldArchive.last :
+    frameDate(month, new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).getUTCDate());
+  return [first, last];
+}
+
+function setWorldPeriod(span) {
+  if (span.start < worldArchive.first || span.end > worldArchive.last || span.start > span.end) return;
+  activePeriod = span;
+  map.closePopup();
+  const { start, end } = span;
+  const range = start !== end;
+  const day = range ? end : start;
+  const filter = $('world-satellite');
+  const detailDays = worldArchive.periodDetailDays ?? 31;
+  const publisherRange = daysBetween(start, end) + 1 > detailDays;
+  if (publisherRange && !filter.disabled) dailySatellite = filter.value;
+  if (publisherRange) filter.value = '';
+  else if (filter.disabled) filter.value = dailySatellite;
+  filter.disabled = publisherRange;
+  filter.title = publisherRange ? `Фильтр по спутнику доступен для периодов до ${detailDays} дней.` : '';
+  $('world-date').value = day;
+  $('world-date').closest('label').hidden = range;
+  $('frame-date').textContent = range ? `${shortDate.format(new Date(start))} — ${shortDate.format(new Date(end))}`
+    : dayFormatter.format(new Date(day));
   const slider = $('day-slider');
-  slider.min = month === worldArchive.first.slice(0, 7) ? Number(worldArchive.first.slice(-2)) : 1;
-  slider.max = month === worldArchive.last.slice(0, 7) ? Number(worldArchive.last.slice(-2))
-    : new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).getUTCDate();
-  slider.value = Number(day.slice(-2));
+  const [first, last] = sliderRange(day);
+  slider.min = 0;
+  slider.max = daysBetween(first, last);
+  slider.value = daysBetween(first, day);
   slider.setAttribute('aria-valuetext', $('frame-date').textContent);
+  $('play-frames').disabled = first === last;
+  document.querySelector('.timeline-controls').hidden = range;
+  $('show-period-days').hidden = !range && !inspectionPeriod;
+  $('show-period-days').textContent = range ? 'Смотреть по дням' : 'Сводка за период';
   const through = worldArchive.through;
-  $('archive-caption').textContent = day === worldArchive.last && through?.startsWith(day)
+  $('archive-caption').textContent = range ? `Группы детекций · слои на ${shortDate.format(new Date(end))}`
+    : day === worldArchive.last && through?.startsWith(day)
     ? `Данные до ${through.slice(11, 16)} UTC`
     : 'Архив FIRMS · время UTC';
   renderLayers();
   return loadWorldFrame();
+}
+
+function setWorldDate(day, keepInspection = false) {
+  if (!keepInspection) inspectionPeriod = undefined;
+  return setWorldPeriod({ start: day, end: day, mode: 'day' });
 }
 
 async function loadArchive() {
@@ -386,7 +442,12 @@ async function loadArchive() {
     }
     $('world-date').min = worldArchive.first;
     $('world-date').max = worldArchive.last;
-    for (const id of ['world-satellite', 'world-date', 'day-slider', 'play-frames']) $(id).disabled = false;
+    createPeriodPicker(worldArchive, () => activePeriod, (span) => {
+      stopPlayback();
+      inspectionPeriod = undefined;
+      setWorldPeriod(span);
+    });
+    for (const id of ['world-satellite', 'world-date', 'day-slider', 'play-frames', 'open-period']) $(id).disabled = false;
     await setWorldDate(worldArchive.last);
   } catch (error) {
     $('frame-date').textContent = 'Архив недоступен';
@@ -401,16 +462,14 @@ function togglePlayback() {
     return;
   }
   const current = $('world-date').value;
-  const month = current.slice(0, 7);
-  const first = frameDate(month, Number($('day-slider').min));
-  const last = frameDate(month, Number($('day-slider').max));
+  const [first, last] = sliderRange(current);
   $('play-frames').textContent = 'Ⅱ Пауза';
   const advance = async (day) => {
     const playing = playbackTimer;
-    await setWorldDate(day);
+    await setWorldDate(day, true);
     if (playbackTimer !== playing) return;
     if (day === last) return stopPlayback();
-    playbackTimer = setTimeout(() => advance(frameDate(month, Number(day.slice(-2)) + 1)), 850);
+    playbackTimer = setTimeout(() => advance(addDays(day, 1)), 850);
   };
   playbackTimer = setTimeout(() => advance(current === last ? first : current), 0);
 }
@@ -570,7 +629,9 @@ function chooseMonth(index) {
 function setupPanels() {
   const analysis = $('analysis-panel');
   const layers = $('map-layer-controls');
+  const area = $('area-panel');
   const layersToggle = $('open-layers');
+  const areaToggle = $('open-area');
   const tabs = [...document.querySelectorAll('.tool-nav a')];
   const toolbar = document.querySelector('.topbar');
   new ResizeObserver(() => {
@@ -582,17 +643,20 @@ function setupPanels() {
     '#kishkenekol-case': ['kishkenekol-case', 'Кейс Кишкенеколя'],
   };
   function closePanel() {
-    const active = [...tabs, layersToggle].find((tab) => tab.getAttribute('aria-expanded') === 'true');
-    for (const tab of [...tabs, layersToggle]) tab.setAttribute('aria-expanded', 'false');
-    analysis.hidden = layers.hidden = true;
+    const active = [...tabs, layersToggle, areaToggle].find((tab) => tab.getAttribute('aria-expanded') === 'true');
+    for (const tab of [...tabs, layersToggle, areaToggle]) tab.setAttribute('aria-expanded', 'false');
+    analysis.hidden = layers.hidden = area.hidden = true;
+    areaAnalysis?.resetDraft();
     if (Object.hasOwn(sections, location.hash)) history.replaceState(null, '', '#observations');
     active?.focus({ preventScroll: true });
   }
   function openAnalysis(hash) {
     const selected = sections[hash];
     if (!Object.hasOwn(sections, hash)) return closePanel();
-    layers.hidden = true;
+    layers.hidden = area.hidden = true;
+    areaAnalysis?.resetDraft();
     layersToggle.setAttribute('aria-expanded', 'false');
+    areaToggle.setAttribute('aria-expanded', 'false');
     for (const tab of tabs) tab.setAttribute('aria-expanded', String(tab.hash === hash));
     for (const [id] of Object.values(sections)) $(id).hidden = id !== selected[0];
     $('analysis-heading').textContent = selected[1];
@@ -613,9 +677,17 @@ function setupPanels() {
     layers.hidden = false;
     layersToggle.setAttribute('aria-expanded', 'true');
   });
+  areaToggle.addEventListener('click', () => {
+    if (!area.hidden) return closePanel();
+    closePanel();
+    area.hidden = false;
+    areaToggle.setAttribute('aria-expanded', 'true');
+    areaAnalysis?.opened();
+  });
   for (const button of document.querySelectorAll('[data-close-panel]')) button.addEventListener('click', closePanel);
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !$('method').open && (!analysis.hidden || !layers.hidden)) closePanel();
+    if (event.key === 'Escape' && !$('method').open && !$('period-picker').open
+      && (!analysis.hidden || !layers.hidden || !area.hidden)) closePanel();
   });
   window.addEventListener('hashchange', () => openAnalysis(location.hash));
   if (Object.hasOwn(sections, location.hash)) openAnalysis(location.hash);
@@ -631,6 +703,13 @@ async function start() {
     ]);
     calendar = regionalCalendar;
     const reset = createMap(basemap, boundary);
+    $('sko-example').addEventListener('click', () => {
+      stopPlayback();
+      dailySatellite = '';
+      $('world-satellite').value = '';
+      reset();
+      setWorldDate(kishkenekolDay);
+    });
     for (const id of ['fire-layer', 'fire-points', 'fire-heat']) $(id).disabled = false;
     $('local-layers').disabled = false;
     const extraControls = $('extra-layer-controls');
@@ -671,7 +750,8 @@ async function start() {
         }
         const day = frameDate(row.month, counts.indexOf(largest) + 1);
         const satellite = ['Aqua', 'Suomi NPP', 'NOAA-20'][platform];
-        $('world-satellite').value = String(worldArchive.platforms.indexOf(satellite));
+        dailySatellite = String(worldArchive.platforms.indexOf(satellite));
+        $('world-satellite').value = dailySatellite;
         $('fire-layer').checked = true;
         closePanel();
         stopPlayback();
@@ -689,7 +769,8 @@ async function start() {
       if (!worldArchive) return;
       stopPlayback();
       closePanel();
-      $('world-satellite').value = String(worldArchive.platforms.indexOf('NOAA-20'));
+      dailySatellite = String(worldArchive.platforms.indexOf('NOAA-20'));
+      $('world-satellite').value = dailySatellite;
       $('fire-layer').checked = true;
       map.fitBounds([[53.035, 71.68], [53.346, 72.013]], { padding: [22, 70], animate: false });
       setWorldDate(kishkenekolDay);
@@ -712,7 +793,19 @@ async function start() {
     });
     $('day-slider').addEventListener('input', ({ target }) => {
       stopPlayback();
-      setWorldDate(frameDate($('world-date').value.slice(0, 7), Number(target.value)));
+      const [first] = sliderRange($('world-date').value);
+      setWorldDate(addDays(first, Number(target.value)), true);
+    });
+    $('show-period-days').addEventListener('click', () => {
+      stopPlayback();
+      if (inspectionPeriod) {
+        const span = inspectionPeriod;
+        inspectionPeriod = undefined;
+        setWorldPeriod(span);
+      } else {
+        inspectionPeriod = activePeriod;
+        setWorldDate(activePeriod.start, true);
+      }
     });
     $('play-frames').addEventListener('click', togglePlayback);
     const initial = calendar.months.findIndex((row) => row.month === kishkenekolDay.slice(0, 7));

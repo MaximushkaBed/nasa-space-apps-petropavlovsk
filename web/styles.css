@@ -62,6 +62,7 @@ body { overflow: hidden; }
 .workspace, .map-panel, #map { position: fixed; inset: 0; }
 .workspace { height: 100dvh; }
 #map { background: #102440; font-family: inherit; }
+#map.selecting-area { cursor: crosshair; }
 .topbar { position: absolute; z-index: 700; top: 12px; inset-inline: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; pointer-events: none; }
 .wordmark, .map-filters, .tool-nav { display: flex; align-items: center; gap: 5px; pointer-events: auto; }
 .wordmark { gap: 7px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 5px; background: #07132df2; text-decoration: none; font-weight: 710; white-space: nowrap; }
@@ -70,6 +71,23 @@ body { overflow: hidden; }
 .tool-nav .quiet-button[aria-expanded=true] { border-color: var(--sky); color: var(--sky); }
 .atlas-panel { position: absolute; z-index: 650; top: var(--panel-top, 62px); right: 12px; max-height: calc(100dvh - var(--panel-top, 62px) - 14px); overflow: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid #45638d; border-radius: 6px; background: #091a35f7; }
 .analysis-panel { width: min(1080px, calc(100% - 82px)); }
+.area-panel { width: min(340px, calc(100% - 60px)); }
+.area-tools { margin-top: 9px; width: fit-content; max-width: 100%; flex-wrap: wrap; }
+.area-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.area-presets button { padding: 4px 8px; min-height: 28px; }
+.radius-label, .area-search { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 9px; font-size: 12px; }
+.area-search label { flex-basis: 100%; color: var(--muted); }
+.radius-label input, .area-search input { background: #112648; color: var(--text); border: 1px solid #355787; border-radius: 4px; padding: 6px; min-width: 0; }
+.radius-label input { width: 90px; }
+.area-search input { flex: 1; }
+.area-results { display: grid; gap: 4px; margin-top: 6px; color: var(--muted); font-size: 12px; }
+.area-results .quiet-button { justify-content: flex-start; text-align: left; }
+.area-sources { margin-bottom: 0; }
+.area-summary { margin-top: 10px; padding: 9px; background: #0e2345; border: 1px solid #355787; border-radius: 4px; }
+.area-summary h3 { margin: 0; font-size: 14px; }
+.area-count { display: block; color: #9ae8ff; margin-top: 6px; font-size: 17px; }
+.area-platforms { padding-left: 16px; margin: 7px 0; color: var(--muted); font-size: 12px; }
+#sko-example { position: absolute; z-index: 540; left: 12px; top: calc(var(--panel-top, 62px) + 84px); max-width: calc(100% - 24px); background: #07132df2; color: #b9efff; }
 .drawer-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .drawer-heading h2 { font-size: 15px; font-weight: 660; }
 .drawer-heading .quiet-button { padding: 3px 8px; font-size: 18px; line-height: 1; }
@@ -87,6 +105,15 @@ body { overflow: hidden; }
 .source-field select, .world-date input { border: 1px solid var(--line); border-radius: 4px; background: #102447; color: inherit; min-height: 34px; }
 .world-date { width: 131px; }
 .world-date input { width: 100%; padding: 4px 7px; font: 12px var(--mono); }
+#open-period { min-height: 34px; padding-inline: 8px; background: #07132df2; }
+.period-picker { width: min(420px, calc(100% - 18px)); }
+.period-picker form { margin: 0; }
+.period-modes { margin-top: 10px; flex-wrap: wrap; }
+.period-fields { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.period-fields label { flex: 1 1 118px; min-width: 0; display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.period-fields input { width: 100%; min-width: 0; min-height: 34px; padding: 4px 6px; border: 1px solid #355787; border-radius: 4px; background: #102447; color: var(--text); }
+#apply-period { min-height: 34px; background: #19335e; }
+#show-period-days { margin-top: 5px; padding: 5px 8px; }
 .source-field select { width: 100%; min-width: 126px; padding: 5px 7px; font-size: 12px; font-weight: 560; }
 #map .blue-marble-tile { background-image: url('assets/world-blue-marble.webp'); background-repeat: no-repeat; }
 #map .leaflet-terrain-shading-pane { mix-blend-mode: soft-light; }
@@ -295,7 +322,7 @@ dialog strong { color: var(--text); }
   .map-filters .source-field { flex: 1; }
   .map-filters .source-field select { min-width: 0; }
   .world-date { width: 117px; }
-  .tool-nav { gap: 3px; }
+  .tool-nav { gap: 3px; flex-wrap: wrap; }
   .tool-nav .quiet-button { padding: 6px 5px; font-size: 10px; }
   .atlas-panel { right: 7px; }
   .analysis-panel { width: calc(100% - 14px); }
@@ -318,8 +345,12 @@ dialog strong { color: var(--text); }
 }
 @media (max-width: 420px) {
   .topbar .tool-nav { width: 100%; }
+  .area-panel { top: auto; bottom: 26px; width: calc(100% - 14px); max-height: 43dvh; padding: 8px; }
+  .workspace:has(.area-panel:not([hidden])) .timeline { visibility: hidden; }
+  .area-panel .area-tools button { padding-inline: 5px; font-size: 11px; }
 }
 @media (max-width: 360px) {
+  .map-filters { flex-wrap: wrap; }
   .calendar { border-spacing: 2px 3px; }
   .calendar th:first-child { width: 33px; }
   .calendar button { font-size: 9px; }

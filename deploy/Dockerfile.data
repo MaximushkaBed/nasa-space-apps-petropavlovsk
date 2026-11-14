@@ -6,6 +6,7 @@ RUN pip install --no-cache-dir --disable-pip-version-check -r requirements-globa
     && pip uninstall -y pip \
     && python -c "import ensurepip, shutil; shutil.rmtree(ensurepip.__path__[0])"
 COPY scripts/sync_global_firms.py scripts/serve_global_fires.py scripts/
+COPY web/data/region.geojson web/data/
 USER 10001:10001
 ENV PYTHONUNBUFFERED=1
 ENTRYPOINT ["python", "scripts/sync_global_firms.py"]

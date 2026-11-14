@@ -1,4 +1,11 @@
-const monthPath = (path, month, day) => path.replaceAll('{month}', month).replaceAll('{date}', day ?? '');
+function monthPath(path, month, day) {
+  const dated = path.replaceAll('{month}', month).replaceAll('{date}', day ?? '');
+  if (!dated.includes('{ndvi}') || !day) return dated;
+  const first = Date.UTC(Number(day.slice(0, 4)), 0, 1);
+  const duration = 86400000 * 16;
+  const composite = first + Math.floor((Date.parse(day) - first) / duration) * duration;
+  return dated.replace('{ndvi}', new Date(composite).toISOString().slice(0, 10));
+}
 
 function externalLink(url, label) {
   try {
@@ -30,7 +37,7 @@ function eventPopup(feature, spec) {
 }
 
 export async function createExtraLayers(map, controls, getJSON, onChange) {
-  const manifest = await getJSON('data/layers.json?v=sko-layers');
+  const manifest = await getJSON('data/layers.json?v=area-tools');
   const cached = new Map();
   const groups = new Map();
   const layers = [];
@@ -81,7 +88,7 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
         return null;
       }
       const prefix = `${spec.label} · ${spec.source}`;
-      if (spec.range && (month < spec.range[0] || month > spec.range[1])) {
+      if (spec.range && (month < spec.range[0] || (spec.range[1] && month > spec.range[1]))) {
         shown.clearLayers();
         entry.key = undefined;
         return `${prefix} · архив для этой даты недоступен.`;
@@ -97,7 +104,8 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
           shown.clearLayers();
           const tiles = L.tileLayer(/^https:\/\//.test(path) ? path : `data/${path}`, {
             maxNativeZoom: spec.maxNativeZoom ?? 8, maxZoom: map.getMaxZoom(), opacity: spec.opacity ?? .65,
-            noWrap: true, pane: spec.underlay ? 'tilePane' : 'event-layers', zIndex: 4,
+            pane: spec.underlay ? 'tilePane' : 'event-layers', zIndex: 4,
+            attribution: `<a href="${spec.sourceUrl}">${spec.source}</a>`,
           });
           tiles.on('tileerror', () => {
             if (entry.key === path && input.checked) controls.dispatchEvent(new CustomEvent('layer-tile-error', { detail: spec.label }));
@@ -105,7 +113,7 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
           tiles.addTo(shown);
           entry.key = path;
         }
-        return prefix;
+        return spec.url.includes('{ndvi}') ? `${prefix} · композит с ${path.split('/default/')[1].slice(0, 10)}` : prefix;
       }
       shown.clearLayers();
       try {

@@ -8,10 +8,10 @@
   <title>Атлас пожаров · NASA FIRMS</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=atlas-workspace">
+  <link rel="stylesheet" href="styles.css?v=atlas-periods">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=atlas-workspace" type="module"></script>
-  <script src="correlations.js?v=sko-layers" type="module"></script>
+  <script src="app.js?v=atlas-periods" type="module"></script>
+  <script src="correlations.js?v=ndvi" type="module"></script>
   <script src="burn-case.js?v=atlas-workspace" type="module"></script>
 </head>
 <body>
@@ -30,12 +30,14 @@
             <span class="sr-only">Дата наблюдений UTC</span>
             <input type="date" id="world-date" disabled>
           </label>
+          <button class="quiet-button" id="open-period" type="button" aria-haspopup="dialog" disabled>Период</button>
           <label class="source-field">
             <span class="sr-only">Спутник на карте мира</span>
             <select id="world-satellite" disabled><option value="">Все спутники</option></select>
           </label>
         </div>
         <nav class="tool-nav" aria-label="Панели атласа">
+          <button type="button" class="quiet-button" id="open-area" aria-controls="area-panel" aria-expanded="false">Территория</button>
           <button type="button" class="quiet-button" id="open-layers" aria-controls="map-layer-controls" aria-expanded="false">Слои</button>
           <a class="quiet-button" href="#season-calendar" aria-controls="analysis-panel" aria-expanded="false">Календарь СКО</a>
           <a class="quiet-button" href="#correlations" aria-controls="analysis-panel" aria-expanded="false">Связи</a>
@@ -49,6 +51,71 @@
         <button type="button" id="zoom-out" aria-label="Отдалить карту">−</button>
       </div>
       <div class="map-message" id="map-message" role="status" hidden></div>
+      <button class="quiet-button" id="sko-example" type="button" title="Открыть 12 апреля 2025 года" hidden>СКО · нет точек · открыть пример ↗</button>
+      <dialog class="period-picker" id="period-picker" aria-labelledby="period-heading">
+        <form id="period-form">
+          <div class="drawer-heading">
+            <h2 id="period-heading">Период наблюдений · UTC</h2>
+            <button class="quiet-button" id="close-period" type="button" aria-label="Закрыть выбор периода">×</button>
+          </div>
+          <div class="view-switch period-modes" role="group" aria-label="Масштаб времени">
+            <button type="button" data-period="day">День</button>
+            <button type="button" data-period="week">Неделя</button>
+            <button type="button" data-period="month">Месяц</button>
+            <button type="button" data-period="year">Год</button>
+            <button type="button" data-period="custom">Диапазон</button>
+            <button type="button" data-period="all">Весь архив</button>
+          </div>
+          <div class="period-fields" id="period-fields">
+            <label id="period-anchor-field"><span id="period-anchor-label">Дата</span><input type="date" id="period-anchor"></label>
+            <label id="period-month-field" hidden>Месяц<input type="month" id="period-month"></label>
+            <label id="period-year-field" hidden>Год<input type="number" id="period-year" step="1" inputmode="numeric"></label>
+            <label id="period-start-field" hidden>С какого дня<input type="date" id="period-start"></label>
+            <label id="period-end-field" hidden>По какой день<input type="date" id="period-end"></label>
+          </div>
+          <p class="layer-caption" id="period-preview" aria-live="polite"></p>
+          <button type="submit" class="quiet-button" id="apply-period">Показать на карте</button>
+        </form>
+      </dialog>
+
+      <aside id="area-panel" class="atlas-panel area-panel" aria-labelledby="area-title" hidden>
+        <div class="drawer-heading">
+          <h2 id="area-title">Анализ территории</h2>
+          <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть анализ территории">×</button>
+        </div>
+        <div class="view-switch area-tools" role="group" aria-label="Способ выбора территории">
+          <button type="button" id="area-circle" aria-pressed="false">Точка + радиус</button>
+          <button type="button" id="area-polygon" aria-pressed="false">Полигон</button>
+          <button type="button" id="area-search-mode" aria-pressed="false">Поиск</button>
+        </div>
+        <p class="layer-caption" id="area-guide">Кликните по карте или выберите способ выделения.</p>
+        <label class="radius-label" id="area-radius-label" hidden>Радиус, км
+          <input type="number" id="area-radius" list="area-radii" min="0.1" max="1000" step="any" value="5">
+          <datalist id="area-radii"><option value="1"><option value="2"><option value="3"><option value="5"><option value="10"><option value="15"></datalist>
+        </label>
+        <div class="area-presets" id="area-presets" hidden>
+          <button type="button" class="quiet-button" data-radius="1">1</button><button type="button" class="quiet-button" data-radius="2">2</button><button type="button" class="quiet-button" data-radius="3">3</button><button type="button" class="quiet-button" data-radius="5">5</button><button type="button" class="quiet-button" data-radius="10">10</button><button type="button" class="quiet-button" data-radius="15">15 км</button>
+        </div>
+        <div class="area-presets" id="area-polygon-controls" hidden>
+          <button class="quiet-button" id="area-finish" type="button" disabled>Замкнуть</button>
+          <button class="quiet-button" id="area-undo" type="button" disabled>Убрать точку</button>
+        </div>
+        <form id="area-search" class="area-search" hidden>
+          <label for="area-query">Страна, штат, область или район</label>
+          <input id="area-query" type="search" placeholder="Например, СКО или Travis, США" autocomplete="off">
+          <button class="quiet-button" type="submit">Найти</button>
+        </form>
+        <div id="area-results" class="area-results"></div>
+        <section id="area-summary" class="area-summary" aria-live="polite" hidden>
+          <h3 id="area-name"></h3>
+          <p class="layer-caption" id="area-meta"></p>
+          <strong class="area-count" id="area-count"></strong>
+          <p class="layer-caption" id="area-coverage" hidden></p>
+          <ul id="area-platforms" class="area-platforms"></ul>
+          <button type="button" class="quiet-button" id="area-clear">Очистить выделение</button>
+        </section>
+        <p class="layer-caption area-sources"><a href="https://www.naturalearthdata.com/">Natural Earth</a> · <a href="https://www.geoboundaries.org/">geoBoundaries</a> · <a href="https://open-meteo.com/en/docs/geocoding-api">GeoNames через Open-Meteo</a></p>
+      </aside>
 
       <aside id="map-layer-controls" class="map-layer-controls atlas-panel" aria-labelledby="layers-title" hidden>
         <div class="drawer-heading">
@@ -108,10 +175,11 @@
         <div class="timeline-controls">
           <button id="play-frames" type="button" class="play-button" disabled><span aria-hidden="true">▶</span> Воспроизвести</button>
           <label class="day-slider">
-            <span class="sr-only">День выбранного месяца UTC</span>
+            <span class="sr-only">День на шкале UTC</span>
             <input type="range" id="day-slider" min="1" max="31" value="1" disabled>
           </label>
         </div>
+        <button id="show-period-days" class="quiet-button" type="button" hidden>Смотреть по дням</button>
         <div class="map-caption">
           <span id="map-summary" role="status"></span>
           <span id="regional-count"></span>

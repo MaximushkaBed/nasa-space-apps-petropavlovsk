@@ -196,6 +196,7 @@ def main():
     calendar = json.loads((WEB / "calendar.json").read_text(encoding="utf-8"))
     weather = json.loads((WEB / "weather.json").read_text(encoding="utf-8"))
     floods = json.loads((WEB / "hazards/gfm/daily.json").read_text(encoding="utf-8"))
+    ndvi = json.loads((WEB / "sko-ndvi.json").read_text(encoding="utf-8"))["composites"]
     months = [item["month"] for item in calendar["months"]]
     years = sorted({int(key[:4]) for key in months})
     with ThreadPoolExecutor(max_workers=5) as pool:
@@ -219,8 +220,13 @@ def main():
             temperature, wind, _, rain, cloud = np.mean(weather["days"][date_label], axis=0)
             humidity, soil, prior_rain = extras_by_day[date_label]
             flood, coverage = floods.get(date_label, (np.nan, 0))
+            day = date.fromisoformat(date_label)
+            first = date(day.year, 1, 1)
+            # Use the previous completed composite, before the detections counted on this day.
+            previous = first + timedelta(days=((day - first).days // 16 - 1) * 16)
+            greenness, _ = ndvi.get(previous.isoformat(), (np.nan, 0))
             conditions.append([temperature, wind, rain, prior_rain, humidity, soil, cloud,
-                               flood if coverage >= 25 else np.nan, np.nan, np.nan])
+                               flood if coverage >= 25 else np.nan, np.nan, np.nan, greenness])
             date_labels.append(key)
             for sensor, slot in SENSORS.items():
                 daily[sensor].append(len(frame[slot]))
@@ -234,6 +240,7 @@ def main():
     areas = [area for _, _, area in grids]
     output = {"days": len(date_labels), "areas": len(grids),
               "coverage": {"flood": sum(math.isfinite(row[7]) for row in conditions),
+                           "ndvi": sum(math.isfinite(row[-1]) for row in conditions),
                            "floodMinimumPercent": 25},
               "results": {}}
     for sensor in SENSORS:
