@@ -1,0 +1,25 @@
+{
+  "name": "nasa-space-apps",
+  "config": {
+    "server_id": "Local",
+    "project_name": "nasa-space-apps",
+    "files_on_host": true,
+    "run_directory": "/root/platforms/projects/nasa-space-apps/repository/deploy",
+    "file_paths": ["compose.yml"],
+    "run_build": true,
+    "auto_pull": false,
+    "poll_for_updates": false,
+    "auto_update": false,
+    "webhook_enabled": true,
+    "webhook_force_deploy": true,
+    "pre_deploy": {
+      "path": "/root/platforms/projects/nasa-space-apps/repository",
+      "command": "bash deploy/update-checkout.sh"
+    },
+    "post_deploy": {
+      "path": "/root/platforms/projects/nasa-space-apps/repository",
+      "command": "docker exec nasa-space-apps-web wget -q -O - http://127.0.0.1:8080/health"
+    },
+    "links": ["http://nasa.aican.cloud", "http://31.97.72.56:18088"]
+  }
+}

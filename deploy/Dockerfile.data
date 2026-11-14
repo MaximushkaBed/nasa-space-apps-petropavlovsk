@@ -1,0 +1,9 @@
+FROM python@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72
+WORKDIR /app
+COPY requirements-global.txt .
+RUN pip install --no-cache-dir --disable-pip-version-check -r requirements-global.txt
+COPY scripts/sync_global_firms.py scripts/sync_global_firms.py
+USER 10001:10001
+ENV PYTHONUNBUFFERED=1
+ENTRYPOINT ["python", "scripts/sync_global_firms.py"]
+CMD ["--data-dir", "/data"]

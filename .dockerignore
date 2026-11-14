@@ -1,0 +1,8 @@
+*
+!web/
+!web/**
+!deploy/
+!deploy/**
+!requirements-global.txt
+!scripts/
+!scripts/sync_global_firms.py

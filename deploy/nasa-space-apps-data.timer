@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh global FIRMS archive hourly
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=1h
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -8,13 +8,17 @@ Local challenge label supplied by the team: `15 - Harmonization of MODIS and VII
 
 The repository includes a NASA FIRMS downloader, a historical database, and a static web prototype.
 
-The initial study area is **North Kazakhstan Region (Северо-Казахстанская область, СКО)**.
+The project scope is **global**. North Kazakhstan Region (Северо-Казахстанская область, СКО) is the existing validation case; the USA, Brazil and Canada are planned independent research/validation regions. Large datasets will live on the shared `unik` server.
 
 ## Web MVP
+
+Shared-server deployment, global dataset paths and Komodo autodeploy are documented in [deploy/README.md](deploy/README.md). Large world archives are downloaded on `unik`, not on the laptop.
 
 From the repository root, run `python -m http.server 8000 --bind 127.0.0.1 --directory web` and open [localhost:8000](http://127.0.0.1:8000/). The app uses bundled assets and the validated April–October 2020–2025 data snapshot. See the [MVP documentation](web/README.md) for methodology and data export.
 
 ## Research
+
+[Global data sources and methodology notes (RU)](docs/global-data/README.md) preserves the team's worldwide source inventory, distinctions between detections/events/burned area, and proposed cross-region validation plan. Unverified source versions and archive availability are marked explicitly.
 
 [Full Russian translation of the challenge and explanatory video](docs/challenge/README.md) includes the team's original DOCX and implementation notes.
 

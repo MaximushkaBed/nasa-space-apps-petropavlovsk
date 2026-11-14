@@ -1,0 +1,23 @@
+[Unit]
+Description=Global NASA FIRMS archive sync for Space Apps
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/platforms/projects/nasa-space-apps/repository
+ExecStart=/usr/bin/docker run --rm --name nasa-space-apps-data --cpus=1 --memory=2g --pids-limit=64 --cap-drop=ALL --security-opt=no-new-privileges --read-only --tmpfs /tmp:rw,noexec,nosuid,size=256m --mount type=bind,source=/root/platforms/projects/nasa-space-apps/shared/data/firms-global,target=/data nasa-space-apps-data:current
+ExecStop=/usr/bin/docker stop -t 30 nasa-space-apps-data
+Environment=PYTHONUNBUFFERED=1
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+CPUQuota=100%
+MemoryMax=2G
+TimeoutStartSec=3h
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/root/platforms/projects/nasa-space-apps/shared/data
+StandardOutput=journal
+StandardError=journal
