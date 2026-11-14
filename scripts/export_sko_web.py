@@ -3,6 +3,7 @@
 
 import argparse
 from collections import defaultdict
+from calendar import monthrange
 import csv
 import json
 import math
@@ -53,11 +54,18 @@ def export_calendar(cache_dir, output_dir):
         key = row["month"]
         cells = []
         totals = [0] * len(SENSORS)
+        day_count = monthrange(int(key[:4]), int(key[5:7]))[1]
+        skipped = {day.day for day in excluded if day.isoformat().startswith(key)}
+        frames = [None if day in skipped else [[] for _ in SENSORS]
+                  for day in range(1, day_count + 1)]
         for (ix, iy), sensors in sorted(grids[key].items()):
             counts = [len(sensors[platform]) for platform in SENSORS]
             # The equal-area cylindrical projection keeps cell edges at constant lat/lon.
             west, south = unproject.transform(ix * PRIMARY_GRID, iy * PRIMARY_GRID)
             east, north = unproject.transform((ix + 1) * PRIMARY_GRID, (iy + 1) * PRIMARY_GRID)
+            for platform, sensor in enumerate(SENSORS):
+                for day in sorted(sensors[sensor]):
+                    frames[day - 1][platform].append(len(cells))
             cells.append([*(round(v, 6) for v in (west, south, east, north)), *counts])
             totals = [total + count for total, count in zip(totals, counts)]
         published = [int(row[f"{prefix}_cell_days"]) for prefix in prefixes]
@@ -65,6 +73,8 @@ def export_calendar(cache_dir, output_dir):
             raise ValueError(f"{key}: map sums {totals} differ from validation totals {published}")
 
         included = int(row["included_days"])
+        if day_count - len(skipped) != included:
+            raise ValueError(f"{key}: playback dates differ from validation totals")
         # Use the reference during the baseline and the validated VIIRS
         # continuation on the held-out seasons, even when a count is zero.
         series_source = SENSORS.index("Aqua" if row["split"] == "fit" else "NOAA-20")
@@ -72,7 +82,7 @@ def export_calendar(cache_dir, output_dir):
                          "excluded": int(row["excluded_days"]), "raw": published,
                          "points": [int(row[f"{prefix}_points"]) for prefix in prefixes],
                          "norm": round(rates[int(key[5:7])] * included, 8)})
-        write_json(output_dir / f"{key}.json", cells)
+        write_json(output_dir / f"{key}.json", {"cells": cells, "frames": frames})
 
     write_json(output_dir / "calendar.json", {"region": "Северо-Казахстанская область", "gridKm": 2,
                                               "zone": "UTC", "baseline": metrics["fit_years"],

@@ -8,9 +8,9 @@
   <title>Пожары СКО · Спутниковый календарь</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=sko-series">
+  <link rel="stylesheet" href="styles.css?v=sko-time">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=sko-series" defer></script>
+  <script src="app.js?v=sko-time" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -81,17 +81,51 @@
             <button type="button" id="zoom-out" aria-label="Отдалить карту" title="Отдалить">−</button>
             <button type="button" id="reset-map" aria-label="Вернуться к границе СКО" title="К границе СКО"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></svg></button>
           </div>
-          <div class="map-legend" aria-label="Число дней с детекциями в ячейке">
+          <div class="map-legend" id="month-map-legend" aria-label="Число дней с детекциями в ячейке">
             <strong>Дни с сигналом в ячейке</strong>
             <span><i class="map-level-1"></i> 1–2</span>
             <span><i class="map-level-2"></i> 3–6</span>
             <span><i class="map-level-3"></i> 7+</span>
           </div>
+          <div class="map-legend day-map-legend" id="day-map-legend" hidden>
+            <span><i class="map-level-1"></i> Ячейка с тепловым сигналом</span>
+          </div>
           <div class="map-message" id="map-message" role="status" hidden></div>
         </div>
         <div class="map-caption">
           <span><i aria-hidden="true"></i> Граница СКО</span>
-          <span id="map-summary" aria-live="polite"></span>
+          <span id="map-summary"></span>
+        </div>
+        <div class="timeline" aria-labelledby="timeline-title">
+          <div class="timeline-heading">
+            <div>
+              <h3 id="timeline-title">Динамика по дням</h3>
+              <p><output id="frame-date" for="day-slider">Весь месяц</output><span class="utc-label">UTC</span></p>
+            </div>
+            <label class="weather-control">
+              <span>Погода на карте</span>
+              <select id="weather" disabled>
+                <option value="">Слой выключен</option>
+                <option value="wind">Ветер</option>
+                <option value="temperature">Температура</option>
+                <option value="rain">Осадки</option>
+              </select>
+            </label>
+          </div>
+          <div class="timeline-controls">
+            <button id="play-frames" type="button" class="play-button" disabled><span aria-hidden="true">▶</span> Воспроизвести</button>
+            <label class="day-slider">
+              <span class="sr-only">День выбранного месяца UTC</span>
+              <input type="range" id="day-slider" min="0" max="31" value="0" disabled>
+            </label>
+            <button id="whole-month" type="button" class="quiet-button" disabled>Весь месяц</button>
+          </div>
+          <div class="timeline-notes">
+            <button id="peak-day" type="button" class="peak-day" hidden></button>
+            <span id="timeline-outages" hidden>Штриховка — пропуск наблюдений</span>
+          </div>
+          <div class="timeline-ticks" id="timeline-ticks" aria-hidden="true"></div>
+          <p id="weather-summary" class="weather-summary" hidden></p>
         </div>
       </section>
 
@@ -99,7 +133,7 @@
         <div class="comparison-content" id="comparison-content" aria-live="polite">
           <p id="comparison-period" class="comparison-period"></p>
           <h2 class="deviation" id="deviation">Что видно за месяц</h2>
-          <p class="norm-context">Сравнение с тем же месяцем в 2020–2023 годах с учётом числа дней.</p>
+          <p class="norm-context">Итог за весь месяц. Сравнение с тем же месяцем в 2020–2023 годах с учётом числа дней.</p>
           <div class="bars" role="img" id="bar-chart" aria-label="Сравнение активности с нормой в ячейко-днях на шкале Aqua">
             <div class="bar-row">
               <span>Выбранный месяц</span><strong id="actual-bar-value"></strong>
@@ -145,6 +179,7 @@
 
     <footer class="workspace-footer">
       <div>Данные <a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noreferrer">NASA FIRMS</a> / LANCE / ESDIS · <a href="https://source.coop/portolan-mirrors/firms-catalog" target="_blank" rel="noreferrer">Portolan</a></div>
+      <div>Погода <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noreferrer">ERA5 / Open‑Meteo</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a></div>
       <a href="https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/tree/main/docs/sko-validation" target="_blank" rel="noreferrer">Отчёт о проверке ↗</a>
     </footer>
   </main>
@@ -157,6 +192,8 @@
     <p><strong>Единый ряд.</strong> С 2020 по 2023 год используются наблюдения Aqua/MODIS. Для сезонов 2024 и 2025 годов используется NOAA‑20/VIIRS с поправкой 0,2897 к месячной сумме. Источник фиксирован для каждого периода, включая месяцы без детекций. В меню доступны отдельные спутники для проверки наблюдений.</p>
     <p><strong>Ячейко-день</strong> — участок 2 × 2 км, где спутник зарегистрировал хотя бы один подходящий тепловой сигнал за сутки UTC. Календарь суммирует такие наблюдения за месяц. Цвет ячейки на карте показывает число дней с сигналом по спутнику этого месяца.</p>
     <p><strong>Снимок карты</strong> — статическая подложка Blue Marble от NASA GIBS. Месяц и спутник определяют отображаемые детекции.</p>
+    <p><strong>Динамика.</strong> Кадр показывает ячейки, в которых выбранный спутник отметил сигнал в этот день UTC. Известные пропуски выделены отдельно. Месячная статистика и историческая норма относятся ко всему выбранному месяцу.</p>
+    <p><strong>Погода.</strong> Дневные значения ERA5 из Open‑Meteo показаны в 17 точках СКО. Температура — суточный максимум на высоте 2 м, ветер — средняя скорость и преобладающее направление на высоте 10 м, осадки — сумма за сутки. Наложение помогает сравнить условия и детекции по времени, а для вывода о причинах или распространении пожара нужен отдельный анализ.</p>
     <p><strong>Шкала Aqua.</strong> Месячные суммы Suomi NPP и NOAA‑20 умножаются на коэффициенты 0,2932 и 0,2897, рассчитанные по 2020–2023 годам. Коэффициенты применяются к суммам, а карта сохраняет исходные наблюдения.</p>
     <p><strong>Историческая норма</strong> — медиана средних суточных значений Aqua за тот же месяц в 2020–2023 годах, умноженная на число включённых дней выбранного месяца. Для месяцев 2020–2023 сравнение включает выбранный год в базовый период. Отклонения до 10% включительно отмечены одним цветом. Этот цвет показывает размер отклонения.</p>
     <p><strong>Наблюдения.</strong> Стандартные данные FIRMS (SP) отфильтрованы по полигону СКО, по типу предполагаемого горения растительности и по уверенности. Даты известных сбоев исключены. Облака, геометрия пролётов и локальное покрытие не проверялись. Показатель отражает спутниковые детекции. Число пожаров и площадь выгорания требуют отдельных данных.</p>
