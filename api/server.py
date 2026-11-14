@@ -19,6 +19,7 @@ import time
 from urllib.parse import urlsplit, parse_qs
 
 from api.analysis import analyze, PLATFORMS
+from api.geometry import circle_polygon, normalize_geometry
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get('SPACEAPPS_DATA_DIR', ROOT / 'data/raw/firms/global'))
@@ -32,8 +33,11 @@ PRESETS = [
 JOBS = {}
 JOBS_LOCK = threading.Lock()
 POOL = ThreadPoolExecutor(max_workers=1)
+MATRIX_POOL=ThreadPoolExecutor(max_workers=1)
+MATRIX_JOBS={}
 CACHE.mkdir(parents=True, exist_ok=True)
 MAP_LIMIT=threading.BoundedSemaphore(1)
+GEOMETRY_LIMIT=threading.BoundedSemaphore(1)
 ACTIVE_EXTRACTS=Counter()
 EXTRACT_VERSION='nasa-spatial-v2'
 ANALYSIS_VERSION='nasa-temporal-v4'
@@ -82,13 +86,17 @@ def region_bounds():
 def validate(value):
     if not isinstance(value, dict):
         raise ValueError('Ожидается объект параметров анализа.')
-    bbox = value.get('bbox')
+    geometry=None
+    if value.get('preset')!='sko' and (value.get('geometry') is not None or value.get('circle') is not None):
+        with GEOMETRY_LIMIT:
+            geometry,bbox=normalize_geometry(circle_polygon(value['circle']) if value.get('circle') is not None else value['geometry'],connection)
+    else:bbox = value.get('bbox')
     if not isinstance(bbox, list) or len(bbox) != 4 or any(isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x) for x in bbox):
         raise ValueError('Укажите четыре конечные координаты: запад, юг, восток, север.')
     west, south, east, north = bbox
     if not (-180 <= west < east <= 180 and -85 <= south < north <= 85):
         raise ValueError('Границы: долгота −180…180, широта −85…85; запад < восток, юг < север.')
-    if (east - west) * (north - south) > 5000:
+    if geometry is None and (east - west) * (north - south) > 5000:
         raise ValueError('Для детального анализа выделите область меньше 5000 квадратных градусов.')
     start, end = date.fromisoformat(value['start']), date.fromisoformat(value['end'])
     if not date(2000, 11, 1) <= start <= end <= date.today():
@@ -113,9 +121,23 @@ def validate(value):
         raise ValueError('Неизвестная область.')
     if preset=='sko':
         bbox=region_bounds()
-    return {'bbox': [round(x, 5) for x in bbox], 'preset': preset,
+    result={'bbox': [round(x, 5) for x in bbox] if geometry is None else bbox, 'preset': preset,
             'start': start.isoformat(), 'end': end.isoformat(), 'baseline_start': a, 'baseline_end': b,
             'grid_km': grid, 'quality': quality, 'daynight': daytime}
+    if geometry is not None:result['geometry']=geometry
+    for field,limit in [('roi_name',120),('roi_source',200)]:
+        if value.get(field) is not None:
+            if not isinstance(value[field],str) or len(value[field])>limit:raise ValueError(f'Слишком длинное поле {field}.')
+            result[field]=value[field]
+    if geometry is not None and value.get('circle') is not None:result['circle']=value['circle']
+    return result
+
+
+def query_geometry(config):
+    if config['preset']=='sko':return region_geometry()
+    if config.get('geometry'):return config['geometry']
+    w,s,e,n=config['bbox']
+    return {'type':'Polygon','coordinates':[[[w,s],[e,s],[e,n],[w,n],[w,s]]]}
 
 
 @contextmanager
@@ -238,8 +260,7 @@ def extract(job, config, sources, key):
                 atomic_json(global_path, available)
             availability.extend(available)
             west, south, east, north = config['bbox']
-            geom = json.dumps(region_geometry()) if config['preset'] == 'sko' else json.dumps({
-                'type': 'Polygon', 'coordinates': [[[west,south],[east,south],[east,north],[west,north],[west,south]]]})
+            geom = json.dumps(query_geometry(config))
             quality = "AND lower(quality)='sp' AND type=0" if config['quality'] == 'sp' else 'AND (type=0 OR type IS NULL)'
             daytime = '' if config['daynight'] == 'all' else 'AND daynight=?'
             params = [config['grid_km'] * 1000, config['grid_km'] * 1000, paths, config['start'], config['end'], geom]
@@ -285,7 +306,7 @@ def run(job, config):
             if not sources:
                 raise ValueError('В выбранном периоде нет доступных файлов архива.')
             spatial = {k:v for k,v in config.items() if not k.startswith('baseline_')}
-            geometry=json.dumps(region_geometry(),sort_keys=True) if config['preset']=='sko' else json.dumps(config['bbox'])
+            geometry=json.dumps(config['geometry'],sort_keys=True) if config.get('geometry') else (json.dumps(region_geometry(),sort_keys=True) if config['preset']=='sko' else json.dumps(config['bbox']))
             geometry_sha=hashlib.sha256(geometry.encode()).hexdigest()
             outages_sha=hashlib.sha256((ROOT/'docs/sko-validation/outages.csv').read_bytes()).hexdigest()
             fingerprint = hashlib.sha256(json.dumps({'config': spatial, 'sources': [a['sha256'] for a in sources],
@@ -369,7 +390,7 @@ def cached_grid(extract_id):
     return folder,json.loads((folder/'grid.json').read_text())
 
 
-def map_cells(extract_id,month,platform,day=None):
+def map_cells(extract_id,month,platform,day=None,start=None,end=None):
     with map_guard(extract_id):
         if not re.fullmatch(r'\d{4}(?:-(?:0[1-9]|1[0-2]))?',month) or platform not in PLATFORMS:
             raise ValueError('Неверные параметры карты.')
@@ -386,11 +407,17 @@ def map_cells(extract_id,month,platform,day=None):
             if not day.startswith(month+'-'):
                 raise ValueError('Дата должна принадлежать выбранному месяцу.')
         cfg=metadata.get('config',{})
+        custom=start is not None or end is not None
+        if custom:
+            if day or not start or not end:raise ValueError('Диапазон карты: укажите start и end, без day.')
+            first,last=date.fromisoformat(start),date.fromisoformat(end)
+            if first>last:raise ValueError('Начало диапазона позже окончания.')
+            if start<cfg.get('start',start) or end>cfg.get('end',end):raise ValueError('Период карты вне рассчитанной истории. Расширьте историю анализа.')
         first=max(first,date.fromisoformat(cfg.get('start',first.isoformat())))
         last=min(last,date.fromisoformat(cfg.get('end',last.isoformat())))
         paths=[str(p) for year in range(first.year,last.year+1) if (p:=folder/f'{year}.parquet').exists()]
         if not paths:
-            return {'cells':[],'grid_km':metadata['grid_km'],'display_grid_km':metadata['grid_km'],'month':month,'platform':platform,'year_basis':'ISO' if annual else 'calendar'}
+            return {'cells':[],'grid_km':metadata['grid_km'],'display_grid_km':metadata['grid_km'],'month':month,'platform':platform,'year_basis':'UTC-range' if custom else 'ISO' if annual else 'calendar','start_date':first.isoformat(),'end_date':last.isoformat()}
         con=connection(CACHE/'map-temporary',memory='192MB')
         try:
             factor=1
@@ -403,7 +430,7 @@ def map_cells(extract_id,month,platform,day=None):
                 factor*=2
             return {'cells':polygons(con,cells,metadata['grid_km'],factor),'grid_km':metadata['grid_km'],
                 'display_grid_km':metadata['grid_km']*factor,'month':month,'platform':platform,
-                'metric':'sum of original-grid cell-days','year_basis':'ISO' if annual else 'calendar',
+                'metric':'sum of original-grid cell-days','year_basis':'UTC-range' if custom else 'ISO' if annual else 'calendar',
                 'start_date':first.isoformat(),'end_date':last.isoformat()}
         finally:
             con.close()
@@ -467,6 +494,20 @@ def anomaly_map(extract_id,month,platform,baseline_start,baseline_end):
             con.close()
 
 
+def run_matrix(identifier,analysis_id,analysis):
+    def progress(**values):
+        with JOBS_LOCK:MATRIX_JOBS[identifier].update(values)
+    try:
+        from api.matrix import build
+        ensure_space();progress(status='running',message='Подготавливаю численную выборку территории',progress=1)
+        result=build(analysis,analysis_id,progress)
+        atomic_json(CACHE/'matrix'/'jobs'/(identifier+'.json'),result)
+        progress(status='done',progress=100,message='Матрица готова',result=result)
+    except Exception as error:
+        print(f'Matrix {identifier} failed: {type(error).__name__}: {error}',flush=True)
+        progress(status='error',progress=0,message='Матрица не рассчитана. '+str(error)[:240])
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
 
@@ -487,10 +528,31 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
+            if match:=re.fullmatch(r'/api/v1/analyses/([0-9a-f]{32})/matrix',self.path):
+                size=int(self.headers.get('Content-Length',0))
+                if not 0<=size<=1024:return self.respond(413,{'error':'Матрица использует параметры готового анализа.'})
+                if size:
+                    options=json.loads(self.rfile.read(size))
+                    if options!={}:return self.respond(400,{'error':'Матрица использует параметры готового анализа; передайте {}.'})
+                analysis_id=match[1]
+                with JOBS_LOCK:info=JOBS.get(analysis_id)
+                if info and info['status']!='done':return self.respond(409,{'error':'Сначала дождитесь готовности анализа.'})
+                saved=CACHE/'jobs'/(analysis_id+'.json')
+                analysis=info['result'] if info else json.loads(saved.read_text()) if saved.exists() else None
+                if analysis is None:return self.respond(404,{'error':'Исходный анализ не найден.'})
+                if analysis.get('analysis_version')!=ANALYSIS_VERSION:return self.respond(409,{'error':'Методика обновлена. Сначала пересчитайте анализ.'})
+                identifier=hashlib.sha256((analysis_id+str(time.time_ns())).encode()).hexdigest()[:32]
+                with JOBS_LOCK:
+                    if sum(j['status'] in ('queued','running') for j in MATRIX_JOBS.values())>=3:return self.respond(429,{'error':'Очередь матриц занята. Повторите позже.'})
+                    if len(MATRIX_JOBS)>16:
+                        for old in [k for k,v in MATRIX_JOBS.items() if v['status'] in ('done','error')][:8]:MATRIX_JOBS.pop(old,None)
+                    MATRIX_JOBS[identifier]={'id':identifier,'status':'queued','progress':0,'message':'Матрица в очереди'}
+                MATRIX_POOL.submit(run_matrix,identifier,analysis_id,analysis)
+                return self.respond(202,{'id':identifier,'status':'queued'})
             if self.path != '/api/v1/analyses':
                 return self.respond(404, {'error':'Неизвестный адрес API.'})
             size = int(self.headers.get('Content-Length',0))
-            if not 0 < size <= 16384:
+            if not 0 < size <= 524288:
                 return self.respond(413, {'error':'Слишком большой или пустой запрос.'})
             config = validate(json.loads(self.rfile.read(size)))
             job = hashlib.sha256((json.dumps(config,sort_keys=True)+str(time.time_ns())).encode()).hexdigest()[:32]
@@ -517,6 +579,27 @@ class Handler(BaseHTTPRequestHandler):
                     'start':'2000-11-01', 'end':date.today().isoformat(), 'rows':state['base_rows'],
                     'through':max([a.get('end','') for a in state['assets'] if a['kind']=='observations']+[(state.get('live_tail') or {}).get('end') or '']),
                     'snapshot_at':state['updated_at'], 'region_geometry':region_geometry()})
+            if match:=re.fullmatch(r'/api/v1/matrices/([0-9a-f]{32})(/export)?',parsed.path):
+                identifier,export=match.groups()
+                with JOBS_LOCK:info=dict(MATRIX_JOBS[identifier]) if identifier in MATRIX_JOBS else None
+                saved=CACHE/'matrix'/'jobs'/(identifier+'.json')
+                if info is None and saved.exists():info={'id':identifier,'status':'done','progress':100,'message':'Матрица готова','result':json.loads(saved.read_text())}
+                if info is None:return self.respond(404,{'error':'Матрица не найдена.'})
+                from api.matrix import VERSION
+                if info['status']=='done' and info['result'].get('version')!=VERSION:return self.respond(409,{'error':'Методика матрицы обновлена; пересчитайте её.'})
+                if not export:return self.respond(200,info)
+                if info['status']!='done':return self.respond(409,{'error':'Дождитесь готовности матрицы.'})
+                result=info['result']
+                if parse_qs(parsed.query).get('format',['csv'])[0]=='json':return self.respond(200,json.dumps(result,ensure_ascii=False,indent=2).encode(),'application/json; charset=utf-8','nasa-space-apps-matrix.json')
+                stream=io.StringIO(newline='');writer=csv.writer(stream);writer.writerow(['platform','mode','factor_a','factor_b','rho','n','reason','n_overlap','n_used','strata_used','mask_sha256','roi','start','end','quality','extract_id'])
+                for platform,modes in result['results'].items():
+                    for mode,values in modes.items():
+                        factors=result['space_factors'] if mode=='space' else result['time_factors']
+                        for i,row in enumerate(values):
+                            for j,(rho,n) in enumerate(row):
+                                detail=result['pair_details'][platform][mode][i][j]
+                                writer.writerow([platform,mode,factors[i]['id'],factors[j]['id'],rho,n,detail['reason'],detail['n_overlap'],detail['n_used'],detail['strata_used'],detail['mask_sha256'],result['config'].get('roi_name',result['config']['preset']),result['config']['start'],result['config']['end'],result['config']['quality'],result['extract_id']])
+                return self.respond(200,('\ufeff'+stream.getvalue()).encode(),'text/csv; charset=utf-8','nasa-space-apps-matrix.csv')
             if match := re.fullmatch(r'/api/v1/analyses/([0-9a-f]{32})(/export)?',parsed.path):
                 job, export = match.groups()
                 with JOBS_LOCK:
@@ -544,7 +627,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, info)
             if match := re.fullmatch(r'/api/v1/maps/([0-9a-f]{32})',parsed.path):
                 query=parse_qs(parsed.query)
-                return self.respond(200,map_cells(match[1],query.get('month',[''])[0],query.get('platform',[''])[0],query.get('day',[None])[0]))
+                return self.respond(200,map_cells(match[1],query.get('month',[''])[0],query.get('platform',[''])[0],query.get('day',[None])[0],query.get('start',[None])[0],query.get('end',[None])[0]))
             if match := re.fullmatch(r'/api/v1/anomaly-map/([0-9a-f]{32})',parsed.path):
                 query=parse_qs(parsed.query)
                 return self.respond(200,anomaly_map(match[1],query.get('month',[''])[0],query.get('platform',[''])[0],

@@ -4,6 +4,7 @@
 !deploy/
 !deploy/**
 !requirements-global.txt
+!requirements-analysis.txt
 !scripts/
 !scripts/sync_global_firms.py
 !scripts/serve_global_fires.py

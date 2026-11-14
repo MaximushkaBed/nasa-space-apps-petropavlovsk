@@ -49,7 +49,8 @@ function polygonSelection(geometry) {
   };
 }
 
-export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry) {
+export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scope = document, onChange, onMode } = {}) {
+  const byId = (id) => scope.querySelector('#' + id);
   const layer = L.layerGroup().addTo(map);
   map.createPane('analysis-area').style.zIndex = 407;
   const style = { pane: 'analysis-area', color: '#61e4f6', weight: 2, fillOpacity: .10, interactive: false };
@@ -159,6 +160,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry) {
     for (const [id, value] of modes) byId(id).setAttribute('aria-pressed', String(method === value));
     if (method !== 'search') results.replaceChildren();
     renderTools();
+    onMode?.(method);
   }
 
   function selectCircle(center) {
@@ -180,6 +182,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry) {
     };
     redraw();
     renderTools();
+    onChange?.(getSelection());
   }
 
   function selectPolygon(geometry, name, details) {
@@ -187,6 +190,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry) {
     vertices = [];
     redraw();
     setMethod('report');
+    onChange?.(getSelection());
   }
 
   function fitBoundary(geometry) {
@@ -222,7 +226,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry) {
   for (const [id] of modes) byId(id).disabled = false;
   const changeRadius = () => { if (selection?.circle) selectCircle(selection.center); };
   radius.addEventListener('input', changeRadius);
-  for (const button of document.querySelectorAll('[data-radius]')) button.addEventListener('click', () => {
+  for (const button of scope.querySelectorAll('[data-radius]')) button.addEventListener('click', () => {
     radius.value = button.dataset.radius;
     changeRadius();
   });
@@ -254,6 +258,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry) {
     vertices = [];
     redraw();
     setMethod('');
+    onChange?.(null);
   });
 
   function namesFor([name, , aliases]) {
@@ -365,6 +370,22 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry) {
     setMethod('');
   }
 
-  return { render(frame) { archiveFrame = frame; renderSummary(); }, resetDraft, drawing,
+  function getSelection() {
+    if (!selection) return null;
+    const extents = selection.extents;
+    const bbox = [Math.min(...extents.map(e => e.west)), Math.min(...extents.map(e => e.south)), Math.max(...extents.map(e => e.east)), Math.max(...extents.map(e => e.north))];
+    const roi = { preset: selection.geometry === skoGeometry ? 'sko' : 'custom', name: selection.name, bbox, source: selection.details };
+    if (selection.circle) roi.circle = { center: [L.Util.wrapNum(selection.center.lng, [-180,180]), selection.center.lat], radius_km: selection.radius };
+    else roi.geometry = selection.geometry;
+    return roi;
+  }
+  function setSelection(roi) {
+    if (!roi) return;
+    if (roi.circle) { radius.value = roi.circle.radius_km; selectCircle(L.latLng(roi.circle.center[1], roi.circle.center[0])); setMethod('report'); }
+    else if (roi.preset === 'sko') selectPolygon(skoGeometry, roi.name || 'Северо-Казахстанская область', roi.source || 'Граница СКО');
+    else if (roi.geometry) selectPolygon(roi.geometry, roi.name || 'Выбранная территория', roi.source || 'Переданная граница');
+    else if (roi.bbox) { const [w,s,e,n] = roi.bbox; selectPolygon({ type: 'Polygon', coordinates: [[[w,s],[e,s],[e,n],[w,n],[w,s]]] }, roi.name || 'Прямоугольник', roi.source || 'Граница окна'); }
+  }
+  return { render(frame) { archiveFrame = frame; renderSummary(); }, resetDraft, drawing, getSelection, setSelection,
     active: () => Boolean(method) };
 }

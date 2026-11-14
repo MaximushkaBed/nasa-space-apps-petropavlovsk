@@ -192,6 +192,10 @@ class SpatialQueryTests(unittest.TestCase):
                 annual=server.map_cells(key,'2024','NOAA-20')
                 self.assertEqual(annual['year_basis'],'ISO')
                 self.assertEqual(sum(r[4] for r in annual['cells']),12)
+                window=server.map_cells(key,'2024-04','NOAA-20',start='2024-04-03',end='2024-04-05')
+                self.assertEqual(sum(r[4] for r in window['cells']),3)
+                self.assertEqual((window['start_date'],window['end_date'],window['year_basis']),('2024-04-03','2024-04-05','UTC-range'))
+                with self.assertRaises(ValueError):server.map_cells(key,'2024-04','NOAA-20',start='2019-01-01',end='2024-04-05')
 
     def test_archive_can_omit_optional_live_tail(self):
         from api.server import archive_through

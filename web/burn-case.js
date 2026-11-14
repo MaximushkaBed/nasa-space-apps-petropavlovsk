@@ -1,4 +1,5 @@
-const byId = (id) => document.getElementById(id);
+export function mountBurnCase(root = document) {
+const byId = (id) => root.querySelector('#' + id);
 const base = 'data/cases/kishkenekol-2025-04-12/';
 const number = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
 
@@ -24,7 +25,7 @@ async function renderCase() {
   byId('case-overlap').textContent = `Пересечение с контурами ЕГКН — ${number.format(study.overlapPercent)}% выделенного следа (${number.format(study.overlapKm2)} км², участков с пересечением — ${study.intersectingParcels}).`;
   byId('case-layout').hidden = false;
   const bounds = L.latLngBounds(study.bounds);
-  const map = L.map('case-map', {
+  const map = L.map(byId('case-map'), {
     minZoom: 7, maxZoom: 15, zoomSnap: .25, zoomAnimation: false,
     scrollWheelZoom: false, attributionControl: false,
   });
@@ -105,3 +106,6 @@ const observer = new IntersectionObserver(([entry]) => {
   });
 }, { rootMargin: '400px' });
 observer.observe(section);
+
+return { reveal() { if (byId('case-layout') && !byId('case-layout').hidden) window.dispatchEvent(new Event('resize')); } };
+}

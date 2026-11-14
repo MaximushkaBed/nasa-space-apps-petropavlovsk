@@ -16,7 +16,7 @@ import re
 import threading
 import time
 from urllib.error import HTTPError
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlsplit, urlencode, urlunsplit
 from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
@@ -25,7 +25,7 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def local_server(api_base):
+def local_server(api_base, fires_base=None):
     class Proxy(SimpleHTTPRequestHandler):
         def forward(self):
             length = int(self.headers.get('Content-Length', '0'))
@@ -33,7 +33,8 @@ def local_server(api_base):
             headers = {'Accept': self.headers.get('Accept', 'application/json')}
             if self.headers.get('Content-Type'):
                 headers['Content-Type'] = self.headers['Content-Type']
-            request = Request(api_base.rstrip('/') + self.path, data=body,
+            target = fires_base if fires_base and self.path.startswith('/api/fires') else api_base
+            request = Request(target.rstrip('/') + self.path, data=body,
                               headers=headers, method=self.command)
             try:
                 response = urlopen(request, timeout=60)
@@ -103,7 +104,14 @@ def run(base_url, output, timeout):
 
         page.on('response', capture)
         try:
-            page.goto(base_url, wait_until='domcontentloaded', timeout=40000)
+            parsed = urlsplit(base_url)
+            params = parse_qs(parsed.query)
+            params['view'] = ['analysis']
+            params['analysis'] = [json.dumps({'preset':'sko','bbox':[65.9,52.2,74.3,55.5],
+                'start':'2020-01-01','end':'2025-12-31','baseline_start':2020,'baseline_end':2023,
+                'grid_km':10,'quality':'sp','daynight':'all','platform':'NOAA-20'})]
+            target = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(params, doseq=True), parsed.fragment))
+            page.goto(target, wait_until='domcontentloaded', timeout=40000)
             deadline = time.monotonic() + timeout / 1000
             while page.locator('#export-csv').is_disabled():
                 if page.locator('#error-banner').is_visible():
@@ -308,6 +316,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-url', default='http://31.97.72.56:18089')
     parser.add_argument('--api-base', default='http://31.97.72.56:18089')
+    parser.add_argument('--fires-base', default=None)
     parser.add_argument('--local-web', action='store_true')
     parser.add_argument('--output-dir', type=Path, default=Path('/tmp/nasa-workbench-e2e'))
     parser.add_argument('--timeout', type=int, default=240000)
@@ -316,7 +325,7 @@ if __name__ == '__main__':
     try:
         base = args.base_url
         if args.local_web:
-            server, base = local_server(args.api_base)
+            server, base = local_server(args.api_base, args.fires_base)
         print(json.dumps(run(base, args.output_dir, args.timeout), ensure_ascii=False, indent=2))
     finally:
         if server:

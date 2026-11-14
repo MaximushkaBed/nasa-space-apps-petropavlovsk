@@ -3,8 +3,8 @@ const iso = (date) => date.toISOString().slice(0, 10);
 export const addDays = (day, amount) => iso(new Date(Date.parse(day) + amount * dayMs));
 export const daysBetween = (first, last) => Math.round((Date.parse(last) - Date.parse(first)) / dayMs);
 
-export function createPeriodPicker(archive, active, onSelect) {
-  const $ = (id) => document.getElementById(id);
+export function createPeriodPicker(archive, active, onSelect, scope = document) {
+  const $ = (id) => scope.querySelector('#' + id);
   const dialog = $('period-picker');
   const buttons = [...dialog.querySelectorAll('[data-period]')];
   const anchor = $('period-anchor');
