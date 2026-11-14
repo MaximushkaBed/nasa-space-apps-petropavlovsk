@@ -8,9 +8,9 @@
   <title>Атлас пожаров · NASA FIRMS</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=fire-loading">
+  <link rel="stylesheet" href="styles.css?v=fire-frame-date">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=fire-loading" type="module"></script>
+  <script src="app.js?v=fire-frame-date" type="module"></script>
   <script src="correlations.js?v=ndvi" type="module"></script>
   <script src="burn-case.js?v=atlas-workspace" type="module"></script>
 </head>
@@ -199,6 +199,7 @@
         </div>
         <button id="show-period-days" class="quiet-button" type="button" hidden>Смотреть по дням</button>
         <div class="map-caption">
+          <span id="fire-frame-date" role="status" hidden></span>
           <span id="map-summary" role="status"></span>
           <span id="regional-count"></span>
           <button class="quiet-button" id="sko-example" type="button" title="Открыть 12 апреля 2025 года" hidden>СКО · открыть пример ↗</button>

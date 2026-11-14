@@ -135,6 +135,7 @@ body { overflow: hidden; }
 @keyframes fire-loading-spin { to { transform: rotate(1turn); } }
 @media (prefers-reduced-motion: reduce) { .fire-loading-spinner { animation: none; } }
 .map-caption { display: flex; flex-wrap: wrap; gap: 3px 14px; padding-top: 6px; font: 11px var(--mono); color: var(--muted); }
+#fire-frame-date { color: var(--sky); font-weight: 700; }
 #regional-count { color: #b9efff; }
 .timeline { position: absolute; left: 12px; bottom: 25px; z-index: 520; width: min(620px, calc(100% - 24px)); border: 1px solid #45638d; border-radius: 6px; padding: 8px 10px; background: #07152eef; }
 .timeline summary { cursor: pointer; color: var(--sky); list-style: none; display: flex; align-items: center; gap: 5px; min-height: 22px; }
