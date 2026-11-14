@@ -68,6 +68,18 @@ def run(base,output,timeout):
             page.set_viewport_size({'width':390,'height':900});page.wait_for_timeout(600)
             check(not page.evaluate('document.documentElement.scrollWidth>innerWidth'),'Persistent shell and analysis fit a 390px viewport')
             page.screenshot(path=str(output/'analysis-mobile.png'),full_page=True)
+            page.locator('#platform').select_option('all')
+            page.wait_for_function("!document.querySelector('#run').disabled")
+            post_count=sum(r['method']=='POST' for r in report['requests'])
+            page.locator('#run').click();page.wait_for_timeout(500)
+            check(page.evaluate("window.__headerBeforeNavigation===document.querySelector('#app-header')"),'Submitting all platforms keeps the shell instead of reloading the page')
+            check('Выберите один спутник' in page.locator('#error-banner').inner_text() and sum(r['method']=='POST' for r in report['requests'])==post_count,'All-platform analysis requires an explicit single-source selection before any POST')
+            legacy=browser.new_page()
+            legacy.on('pageerror',lambda e:report['javascript_errors'].append(str(e)))
+            legacy.goto(base.rstrip('/')+'/atlas.html#kishkenekol-case',wait_until='domcontentloaded')
+            legacy.wait_for_function("document.body.dataset.appView==='cases' && document.querySelector('#kishkenekol-case') && !document.querySelector('#kishkenekol-case').hidden",timeout=60000)
+            check('Кишкенеколь' in legacy.locator('#app-context').inner_text(),'Legacy case links restore Cases navigation and the case dataset scope')
+            legacy.close()
             check(not report['javascript_errors'],'No unhandled browser errors across atlas, case and analysis navigation')
             report['status']='PASS';return report
         except Exception as error:

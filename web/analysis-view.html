@@ -8,10 +8,10 @@
           <select id="preset"><option value="sko">Северо-Казахстанская область</option><option value="california">Калифорния · окно</option><option value="brazil">Мату-Гросу · окно</option><option value="canada">Альберта · окно</option><option value="custom">Своя область на карте</option></select>
           <button class="outline full" id="draw-area" type="button">Выделить прямоугольник на карте</button>
           <details id="coordinate-details"><summary>Координаты области</summary><div class="coordinates">
-            <label>Запад<input type="number" id="west" step="0.00001" min="-180" max="180" value="65.9" required></label>
-            <label>Восток<input type="number" id="east" step="0.00001" min="-180" max="180" value="74.3" required></label>
-            <label>Юг<input type="number" id="south" step="0.00001" min="-85" max="85" value="52.2" required></label>
-            <label>Север<input type="number" id="north" step="0.00001" min="-85" max="85" value="55.5" required></label>
+            <label>Запад<input type="number" id="west" step="any" min="-180" max="180" value="65.9" required></label>
+            <label>Восток<input type="number" id="east" step="any" min="-180" max="180" value="74.3" required></label>
+            <label>Юг<input type="number" id="south" step="any" min="-85" max="85" value="52.2" required></label>
+            <label>Север<input type="number" id="north" step="any" min="-85" max="85" value="55.5" required></label>
           </div><button class="text-button" id="apply-bounds" type="button">Показать границы</button></details>
           <p class="hint" id="area-note">Анализ по полигону области, не по прямоугольнику.</p>
         </fieldset>

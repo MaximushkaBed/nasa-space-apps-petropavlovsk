@@ -14,9 +14,11 @@ The project scope is **global**. North Kazakhstan Region (Северо-Каза�
 
 Shared-server deployment, global dataset paths and Komodo autodeploy are documented in [deploy/README.md](deploy/README.md). Large world archives are downloaded on `unik`, not on the laptop.
 
-The main application selects an area and dates, builds a years-by-month calendar and weekly seasonal profile, compares years, maps monthly deviations, and exports CSV, JSON and SVG. A bounded asynchronous API queries real archive files on the shared server. See [workbench/API documentation](docs/workbench.md) for setup, units, validation and current scientific limits.
+The application shares a persistent header and study context across Atlas, Area Analysis and Cases. It selects an exact area and dates, builds a years-by-month calendar and weekly seasonal profile, compares years, maps monthly deviations, and exports CSV, JSON and SVG. A bounded asynchronous API queries real archive files on the shared server. See [workbench/API documentation](docs/workbench.md) for setup, units, validation and current scientific limits.
 
-Oksana's full-screen atlas and case studies remain available at `/atlas.html`, with their existing data layers and daily global FIRMS API. A static local server can preview the interface; live analysis requires the API. See the [atlas documentation](web/README.md).
+[Global factor matrices](docs/global-matrix.md) calculate numerical weather and landscape relationships for the selected territory using ERA5, WorldCover, GLO-90 and GeoNames. They preserve missing values, pair counts and source provenance; the separate fixed SKO study is retained.
+
+Oksana's full-screen atlas and case studies are integrated into the shared application. Existing `/atlas.html` links redirect to the corresponding view and preserve case anchors. A static local server can preview the interface; live analysis requires the API. See the [atlas documentation](web/README.md).
 
 ## Research
 

@@ -1,4 +1,5 @@
 import { mountMatrixPanel } from './matrix-panel.js';
+import { sameScientificConfig, scientificSignature } from './scientific-context.js';
 
 export function mountWorkbench(root, bridge={}) {
 if (!(root instanceof Element)) throw new TypeError('Workbench root is required');
@@ -54,6 +55,9 @@ function invalidate(){
   result=null;jobId=null;++mapGeneration;mapYear=null;cellsLayer.clearLayers();$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=true;
   $('focus-month').disabled=true;$('focus-month').replaceChildren(new Option('Сначала построить анализ',''));
   ['activity-value','baseline-value','anomaly-value','season-months'].forEach(id=>$(id).textContent='—');
+  $('points-value').textContent='Нет рассчитанных данных для текущих параметров.';$('anomaly-context').textContent='Постройте анализ выбранной территории для сравнения с историей.';$('reference-disagreement').textContent='';
+  $('activity-unit').textContent=`ячейко-дни · сетка ${$('grid').value} км`;$('map-key-text').textContent='Карта текущих параметров ещё не рассчитана.';
+  $('series-caption').textContent='Нет рассчитанного временного ряда.';$('seasonal-caption').textContent='Сезонный профиль появится после расчёта.';$('validation-note').textContent='Проверка относится к рассчитанным параметрам.';$('compare-caption').textContent='Сравнение лет появится после расчёта выбранной территории.';$('provenance-details').textContent='Для текущих параметров готовый расчёт не выбран.';
   $('context-note').textContent='Параметры изменены. Постройте анализ выбранной области.';
   $('analysis-area-title').textContent=areaName(formConfig());$('map-period').textContent='Область исследования';$('map-count').textContent='';
   $('retry-map').hidden=true;
@@ -63,8 +67,9 @@ function invalidate(){
 }
 function setBusy(value){busy=value;$('run').disabled=value;$('run').firstChild.textContent=value?'Считаю… ':'Построить анализ ';root.querySelectorAll('#analysis-form fieldset').forEach(f=>f.disabled=value);$('job-banner').hidden=!value;}
 async function startAnalysis(event){
+  event?.preventDefault();
   if(source==='all'){$('error-banner').hidden=false;$('error-banner').textContent='Выберите один спутник для временного анализа. Данные разных платформ не суммируются.';return;}
-  event?.preventDefault();stopPlaying();drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';const config=formConfig();const current=++generation;
+  stopPlaying();drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';const config=formConfig();const current=++generation;
   $('error-banner').hidden=true;setBusy(true);result=null;matrixPanel.reset();++mapGeneration;mapYear=null;cellsLayer.clearLayers();publishContext();
   $('retry-map').hidden=true;
   $('analysis-area-title').textContent=areaName(config);$('context-note').textContent=`${config.start} — ${config.end} · базовые годы ${config.baseline_start}–${config.baseline_end}`;
@@ -77,16 +82,36 @@ async function startAnalysis(event){
       if(current!==generation)return;
       $('job-message').textContent=state.message;$('job-progress').value=state.progress||0;
       if(state.status==='error')throw new Error(state.message);
-      if(state.status==='done'){result=state.result;break;}
+      if(state.status==='done'){acceptResult(state.result);break;}
       await new Promise(resolve=>setTimeout(resolve,1200));
     }
     if(!result||current!==generation)return;
-    await displayResult(config);
+    await displayResult();
   }catch(error){if(current===generation){$('error-banner').hidden=false;$('error-banner').textContent=error.message;$('form-status').textContent='Измените параметры или повторите запрос.';}}
   finally{if(current===generation)setBusy(false);}
 }
-async function displayResult(config){
-    if(config.preset==='sko'){clearShape();const canonical=result.config?.geometry||settings?.region_geometry;if(canonical)roiGeometry=canonical.type==='Feature'?clone(canonical.geometry):clone(canonical);showBounds(false);}
+function acceptResult(candidate){
+ if(!candidate?.config)throw new Error('В расчёте отсутствуют научные параметры.');
+ scientificSignature(candidate.config);
+ const freeze=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}return value;};
+ result={...candidate,config:freeze(clone(candidate.config))};
+}
+function syncCanonicalConfig(config){
+ $('preset').value=config.preset;
+ ['west','south','east','north'].forEach((key,index)=>$(key).value=config.bbox[index]);
+ $('start').value=config.start;$('end').value=config.end;$('baseline-start').value=config.baseline_start;$('baseline-end').value=config.baseline_end;$('grid').value=config.grid_km;$('include-nrt').checked=config.quality==='all';$('daynight').value=config.daynight;
+ roiCircle=config.circle?clone(config.circle):null;
+ const geometry=config.geometry||(config.preset==='sko'?settings?.region_geometry:null);
+ roiGeometry=roiCircle?null:geometry?clone(geometry.type==='Feature'?geometry.geometry:geometry):null;
+ roiName=config.roi_name||'';roiSource=config.roi_source||'';
+ $('analysis-area-title').textContent=areaName(config);showBounds(false);
+}
+function rejectCachedResult(message){
+ if(busy)setBusy(false);invalidate();pendingViewState=null;
+ $('error-banner').hidden=false;$('error-banner').textContent=message;$('form-status').textContent='Параметры выбранной территории сохранены. Нажмите «Построить анализ», чтобы получить соответствующие данные.';bridge.notice?.(message);
+}
+async function displayResult(){
+    const config=result.config;syncCanonicalConfig(config);
     const rows=result.monthly.filter(r=>r.platform===source&&r.cells!==null);
     const lastYear=rows.at(-1)?.month.slice(0,4);
     month=rows.filter(r=>r.month.startsWith(lastYear)).sort((a,b)=>(b.cells||0)-(a.cells||0))[0]?.month||rows.at(-1)?.month;
@@ -461,13 +486,21 @@ async function initialize(){
  if(!settingsPromise)settingsPromise=request('/api/v1/config').then(value=>{settings=value;$('end').max=settings.end;$('archive-info').textContent=`${n(settings.rows/1e6)} млн записей · архив с 2000 года`;const preset=selectedPreset();if(preset)['west','south','east','north'].forEach((key,i)=>$(key).value=preset.bbox[i]);showBounds();}).catch(error=>{settingsPromise=null;throw error;});
  return settingsPromise;
 }
+function displayBounds(roi){
+ const box=Array.isArray(roi.bbox)?clone(roi.bbox):null;
+ if(!roi.circle||!box||box.length!==4||!box.every(Number.isFinite))return box;
+ const center=roi.circle.center?.[0];
+ if(Number.isFinite(center)){const shift=360*Math.round(((box[0]+box[2])/2-center)/360);box[0]-=shift;box[2]-=shift;}
+ if(box[0]<-180||box[2]>180||box[0]>box[2]){box[0]=-180;box[2]=180;}
+ return box;
+}
 function applyContext(context){
  if(!context)return;
  if(busy){++generation;setBusy(false);pendingAnalysis=null;}
  const roi=context.roi;
  if(roi){
   clearShape();const preset=roi.preset&&[...$('preset').options].some(option=>option.value===roi.preset)?roi.preset:'custom';$('preset').value=preset;
-  const bbox=preset==='sko'?settings?.presets.find(item=>item.id==='sko')?.bbox:roi.bbox;
+  const bbox=preset==='sko'?settings?.presets.find(item=>item.id==='sko')?.bbox:displayBounds(roi);
   if(Array.isArray(bbox)&&bbox.length===4)['west','south','east','north'].forEach((key,i)=>$(key).value=bbox[i]);
   if(preset!=='sko'){roiGeometry=clone(roi.geometry?.type==='Feature'?roi.geometry.geometry:roi.geometry)||null;roiCircle=roiGeometry?null:clone(roi.circle)||null;roiName=String(roi.name||'');roiSource=String(roi.source||'');}
  }
@@ -495,9 +528,9 @@ function focusState(){
  const dates=frameDates();return frame?{start:dates[frame-1],end:dates[frame-1],basis:'UTC',grain:'day'}:{start:dates[0],end:dates.at(-1),basis:'UTC',grain:'month'};
 }
 function getState(){
- const config=formConfig(),geometry=config.preset==='sko'?(roiGeometry||settings?.region_geometry):roiGeometry;
+ const config=result?.config||formConfig(),geometry=config.circle?null:config.geometry||(config.preset==='sko'?(roiGeometry||settings?.region_geometry):roiGeometry),circle=config.circle||roiCircle;
  const matrix=matrixPanel.getState();
- return {context:{roi:{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(roiCircle?{circle:clone(roiCircle)}:{}),source:roiSource||(config.preset==='sko'?'canonical-sko':'user')},history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km},tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
+ return {context:{roi:{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')},history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km},tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
 }
 async function activate(options={}){
  const current=++activation;active=true;
@@ -505,7 +538,7 @@ async function activate(options={}){
   await initialize();
   if(!active||current!==activation)return;
   const saved=options.state||options,matching=saved.analysisId&&saved.analysisId===jobId&&result;
-  const incoming=options.context||(!matching?saved.context:null);
+  const incoming=options.context||saved.context;
   if(incoming)applyContext(incoming);
   else if(matching&&saved.context){if(labels[saved.context.platform]){source=saved.context.platform;$('platform').value=source;}retainedFocus=clone(saved.context.focus);applyFocus(retainedFocus);}
   matrixPanel.resume();
@@ -515,7 +548,8 @@ async function activate(options={}){
   map.invalidateSize({pan:false});
   if(saved.analysisId&&!result){
    const restoringGeneration=generation;
-   try{const job=await request(`/api/v1/analyses/${encodeURIComponent(saved.analysisId)}`);if(current!==activation||!active||restoringGeneration!==generation)return;if(job.status!=='done'||!job.result)throw new Error('Сохранённый расчёт ещё не готов.');jobId=saved.analysisId;result=job.result;await displayResult(result.config);$('form-status').textContent='Восстановлен сохранённый расчёт; новый запрос не выполнялся.';}
+   const intended=clone(formConfig());
+   try{const job=await request(`/api/v1/analyses/${encodeURIComponent(saved.analysisId)}`);if(current!==activation||!active||restoringGeneration!==generation)return;if(job.status!=='done'||!job.result)throw new Error('Сохранённый расчёт ещё не готов.');if(!sameScientificConfig(job.result.config,intended)||!sameScientificConfig(formConfig(),intended)){rejectCachedResult('Сохранённый расчёт относится к другой территории или другим научным параметрам. Данные не показаны; выполните новый расчёт.');return getState();}jobId=saved.analysisId;acceptResult(job.result);await displayResult();$('form-status').textContent='Восстановлен сохранённый расчёт; новый запрос не выполнялся.';}
    catch(error){if(current===activation){$('form-status').textContent='Сохранённый расчёт недоступен. Параметры восстановлены; нажмите «Построить анализ», чтобы рассчитать заново.';$('error-banner').hidden=false;$('error-banner').textContent=error.message;}}
   }
   else if(options.run===true){pendingAnalysis=startAnalysis();await pendingAnalysis;}

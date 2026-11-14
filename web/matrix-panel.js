@@ -1,3 +1,5 @@
+import { sameScientificConfig } from './scientific-context.js';
+
 const svgNS='http://www.w3.org/2000/svg';
 const modeLabels={within:'По дням · внутри месяцев',pooled:'По дням · весь период',space:'По участкам'};
 const format=new Intl.NumberFormat('ru',{maximumFractionDigits:3});
@@ -22,7 +24,7 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={}}){
  function fields(){return mode==='space'?result?.space_factors||[]:result?.time_factors||[];}
  function cellAt(i,j){const value=result?.results?.[platform]?.[mode]?.[i]?.[j];return Array.isArray(value)?{rho:value[0],n:value[1]}:value&&typeof value==='object'?value:{rho:null,n:null};}
  function detailAt(i,j){return result?.pair_details?.[platform]?.[mode]?.[i]?.[j]||{};}
- function roiName(config){return config?.roi_name||getAnalysis()?.context?.roi?.name||config?.preset||'Выбранная область';}
+ function roiName(config){const names={sko:'Северо-Казахстанская область',california:'Калифорния · окно',brazil:'Мату-Гросу · окно',canada:'Альберта · окно'};return config?.roi_name||names[config?.preset]||(Array.isArray(config?.bbox)?`Область ${config.bbox.map(value=>text(value)).join(', ')}`:'Выбранная область');}
  function refresh(){
   const analysis=getAnalysis();
   const config=result?.config||analysis?.result?.config;
@@ -53,6 +55,8 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={}}){
     if(job.status==='done'){
      if(!job.result)throw new Error('Сервис вернул матрицу без результатов.');
      if(job.result.analysis_id&&job.result.analysis_id!==analysisId)throw new Error('Сохранённая матрица относится к другому расчёту. Рассчитайте матрицу этой территории.');
+     const current=getAnalysis();
+     if(!current||current.id!==analysisId||!sameScientificConfig(job.result.config,current.result.config)||job.result.extract_id!==current.result.extract_id||job.result.snapshot_at!==current.result.snapshot_at)throw new Error('Параметры сохранённой матрицы не совпадают с территорией, историей или снимком текущего анализа. Рассчитайте матрицу выбранной территории.');
      result=job.result;busy=false;const preferred=restorePlatform||getAnalysis()?.platform;restorePlatform=null;platform=result.platforms?.includes(preferred)?preferred:result.platforms?.[0]||null;
      $('.matrix-platform').replaceChildren(...(result.platforms||[]).map(name=>new Option(name,name)));$('.matrix-platform').value=platform||'';
      status('Матрица готова. Выберите пару, чтобы увидеть реальные наблюдения.');showResults();refresh();render();return;
