@@ -49,6 +49,7 @@ class GlobalMirrorTests(unittest.TestCase):
                                              'start': '2026-11-10T12:00:00Z', 'sha256': 'live'}}
             result = firms.build_live_tail(root, assets)
             self.assertEqual(result['rows'], 1)
+            self.assertNotIn('year', {column['name'] for column in result['columns']})
             self.assertEqual(result['start'], '2026-11-11T12:00:00Z')
             con = firms.connection()
             self.assertEqual(con.execute('SELECT quality FROM read_parquet(?)', [str(root / result['path'])]).fetchone()[0], 'SP')

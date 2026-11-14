@@ -105,7 +105,8 @@ docker build -f deploy/Dockerfile.data -t nasa-space-apps-data:current .
 docker image tag nasa-space-apps-web:current nasa-space-apps-web:rollback
 ```
 
-Отключить вебхук stack в Komodo, восстановить образ и запустить без сборки:
+`update-checkout.sh` перед деплоем автоматически сохраняет предыдущий образ
+как `rollback`. Отключить вебхук stack в Komodo, восстановить образ и запустить без сборки:
 
 ```bash
 docker image tag nasa-space-apps-web:rollback nasa-space-apps-web:current

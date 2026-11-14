@@ -97,7 +97,7 @@ def parquet_info(path, kind):
     con = connection()
     try:
         rows, groups = con.execute("SELECT num_rows,num_row_groups FROM parquet_file_metadata(?)", [str(path)]).fetchone()
-        columns = con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(path)]).fetchall()
+        columns = con.execute("DESCRIBE SELECT * FROM read_parquet(?, hive_partitioning=false)", [str(path)]).fetchall()
         names = {row[0] for row in columns}
         result = {"rows": rows, "row_groups": groups,
                   "columns": [{"name": row[0], "type": row[1]} for row in columns]}
@@ -181,13 +181,13 @@ def build_live_tail(root, assets):
         # Filter the base to the rolling interval before the anti join.
         query = """COPY (
             WITH recent AS (
-              SELECT * FROM read_parquet(?)
+              SELECT * FROM read_parquet(?, hive_partitioning=false)
               QUALIFY row_number() OVER (
                 PARTITION BY sensor, acq_datetime, geometry ORDER BY quality='SP' DESC, version DESC
               )=1
             )
             SELECT l.* FROM recent l ANTI JOIN
-              (SELECT sensor,acq_datetime,geometry FROM read_parquet(?) WHERE acq_datetime>=?::TIMESTAMP) b
+              (SELECT sensor,acq_datetime,geometry FROM read_parquet(?, hive_partitioning=false) WHERE acq_datetime>=?::TIMESTAMP) b
             ON l.sensor=b.sensor AND l.acq_datetime=b.acq_datetime AND l.geometry=b.geometry
         ) TO ? (FORMAT PARQUET, COMPRESSION ZSTD)"""
         con.execute(query, [str(root / live["path"]), str(root / base["path"]), live["start"], str(temporary)])
