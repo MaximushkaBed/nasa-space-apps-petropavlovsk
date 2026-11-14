@@ -62,6 +62,48 @@ python3 -m unittest discover -s tests -v
 
 Tests use simulated API responses; live downloads require a valid MAP_KEY.
 
+## GitHub monitoring
+
+`scripts/watch_github.py` performs a read-only snapshot of this repository's branches, tags, issues, pull requests, reviews, comments, releases, workflow runs, recent events, and selected repository settings. It compares snapshots and records changes in `data/monitor/github/changes.jsonl`. The first run establishes a baseline. Failed checks preserve the last successful baseline.
+
+```bash
+python3 scripts/watch_github.py --sync
+systemctl --user status nasa-space-apps-github-monitor.timer
+systemctl --user stop nasa-space-apps-github-monitor.timer
+```
+
+The user systemd timer in `ops/` checks every **20 seconds** and starts again at login when enabled. With `--sync`, it fetches origin, records changed file paths, saves documentation/research diffs in `data/monitor/github/latest-research.md`, and fast-forwards the current branch when Git can preserve local edits. Conflicting local edits or diverged branches are reported for manual integration; it never resets, discards edits, or pushes. The installed service sends **no desktop notifications**. During active development, the agent reads these local updates to incorporate teammates' research; the service itself does not run an AI agent or update conversation context. This polling monitor is not a complete GitHub audit log: activity created and removed between polls may be missed, and GitHub's recent-event feed has retention limits.
+
+## Complete historical database
+
+```bash
+python3 -u -m scripts.build_history --region sko --start 2000-11-01
+python3 -m scripts.render_history
+```
+
+The default end date is today in UTC. The history builder includes MODIS (Terra and Aqua) and VIIRS (Suomi-NPP, NOAA-20, NOAA-21) over their available date ranges. It downloads published annual Kazakhstan CSVs for the standard archive and clips them to the region. Missing annual files and the recent tail are fetched through the Area API. SP takes precedence over NRT for each sensor so their date ranges do not overlap. All original columns, processing status, satellite, and collection versions are retained.
+
+Each completed part is cached with a SHA-256 checksum in `data/cache/firms-history/sko/`. Rerun the command after an interruption to resume. Recent NRT parts are refreshed; `--refresh` reloads all parts. The manifest is marked complete only after every planned part succeeds.
+
+Local outputs in `data/raw/firms/sko/history/`:
+
+- `observations.csv`: the full clipped observation database with source/processing/platform metadata.
+- `monthly.csv` and `yearly.csv`: separate sensor summaries, including zero detections in successfully queried periods and flags for partial periods.
+- `summary.json`: aggregates, source availability, collection-version counts, and interpretation notes.
+- `manifest.json`: retrieval coverage, checksums, source URLs for public archive files, and completion status. API keys are excluded.
+
+The renderer exports an offline interactive calendar and annual chart to `reports/sko-history.html`, with aggregate JSON and CSV exports alongside it. Add `--plot` to also export `reports/sko-history.png` (requires matplotlib). These are **raw observation summaries**, not a harmonized fire-count or burned-area estimate. Product availability and successful queries do not establish clear-sky satellite coverage; a zero count is not proof that no fire occurred.
+
+### Share the database
+
+The [data snapshot release](https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/releases/tag/data-sko-2026-11-14) contains the full observation database and offline report as a ZIP attachment, with a SHA-256 checksum. Teammates with access to this private repository can download the attachment and use the prepared data without an API key. Download the named `sko-history-...zip` asset; GitHub's automatic “Source code” ZIP contains repository code and aggregates only.
+
+To rebuild the data package after downloading and rendering the history:
+
+```bash
+python3 -m scripts.package_history
+```
+
 ## Open data
 
 - [NASA FIRMS archive downloads](https://firms.modaps.eosdis.nasa.gov/download/): hotspot observations in CSV, JSON, and Shapefile formats. Archive access requires Earthdata Login or email authentication.

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check NASA Space Apps GitHub every 20 seconds
+
+[Timer]
+OnCalendar=*-*-* *:*:00,20,40
+AccuracySec=1s
+Persistent=true
+Unit=nasa-space-apps-github-monitor.service
+
+[Install]
+WantedBy=timers.target

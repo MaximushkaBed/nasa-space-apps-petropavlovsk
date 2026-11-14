@@ -1,0 +1,10 @@
+[Unit]
+Description=NASA Space Apps GitHub change monitor
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Документы/NASA_SPACE_APPS
+ExecStart=/usr/bin/python3 scripts/watch_github.py --sync
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:%h/.local/bin
+TimeoutStartSec=180

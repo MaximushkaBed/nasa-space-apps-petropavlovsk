@@ -12,6 +12,7 @@
 # Downloaded satellite data and local caches
 /data/raw/
 /data/cache/
+/data/monitor/
 
 # JavaScript / TypeScript
 node_modules/
