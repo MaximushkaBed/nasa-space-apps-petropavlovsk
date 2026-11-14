@@ -2,8 +2,8 @@
 
 import { createExtraLayers } from './map-layers.js?v=area-tools';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
-import { createFireOverlay } from './fire-overlay.js?v=area-tools';
-import { createAreaAnalysis, inRing } from './area-analysis.js?v=area-tools';
+import { createFireOverlay } from './fire-overlay.js?v=map-controls';
+import { createAreaAnalysis, inRing } from './area-analysis.js?v=map-controls';
 import { addDays, createPeriodPicker, daysBetween } from './period-picker.js?v=atlas-periods';
 
 const $ = (id) => document.getElementById(id);
@@ -116,7 +116,7 @@ function createWorldOverview() {
   });
 }
 
-function createMap(basemap, boundary) {
+function createMap(basemap, boundary, closePanel) {
   const styles = {
     country: { color: '#7890a0', weight: 1.1, fillColor: '#162846', fillOpacity: 1 },
     province: { color: '#74838e', weight: .65, opacity: .58, dashArray: '3 4' },
@@ -205,8 +205,8 @@ function createMap(basemap, boundary) {
   setBasemap(true);
   const activityPane = map.createPane('activity-cells');
   activityPane.style.zIndex = 415;
-  fireOverlay = createFireOverlay(map, () => worldArchive?.platforms ?? [], number, withinRegion, () => $('area-panel').hidden);
-  areaAnalysis = createAreaAnalysis(map, () => !$('area-panel').hidden, getJSON, boundary.geometry);
+  fireOverlay = createFireOverlay(map, () => worldArchive?.platforms ?? [], number, withinRegion, () => !areaAnalysis.drawing());
+  areaAnalysis = createAreaAnalysis(map, () => { map.closePopup(); closePanel(); }, getJSON, boundary.geometry);
   weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)));
 
   const labelPane = map.createPane('city-labels');
@@ -317,9 +317,9 @@ function showWorldFrame() {
   const selected = $('world-satellite').value;
   const points = worldFrame?.points ?? [];
   const selectedPoints = selected === '' ? points : points.filter((point) => point[2] === Number(selected));
-  const drawnRegionalCount = fireOverlay(selectedPoints, fireDisplay, visible);
-  const regionalCount = worldFrame?.regionalCount ?? drawnRegionalCount;
   const approximate = Boolean(worldFrame?.approximate);
+  const drawnRegionalCount = fireOverlay(selectedPoints, fireDisplay, visible, approximate);
+  const regionalCount = worldFrame?.regionalCount ?? drawnRegionalCount;
   const frameLabel = approximate ? $('frame-date').textContent : $('world-date').value;
   areaAnalysis.render({ date: frameLabel, points: worldFrame ? selectedPoints : undefined,
     platforms: worldArchive.platforms, approximate, cellDegrees: worldFrame?.cellDegrees,
@@ -328,7 +328,7 @@ function showWorldFrame() {
     : worldFrame ? `Мир · ${number.format(worldFrame.total ?? selectedPoints.length)} детекций` : 'Загрузка детекций…';
   const regionalPrefix = approximate && !worldFrame.regionalExact ? '≈ ' : '';
   $('regional-count').textContent = visible && worldFrame ? `СКО · ${regionalPrefix}${number.format(regionalCount)}` : '';
-  $('world-point-legend').lastChild.textContent = approximate ? ' Группы детекций за период' : ' Тепловые детекции';
+  $('world-point-legend').lastChild.textContent = approximate ? ' Группы детекций за период' : ' Пиксели MODIS / VIIRS';
   $('sko-example').hidden = !visible || !worldFrame || regionalCount > 0 || approximate
     || kishkenekolDay < worldArchive.first || kishkenekolDay > worldArchive.last;
   if (worldFrame?.method === 'publisher') {
@@ -629,10 +629,9 @@ function chooseMonth(index) {
 function setupPanels() {
   const analysis = $('analysis-panel');
   const layers = $('map-layer-controls');
-  const area = $('area-panel');
   const layersToggle = $('open-layers');
-  const areaToggle = $('open-area');
   const tabs = [...document.querySelectorAll('.tool-nav a')];
+  const toggles = [...tabs, layersToggle];
   const toolbar = document.querySelector('.topbar');
   new ResizeObserver(() => {
     $('top').style.setProperty('--panel-top', `${Math.ceil(toolbar.getBoundingClientRect().bottom + 7)}px`);
@@ -643,9 +642,9 @@ function setupPanels() {
     '#kishkenekol-case': ['kishkenekol-case', 'Кейс Кишкенеколя'],
   };
   function closePanel() {
-    const active = [...tabs, layersToggle, areaToggle].find((tab) => tab.getAttribute('aria-expanded') === 'true');
-    for (const tab of [...tabs, layersToggle, areaToggle]) tab.setAttribute('aria-expanded', 'false');
-    analysis.hidden = layers.hidden = area.hidden = true;
+    const active = toggles.find((tab) => tab.getAttribute('aria-expanded') === 'true');
+    for (const tab of toggles) tab.setAttribute('aria-expanded', 'false');
+    analysis.hidden = layers.hidden = true;
     areaAnalysis?.resetDraft();
     if (Object.hasOwn(sections, location.hash)) history.replaceState(null, '', '#observations');
     active?.focus({ preventScroll: true });
@@ -653,10 +652,9 @@ function setupPanels() {
   function openAnalysis(hash) {
     const selected = sections[hash];
     if (!Object.hasOwn(sections, hash)) return closePanel();
-    layers.hidden = area.hidden = true;
+    layers.hidden = true;
     areaAnalysis?.resetDraft();
     layersToggle.setAttribute('aria-expanded', 'false');
-    areaToggle.setAttribute('aria-expanded', 'false');
     for (const tab of tabs) tab.setAttribute('aria-expanded', String(tab.hash === hash));
     for (const [id] of Object.values(sections)) $(id).hidden = id !== selected[0];
     $('analysis-heading').textContent = selected[1];
@@ -677,17 +675,10 @@ function setupPanels() {
     layers.hidden = false;
     layersToggle.setAttribute('aria-expanded', 'true');
   });
-  areaToggle.addEventListener('click', () => {
-    if (!area.hidden) return closePanel();
-    closePanel();
-    area.hidden = false;
-    areaToggle.setAttribute('aria-expanded', 'true');
-    areaAnalysis?.opened();
-  });
   for (const button of document.querySelectorAll('[data-close-panel]')) button.addEventListener('click', closePanel);
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !$('method').open && !$('period-picker').open
-      && (!analysis.hidden || !layers.hidden || !area.hidden)) closePanel();
+      && (!analysis.hidden || !layers.hidden || areaAnalysis?.active())) closePanel();
   });
   window.addEventListener('hashchange', () => openAnalysis(location.hash));
   if (Object.hasOwn(sections, location.hash)) openAnalysis(location.hash);
@@ -702,7 +693,7 @@ async function start() {
       getJSON('data/basemap.geojson'), getJSON('data/region.geojson'), getJSON('data/calendar.json?v=sko-series'),
     ]);
     calendar = regionalCalendar;
-    const reset = createMap(basemap, boundary);
+    const reset = createMap(basemap, boundary, closePanel);
     $('sko-example').addEventListener('click', () => {
       stopPlayback();
       dailySatellite = '';

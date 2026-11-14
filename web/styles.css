@@ -72,7 +72,8 @@ body { overflow: hidden; }
 .atlas-panel { position: absolute; z-index: 650; top: var(--panel-top, 62px); right: 12px; max-height: calc(100dvh - var(--panel-top, 62px) - 14px); overflow: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid #45638d; border-radius: 6px; background: #091a35f7; }
 .analysis-panel { width: min(1080px, calc(100% - 82px)); }
 .area-panel { width: min(340px, calc(100% - 60px)); }
-.area-tools { margin-top: 9px; width: fit-content; max-width: 100%; flex-wrap: wrap; }
+.area-tools { display: grid; gap: 4px; margin-top: 5px; padding-top: 8px; border-top: 1px solid #7e98b6; }
+.area-instruction { position: absolute; z-index: 500; top: calc(var(--panel-top, 62px) + 94px); left: 55px; max-width: min(255px, calc(100% - 68px)); margin: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: #07132df2; font-size: 12px; pointer-events: none; }
 .area-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .area-presets button { padding: 4px 8px; min-height: 28px; }
 .radius-label, .area-search { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 9px; font-size: 12px; }
@@ -87,7 +88,7 @@ body { overflow: hidden; }
 .area-summary h3 { margin: 0; font-size: 14px; }
 .area-count { display: block; color: #9ae8ff; margin-top: 6px; font-size: 17px; }
 .area-platforms { padding-left: 16px; margin: 7px 0; color: var(--muted); font-size: 12px; }
-#sko-example { position: absolute; z-index: 540; left: 12px; top: calc(var(--panel-top, 62px) + 84px); max-width: calc(100% - 24px); background: #07132df2; color: #b9efff; }
+#sko-example { padding: 2px 5px; color: #b9efff; font: inherit; }
 .drawer-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .drawer-heading h2 { font-size: 15px; font-weight: 660; }
 .drawer-heading .quiet-button { padding: 3px 8px; font-size: 18px; line-height: 1; }
@@ -120,6 +121,9 @@ body { overflow: hidden; }
 .map-tools { position: absolute; top: var(--panel-top, 62px); left: 12px; z-index: 500; display: grid; gap: 4px; }
 .map-tools button { display: grid; place-items: center; border: 1px solid #62799f; border-radius: 4px; width: 36px; height: 36px; background: #07173fee; font-size: 20px; }
 .map-tools button:hover { background: #1b4384; }
+.map-tools button[aria-pressed='true'] { border-color: var(--yellow); background: var(--yellow); color: var(--deep-blue); }
+.area-tools svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
+.area-tools #area-polygon svg circle { fill: currentColor; stroke: none; }
 .view-switch { background: #07173fe8; border: 1px solid #425c89; border-radius: 4px; display: flex; padding: 3px; gap: 2px; }
 .view-switch button { border: 0; border-radius: 2px; padding: 6px 9px; background: transparent; color: #c2d2ef; font-weight: 570; font-size: 12px; white-space: nowrap; }
 .view-switch button[aria-pressed='true'] { background: var(--yellow); color: var(--deep-blue); font-weight: 700; }
@@ -135,7 +139,7 @@ body { overflow: hidden; }
 .timeline[open] summary::before { content: '▾'; }
 .timeline-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 .fire-key { color: var(--muted); display: inline-flex; gap: 5px; align-items: center; font-size: 10px; }
-.fire-key i { width: 6px; height: 6px; background: #ff382d; border-radius: 50%; }
+.fire-key i { width: 6px; height: 6px; background: #ff382d; }
 #heat-legend i { width: 22px; border-radius: 2px; background: linear-gradient(90deg,#ff962d,#f44918,#ffbc36,#fff288); }
 #frame-date { font: 13px var(--mono); }
 .utc-label { color: var(--muted); font: 9px var(--mono); }
@@ -347,7 +351,6 @@ dialog strong { color: var(--text); }
   .topbar .tool-nav { width: 100%; }
   .area-panel { top: auto; bottom: 26px; width: calc(100% - 14px); max-height: 43dvh; padding: 8px; }
   .workspace:has(.area-panel:not([hidden])) .timeline { visibility: hidden; }
-  .area-panel .area-tools button { padding-inline: 5px; font-size: 11px; }
 }
 @media (max-width: 360px) {
   .map-filters { flex-wrap: wrap; }

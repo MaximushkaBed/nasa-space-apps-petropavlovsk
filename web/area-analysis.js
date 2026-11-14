@@ -48,13 +48,15 @@ function polygonSelection(geometry) {
   };
 }
 
-export function createAreaAnalysis(map, isOpen, getJSON, skoGeometry) {
+export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry) {
   const layer = L.layerGroup().addTo(map);
   map.createPane('analysis-area').style.zIndex = 407;
   const style = { pane: 'analysis-area', color: '#61e4f6', weight: 2, fillOpacity: .10, interactive: false };
   const radius = byId('area-radius');
   const guide = byId('area-guide');
   const results = byId('area-results');
+  const panel = byId('area-panel');
+  const instruction = byId('area-instruction');
   let method = '';
   let vertices = [];
   let selection;
@@ -66,6 +68,7 @@ export function createAreaAnalysis(map, isOpen, getJSON, skoGeometry) {
 
   function renderSummary() {
     byId('area-summary').hidden = !selection;
+    byId('area-report').hidden = !selection || !panel.hidden;
     if (!selection) return;
     const counts = new Map();
     let total = 0;
@@ -123,18 +126,35 @@ export function createAreaAnalysis(map, isOpen, getJSON, skoGeometry) {
     byId('area-undo').disabled = !vertices.length;
   }
 
+  function drawing() {
+    return method === 'circle' || method === 'polygon';
+  }
+
+  function renderTools() {
+    map.getContainer().classList.toggle('selecting-area', drawing());
+    panel.hidden = !(method === 'search' || (method === 'circle' && selection?.circle)
+      || (method === 'polygon' && vertices.length) || method === 'report');
+    instruction.hidden = !panel.hidden || !drawing();
+    instruction.textContent = method === 'circle' ? 'Поставьте точку на карте.' : 'Поставьте первую вершину на карте.';
+    byId('area-radius-label').hidden = byId('area-presets').hidden = !selection?.circle || method === 'search' || method === 'polygon';
+    byId('area-polygon-controls').hidden = method !== 'polygon';
+    byId('area-search').hidden = method !== 'search';
+    byId('area-sources').hidden = method !== 'search';
+    byId('area-title').textContent = method === 'search' ? 'Поиск территории'
+      : method === 'polygon' ? 'Новый полигон' : 'Выделенная территория';
+    guide.textContent = method === 'polygon' ? 'Добавьте хотя бы три вершины и замкните полигон.'
+      : method === 'search' ? 'Для района укажите название и страну через запятую.'
+      : method === 'circle' ? 'Щёлкните по карте, чтобы переместить центр.' : '';
+    guide.hidden = !guide.textContent;
+    renderSummary();
+  }
+
   function setMethod(next) {
     searchRevision++;
     method = next;
     for (const [id, value] of modes) byId(id).setAttribute('aria-pressed', String(method === value));
-    map.getContainer().classList.toggle('selecting-area', isOpen() && (method === 'circle' || method === 'polygon' || (!method && !selection)));
-    byId('area-radius-label').hidden = byId('area-presets').hidden = method !== 'circle';
-    byId('area-polygon-controls').hidden = method !== 'polygon';
-    byId('area-search').hidden = method !== 'search';
     if (method !== 'search') results.replaceChildren();
-    guide.textContent = { circle: 'Поставьте точку на карте. Радиус можно менять.', polygon: 'Отметьте вершины по порядку, затем нажмите «Замкнуть».',
-      search: 'Для района укажите название и страну через запятую.' }[method]
-      ?? (selection ? 'Выберите инструмент, чтобы изменить выделение.' : 'Кликните по карте или выберите способ выделения.');
+    renderTools();
   }
 
   function selectCircle(center) {
@@ -150,14 +170,14 @@ export function createAreaAnalysis(map, isOpen, getJSON, skoGeometry) {
         + Math.cos(latitude) * Math.cos(lat * radians) * Math.sin((lon - center.lng) * radians / 2) ** 2 <= distance,
     };
     redraw();
-    renderSummary();
+    renderTools();
   }
 
   function selectPolygon(geometry, name, details) {
     selection = { ...polygonSelection(geometry), name, details, geometry };
     vertices = [];
     redraw();
-    renderSummary();
+    setMethod('report');
   }
 
   function fitBoundary(geometry) {
@@ -177,10 +197,20 @@ export function createAreaAnalysis(map, isOpen, getJSON, skoGeometry) {
   }
 
   for (const [id, value] of modes) byId(id).addEventListener('click', () => {
-    if (method === value) return setMethod('');
-    if (value === 'polygon') { selection = undefined; vertices = []; redraw(); renderSummary(); }
+    const active = method === value;
+    onActivate();
+    if (active) return;
+    if (value === 'polygon') { selection = undefined; vertices = []; redraw(); }
     setMethod(value);
+    if (value === 'search') byId('area-query').focus();
   });
+  byId('area-report').addEventListener('click', () => { onActivate(); setMethod('report'); });
+  byId('area-close').addEventListener('click', () => {
+    const tool = modes.find(([, value]) => method === value)?.[0] ?? 'area-report';
+    resetDraft();
+    if (!byId(tool).hidden) byId(tool).focus();
+  });
+  for (const [id] of modes) byId(id).disabled = false;
   const changeRadius = () => { if (selection?.circle) selectCircle(selection.center); };
   radius.addEventListener('input', changeRadius);
   for (const button of document.querySelectorAll('[data-radius]')) button.addEventListener('click', () => {
@@ -188,14 +218,15 @@ export function createAreaAnalysis(map, isOpen, getJSON, skoGeometry) {
     changeRadius();
   });
   map.on('click', ({ latlng }) => {
-    if (!isOpen()) return;
-    if (method === 'circle' || (!method && !selection)) {
-      if (!method) setMethod('circle');
+    if (method === 'circle') {
+      if (!radius.validity.valid || !radius.valueAsNumber) return;
       selectCircle(latlng);
+      setMethod('report');
     } else if (method === 'polygon') {
       const previous = vertices.at(-1);
       vertices.push([latlng.lat, previous ? wrapNear(latlng.lng, previous[1]) : latlng.lng]);
       redraw();
+      renderTools();
     }
   });
   map.on('moveend', () => { if (selection) redraw(); });
@@ -207,15 +238,13 @@ export function createAreaAnalysis(map, isOpen, getJSON, skoGeometry) {
       return;
     }
     selectPolygon({ type: 'Polygon', coordinates: [ring] }, 'Пользовательский полигон', `${vertices.length} вершин`);
-    setMethod('');
   });
-  byId('area-undo').addEventListener('click', () => { vertices.pop(); redraw(); });
+  byId('area-undo').addEventListener('click', () => { vertices.pop(); redraw(); renderTools(); });
   byId('area-clear').addEventListener('click', () => {
     selection = undefined;
     vertices = [];
     redraw();
-    renderSummary();
-    setMethod(method);
+    setMethod('');
   });
 
   function namesFor([name, , aliases]) {
@@ -307,7 +336,7 @@ export function createAreaAnalysis(map, isOpen, getJSON, skoGeometry) {
           button.type = 'button';
           button.textContent = [place.name, place.admin1, place.country, 'точка + радиус'].filter(Boolean).join(' · ');
           button.addEventListener('click', () => {
-            setMethod('circle');
+            setMethod('report');
             const center = L.latLng(place.latitude, place.longitude);
             selectCircle(center);
             map.setView(center, 11, { animate: false });
@@ -322,13 +351,11 @@ export function createAreaAnalysis(map, isOpen, getJSON, skoGeometry) {
     }
   });
 
-  return {
-    render(frame) { archiveFrame = frame; renderSummary(); },
-    resetDraft() {
-      if (method === 'polygon' && !selection) { vertices = []; redraw(); }
-      setMethod('');
-      map.getContainer().classList.remove('selecting-area');
-    },
-    opened() { setMethod(method); },
-  };
+  function resetDraft() {
+    if (vertices.length) { vertices = []; redraw(); }
+    setMethod('');
+  }
+
+  return { render(frame) { archiveFrame = frame; renderSummary(); }, resetDraft, drawing,
+    active: () => Boolean(method) };
 }

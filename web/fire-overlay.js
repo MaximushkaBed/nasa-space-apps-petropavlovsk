@@ -1,3 +1,11 @@
+const nominalPixelMeters = [1000, 1000, 375, 375, 375];
+const mercatorCircumference = 2 * Math.PI * 6378137;
+const mercatorLimit = 85.0511287798;
+const pixelZoom = 9;
+const projectedPixelWidth = (meters, latitude) => 256 * meters
+  / (mercatorCircumference * Math.cos(latitude * Math.PI / 180));
+const maxPixelWidth = projectedPixelWidth(1000, mercatorLimit);
+
 export function createFireOverlay(map, platformNames, number, withinRegion, allowPopup) {
   const canvas = L.DomUtil.create('canvas', 'fire-canvas', map.getPane('activity-cells'));
   const heat = document.createElement('canvas');
@@ -23,13 +31,17 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
   const palette = colors.getImageData(0, 0, 256, 1).data;
   const mercatorPoints = (data) => data.map(([lon, lat, platform, weight = 1]) => {
     const point = map.project([lat, lon], 0);
-    return { lon, lat, platform, weight, x: point.x, y: point.y, regional: withinRegion(lon, lat) };
+    const latitude = Math.max(-mercatorLimit, Math.min(mercatorLimit, lat));
+    const pixelWidth = projectedPixelWidth(nominalPixelMeters[platform] ?? 0, latitude);
+    return { lon, lat, platform, weight, x: point.x, y: point.y, pixelWidth, regional: withinRegion(lon, lat) };
   });
   let points = [];
   let regionalCount = 0;
   let mode = 'points';
   let visible = true;
+  let aggregated = false;
   let bins = new Map();
+  let hitTargets = [];
   let input;
 
   function drawHeat(ctx, width, height, ratio) {
@@ -60,6 +72,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
 
   function draw() {
     canvas.hidden = !visible || points.length === 0;
+    hitTargets = [];
     if (canvas.hidden) {
       bins.clear();
       return;
@@ -79,16 +92,26 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     const scale = map.getZoomScale(map.getZoom(), 0);
     const origin = map.getPixelBounds().min;
     const worldWidth = 256 * scale;
-    const firstCopy = Math.floor((origin.x - 24) / worldWidth);
-    const lastCopy = Math.floor((origin.x + width + 24) / worldWidth);
+    const detailed = mode === 'points' && !aggregated && map.getZoom() >= pixelZoom;
+    const margin = detailed ? Math.max(4, maxPixelWidth * scale / 2) : 24;
+    const firstCopy = Math.floor((origin.x - margin) / worldWidth);
+    const lastCopy = Math.floor((origin.x + width + margin) / worldWidth);
     const stride = Math.ceil(width / step) + 10;
+    ctx.fillStyle = '#ff382d';
     for (const point of points) {
       const y = point.y * scale - origin.y;
-      if (y < -24 || y > height + 24) continue;
+      if (y < -margin || y > height + margin) continue;
       const baseX = point.x * scale - origin.x;
       for (let copy = firstCopy; copy <= lastCopy; copy++) {
         const x = baseX + copy * worldWidth;
-        if (x < -24 || x > width + 24) continue;
+        if (x < -margin || x > width + margin) continue;
+        if (detailed) {
+          const size = Math.max(3, point.pixelWidth * scale);
+          const half = size / 2;
+          ctx.fillRect(x - half, y - half, size, size);
+          hitTargets.push({ x, y, half, lon: point.lon, lat: point.lat, platform: point.platform, count: 1 });
+          continue;
+        }
         const index = Math.floor(y / step) * stride + Math.floor(x / step);
         const key = index * 2 + Number(point.regional);
         const bin = bins.get(key);
@@ -100,15 +123,14 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
       drawHeat(ctx, width, height, ratio);
       return;
     }
-    ctx.fillStyle = '#ff382d';
+    if (detailed) return;
     for (const regional of [false, true]) {
       for (const bin of bins.values()) {
         if (bin.regional !== regional) continue;
         const { x, y, count } = bin;
-        const radius = Math.min(4.4, (regional ? 2.5 : 1.65) + Math.log2(count) * .43);
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fill();
+        const half = Math.min(3.8, (regional ? 2.1 : 1.4) + Math.log2(count) * .37);
+        ctx.fillRect(x - half, y - half, half * 2, half * 2);
+        hitTargets.push({ ...bin, half });
       }
     }
   }
@@ -117,27 +139,31 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
   map.on('click', ({ containerPoint, latlng }) => {
     if (!allowPopup() || mode !== 'points') return;
     let selected;
-    let nearest = 9;
-    for (const bin of bins.values()) {
-      const distance = Math.hypot(containerPoint.x - bin.x, containerPoint.y - bin.y);
-      if (distance < nearest) {
-        nearest = distance;
-        selected = bin;
-      }
+    let nearest = Infinity;
+    for (const target of hitTargets) {
+      const dx = Math.abs(containerPoint.x - target.x), dy = Math.abs(containerPoint.y - target.y);
+      if (Math.max(dx, dy) > Math.max(target.half, 6)) continue;
+      const distance = Math.hypot(dx, dy);
+      if (distance >= nearest) continue;
+      nearest = distance;
+      selected = target;
     }
     if (!selected) return;
     const content = document.createElement('div');
     const title = document.createElement('strong');
-    title.textContent = selected.count === 1 ? 'Тепловая точка' : `Детекций рядом — ${number.format(selected.count)}`;
+    const single = !aggregated && selected.count === 1;
+    title.textContent = single ? 'Тепловая детекция' : `Детекций в группе — ${number.format(selected.count)}`;
     content.append(title);
-    if (selected.count === 1) {
+    if (single) {
       content.append(document.createElement('br'),
         `${platformNames()[selected.platform] ?? 'NASA FIRMS'} · ${selected.lat.toFixed(4)}°, ${selected.lon.toFixed(4)}°`);
+      const meters = nominalPixelMeters[selected.platform];
+      if (meters) content.append(document.createElement('br'), `Номинальный пиксель · ${meters === 1000 ? '1 км' : '375 м'}`);
     }
     L.popup().setLatLng(latlng).setContent(content).openOn(map);
   });
 
-  return (data, display, show = true) => {
+  return (data, display, show, grouped) => {
     if (input !== data) {
       points = mercatorPoints(data);
       regionalCount = points.reduce((total, point) => total + (point.regional ? point.weight : 0), 0);
@@ -145,6 +171,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     input = data;
     mode = display;
     visible = show;
+    aggregated = grouped;
     draw();
     return regionalCount;
   };
