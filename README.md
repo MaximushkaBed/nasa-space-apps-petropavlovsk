@@ -6,7 +6,7 @@ Selected challenge: **Harmonization of MODIS and VIIRS Hot Spots**.
 
 Local challenge label supplied by the team: `15 - Harmonization of MODIS and VIIRS Hot Spots_4.3`.
 
-The repository includes a NASA FIRMS downloader, a historical database, and a static web prototype.
+The repository includes a NASA FIRMS downloader, a global historical archive, and an interactive temporal-analysis web application.
 
 The project scope is **global**. North Kazakhstan Region (Северо-Казахстанская область, СКО) is the existing validation case; the USA, Brazil and Canada are planned independent research/validation regions. Large datasets will live on the shared `unik` server.
 
@@ -14,7 +14,9 @@ The project scope is **global**. North Kazakhstan Region (Северо-Каза�
 
 Shared-server deployment, global dataset paths and Komodo autodeploy are documented in [deploy/README.md](deploy/README.md). Large world archives are downloaded on `unik`, not on the laptop.
 
-From the repository root, run `python -m http.server 8000 --bind 127.0.0.1 --directory web` and open [localhost:8000](http://127.0.0.1:8000/). The app uses bundled assets and the validated April–October 2020–2025 data snapshot. See the [MVP documentation](web/README.md) for methodology and data export.
+The main application selects an area and dates, builds a years-by-month calendar and weekly seasonal profile, compares years, maps monthly deviations, and exports CSV, JSON and SVG. A bounded asynchronous API queries real archive files on the shared server. See [workbench/API documentation](docs/workbench.md) for setup, units, validation and current scientific limits.
+
+Oksana's full-screen atlas and case studies remain available at `/atlas.html`, with their existing data layers and daily global FIRMS API. A static local server can preview the interface; live analysis requires the API. See the [atlas documentation](web/README.md).
 
 ## Research
 
@@ -70,7 +72,9 @@ For recent observations, select sources such as `MODIS_NRT VIIRS_NOAA20_NRT` and
 python3 -m unittest discover -s tests -v
 ```
 
-Tests use simulated API responses; live downloads require a valid MAP_KEY.
+Tests cover download contracts, temporal regressions, and real DuckDB spatial queries. Install `requirements-global.txt` and DuckDB's `spatial` extension before running the integration tests. Live FIRMS downloads require a valid MAP_KEY. The optional real-browser check is `python3 tests/e2e_workbench.py --base-url https://nasa.aican.cloud` (Playwright + Chromium).
+
+[Agent workflow](docs/agent-workflow.md) records the coordinator → UI worker hierarchy and independent review gates; [feature acceptance](docs/workbench-features.json) records verified capabilities and unfinished data integrations.
 
 ## GitHub monitoring
 

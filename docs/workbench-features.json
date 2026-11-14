@@ -1,0 +1,119 @@
+{
+  "product": "NASA Space Apps",
+  "review_rule": "Only independent evidence can set verified=true. Missing data integrations remain unverified.",
+  "features": [
+    {
+      "id": "FS01",
+      "requirement": "Выбор территории: полигон пилота и произвольный прямоугольник",
+      "owner": "API+UI",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS02",
+      "requirement": "Календарь годы × месяцы — центральный экран",
+      "owner": "UI",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS03",
+      "requirement": "Раскрытие месяца в недели и дни с картой",
+      "owner": "API+UI",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS04",
+      "requirement": "Недельная сезонная медиана и диапазон по базовым годам",
+      "owner": "API+UI",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS05",
+      "requirement": "Сравнение с тем же периодом; неполные периоды совпадают",
+      "owner": "API+UI",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS06",
+      "requirement": "Карта отклонений выбранного периода",
+      "owner": "API+UI",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS07",
+      "requirement": "Ручной выбор двух лет, кривые и периоды активности",
+      "owner": "API+UI",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS08",
+      "requirement": "Сравнение географии двух выбранных лет",
+      "owner": "API+UI",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS09",
+      "requirement": "Исходный/согласованный ряд и отложенная проверка",
+      "owner": "Science+UI",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS10",
+      "requirement": "Неопределённость и границы применения калибровки",
+      "owner": "Science+UI",
+      "status": "Partial: year-bootstrap coefficient variation and scope disclosed; total uncertainty and sensor/time extrapolation not established.",
+      "verified": false
+    },
+    {
+      "id": "FS11",
+      "requirement": "Отсутствие продукта отдельно от нуля детекций",
+      "owner": "Science+UI",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS12",
+      "requirement": "Экспорт CSV, JSON и реального изображения результата",
+      "owner": "API+UI",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS13",
+      "requirement": "Три реальные территории с быстрым повторным открытием",
+      "owner": "Integration",
+      "status": "Independent API/science review + real-browser acceptance PASS (regional SP prototype, 2026-11-14).",
+      "verified": true
+    },
+    {
+      "id": "FS14",
+      "requirement": "Маски локального покрытия/облачности",
+      "owner": "Data",
+      "status": "not ingested; must remain explicitly unknown",
+      "verified": false
+    },
+    {
+      "id": "FS15",
+      "requirement": "Независимая проверка по реестрам США/Канады",
+      "owner": "Science",
+      "status": "not completed; no independent accuracy claim",
+      "verified": false
+    },
+    {
+      "id": "FS16",
+      "requirement": "Связный демонстрационный сценарий за минуту",
+      "owner": "Product+QA",
+      "status": "Independent cached real-browser demo PASS: 18.44 seconds, calendar → weekly detail → anomaly → year geography → validation → CSV/SVG.",
+      "verified": true
+    }
+  ],
+  "evidence": "docs/workbench-validation.json; independent reviewer verified the three real pilot analyses and 53 browser checks"
+}

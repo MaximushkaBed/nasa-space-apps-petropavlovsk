@@ -6,3 +6,12 @@
 !requirements-global.txt
 !scripts/
 !scripts/sync_global_firms.py
+!scripts/serve_global_fires.py
+!api/
+!api/**
+!docs/
+!docs/sko-validation/
+!docs/sko-validation/outages.csv
+!data/
+!data/boundaries/
+!data/boundaries/north-kazakhstan.geojson

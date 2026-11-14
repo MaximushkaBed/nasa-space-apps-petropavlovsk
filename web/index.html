@@ -1,366 +1,110 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#07132d">
-  <meta name="description" content="Мировой атлас тепловых точек NASA FIRMS и календарь пожарной активности Северо-Казахстанской области.">
-  <title>Атлас пожаров · NASA FIRMS</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#132b31">
+  <meta name="description" content="Рабочая среда временного анализа MODIS и VIIRS: выбор территории, сезонность, аномалии и проверка гармонизации.">
+  <title>NASA Space Apps · Временной анализ MODIS и VIIRS</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=atlas-periods">
+  <link rel="stylesheet" href="workbench.css?v=nasa-space-apps">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=atlas-periods" type="module"></script>
-  <script src="correlations.js?v=ndvi" type="module"></script>
-  <script src="burn-case.js?v=atlas-workspace" type="module"></script>
+  <script src="workbench.js?v=nasa-space-apps" type="module"></script>
 </head>
 <body>
-  <main id="top" class="workspace">
-    <section class="map-panel" id="observations" aria-labelledby="map-title">
-      <h1 id="map-title" class="sr-only">Мировая карта тепловых точек</h1>
-      <div id="map" tabindex="0" aria-label="Мировая карта. Стрелки перемещают карту, плюс и минус меняют масштаб."></div>
-      <header class="topbar">
-        <a class="wordmark" href="#observations"><img src="favicon.svg" width="28" height="28" alt=""> Атлас пожаров</a>
-        <div class="map-filters">
-          <div class="view-switch" role="group" aria-label="Охват карты">
-            <button type="button" id="world-view" disabled>Мир</button>
-            <button type="button" id="reset-map" disabled>СКО</button>
-          </div>
-          <label class="world-date">
-            <span class="sr-only">Дата наблюдений UTC</span>
-            <input type="date" id="world-date" disabled>
-          </label>
-          <button class="quiet-button" id="open-period" type="button" aria-haspopup="dialog" disabled>Период</button>
-          <label class="source-field">
-            <span class="sr-only">Спутник на карте мира</span>
-            <select id="world-satellite" disabled><option value="">Все спутники</option></select>
-          </label>
-        </div>
-        <nav class="tool-nav" aria-label="Панели атласа">
-          <button type="button" class="quiet-button" id="open-area" aria-controls="area-panel" aria-expanded="false">Территория</button>
-          <button type="button" class="quiet-button" id="open-layers" aria-controls="map-layer-controls" aria-expanded="false">Слои</button>
-          <a class="quiet-button" href="#season-calendar" aria-controls="analysis-panel" aria-expanded="false">Календарь СКО</a>
-          <a class="quiet-button" href="#correlations" aria-controls="analysis-panel" aria-expanded="false">Связи</a>
-          <a class="quiet-button" href="#kishkenekol-case" aria-controls="analysis-panel" aria-expanded="false">Кейс</a>
-          <button class="quiet-button" id="open-method" type="button" aria-label="Методика">ⓘ</button>
-        </nav>
-      </header>
-
-      <div class="map-tools" role="group" aria-label="Управление картой">
-        <button type="button" id="zoom-in" aria-label="Приблизить карту">+</button>
-        <button type="button" id="zoom-out" aria-label="Отдалить карту">−</button>
-      </div>
-      <div class="map-message" id="map-message" role="status" hidden></div>
-      <button class="quiet-button" id="sko-example" type="button" title="Открыть 12 апреля 2025 года" hidden>СКО · нет точек · открыть пример ↗</button>
-      <dialog class="period-picker" id="period-picker" aria-labelledby="period-heading">
-        <form id="period-form">
-          <div class="drawer-heading">
-            <h2 id="period-heading">Период наблюдений · UTC</h2>
-            <button class="quiet-button" id="close-period" type="button" aria-label="Закрыть выбор периода">×</button>
-          </div>
-          <div class="view-switch period-modes" role="group" aria-label="Масштаб времени">
-            <button type="button" data-period="day">День</button>
-            <button type="button" data-period="week">Неделя</button>
-            <button type="button" data-period="month">Месяц</button>
-            <button type="button" data-period="year">Год</button>
-            <button type="button" data-period="custom">Диапазон</button>
-            <button type="button" data-period="all">Весь архив</button>
-          </div>
-          <div class="period-fields" id="period-fields">
-            <label id="period-anchor-field"><span id="period-anchor-label">Дата</span><input type="date" id="period-anchor"></label>
-            <label id="period-month-field" hidden>Месяц<input type="month" id="period-month"></label>
-            <label id="period-year-field" hidden>Год<input type="number" id="period-year" step="1" inputmode="numeric"></label>
-            <label id="period-start-field" hidden>С какого дня<input type="date" id="period-start"></label>
-            <label id="period-end-field" hidden>По какой день<input type="date" id="period-end"></label>
-          </div>
-          <p class="layer-caption" id="period-preview" aria-live="polite"></p>
-          <button type="submit" class="quiet-button" id="apply-period">Показать на карте</button>
-        </form>
-      </dialog>
-
-      <aside id="area-panel" class="atlas-panel area-panel" aria-labelledby="area-title" hidden>
-        <div class="drawer-heading">
-          <h2 id="area-title">Анализ территории</h2>
-          <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть анализ территории">×</button>
-        </div>
-        <div class="view-switch area-tools" role="group" aria-label="Способ выбора территории">
-          <button type="button" id="area-circle" aria-pressed="false">Точка + радиус</button>
-          <button type="button" id="area-polygon" aria-pressed="false">Полигон</button>
-          <button type="button" id="area-search-mode" aria-pressed="false">Поиск</button>
-        </div>
-        <p class="layer-caption" id="area-guide">Кликните по карте или выберите способ выделения.</p>
-        <label class="radius-label" id="area-radius-label" hidden>Радиус, км
-          <input type="number" id="area-radius" list="area-radii" min="0.1" max="1000" step="any" value="5">
-          <datalist id="area-radii"><option value="1"><option value="2"><option value="3"><option value="5"><option value="10"><option value="15"></datalist>
-        </label>
-        <div class="area-presets" id="area-presets" hidden>
-          <button type="button" class="quiet-button" data-radius="1">1</button><button type="button" class="quiet-button" data-radius="2">2</button><button type="button" class="quiet-button" data-radius="3">3</button><button type="button" class="quiet-button" data-radius="5">5</button><button type="button" class="quiet-button" data-radius="10">10</button><button type="button" class="quiet-button" data-radius="15">15 км</button>
-        </div>
-        <div class="area-presets" id="area-polygon-controls" hidden>
-          <button class="quiet-button" id="area-finish" type="button" disabled>Замкнуть</button>
-          <button class="quiet-button" id="area-undo" type="button" disabled>Убрать точку</button>
-        </div>
-        <form id="area-search" class="area-search" hidden>
-          <label for="area-query">Страна, штат, область или район</label>
-          <input id="area-query" type="search" placeholder="Например, СКО или Travis, США" autocomplete="off">
-          <button class="quiet-button" type="submit">Найти</button>
-        </form>
-        <div id="area-results" class="area-results"></div>
-        <section id="area-summary" class="area-summary" aria-live="polite" hidden>
-          <h3 id="area-name"></h3>
-          <p class="layer-caption" id="area-meta"></p>
-          <strong class="area-count" id="area-count"></strong>
-          <p class="layer-caption" id="area-coverage" hidden></p>
-          <ul id="area-platforms" class="area-platforms"></ul>
-          <button type="button" class="quiet-button" id="area-clear">Очистить выделение</button>
+  <header class="appbar">
+    <a class="brand" href="./"><img src="favicon.svg" width="27" height="27" alt=""><strong>NASA Space Apps</strong><span>MODIS × VIIRS</span></a>
+    <nav aria-label="Инструменты"><a class="current" href="./" aria-current="page">Временной анализ</a><a href="atlas.html">Суточный атлас</a><a href="atlas.html#kishkenekol-case">Исследовательские кейсы</a></nav>
+    <button class="subtle" id="method-open">Метод и ограничения</button>
+  </header>
+  <div class="application">
+    <aside class="filters" aria-label="Параметры анализа">
+      <div class="filter-heading"><span class="eyebrow">Рабочая область</span><h1>Исследование территории</h1><p>История, сезонность и отклонения в одном запросе.</p></div>
+      <form id="analysis-form">
+        <fieldset>
+          <legend><span class="step">1</span> Территория</legend>
+          <label for="preset">Область исследования</label>
+          <select id="preset"><option value="sko">Северо-Казахстанская область</option><option value="california">Калифорния · окно</option><option value="brazil">Мату-Гросу · окно</option><option value="canada">Альберта · окно</option><option value="custom">Своя область на карте</option></select>
+          <button class="outline full" id="draw-area" type="button">Выделить прямоугольник на карте</button>
+          <details id="coordinate-details"><summary>Координаты области</summary><div class="coordinates">
+            <label>Запад<input type="number" id="west" step="0.00001" min="-180" max="180" value="65.9" required></label>
+            <label>Восток<input type="number" id="east" step="0.00001" min="-180" max="180" value="74.3" required></label>
+            <label>Юг<input type="number" id="south" step="0.00001" min="-85" max="85" value="52.2" required></label>
+            <label>Север<input type="number" id="north" step="0.00001" min="-85" max="85" value="55.5" required></label>
+          </div><button class="text-button" id="apply-bounds" type="button">Показать границы</button></details>
+          <p class="hint" id="area-note">Анализ по полигону области, не по прямоугольнику.</p>
+        </fieldset>
+        <fieldset>
+          <legend><span class="step">2</span> История и база сравнения</legend>
+          <div class="pair"><label>Начало<input id="start" type="date" value="2020-01-01" min="2000-11-01" required></label><label>Конец<input id="end" type="date" value="2025-12-31" required></label></div>
+          <label>Базовые годы<span class="pair"><input id="baseline-start" type="number" value="2020" min="2000" max="2100" aria-label="Первый базовый год" required><input id="baseline-end" type="number" value="2023" min="2000" max="2100" aria-label="Последний базовый год" required></span></label>
+          <p class="hint">База задаёт обычную сезонность и обучение. Последующие годы используются для проверки калибровки.</p>
+        </fieldset>
+        <fieldset>
+          <legend><span class="step">3</span> Наблюдения</legend>
+          <label>Основной спутник<select id="platform"><option value="NOAA-20">NOAA-20 / VIIRS · 375 м</option><option value="Suomi-NPP">Suomi-NPP / VIIRS · 375 м</option><option value="NOAA-21">NOAA-21 / VIIRS · 375 м</option><option value="Aqua">Aqua / MODIS · 1 км</option><option value="Terra">Terra / MODIS · 1 км</option></select></label>
+          <div class="pair"><label>Сетка<select id="grid"><option value="2">2 км</option><option value="5">5 км</option><option value="10" selected>10 км</option><option value="20">20 км</option></select></label><label>Время суток<select id="daynight"><option value="all">День и ночь</option><option value="D">День</option><option value="N">Ночь</option></select></label></div>
+          <label class="checkbox"><input id="include-nrt" type="checkbox"> Включить оперативные NRT</label>
+          <p class="hint">По умолчанию — стандартный архив, горение растительности, номинальная и высокая уверенность.</p>
+        </fieldset>
+        <div class="submit-area"><button class="primary full" id="run" type="submit">Построить анализ <span aria-hidden="true">→</span></button><p id="form-status" role="status">Вычисления выполняются на общем сервере.</p></div>
+      </form>
+      <div class="archive-foot"><span class="archive-indicator"></span><span id="archive-info">Мировой архив NASA FIRMS</span></div>
+    </aside>
+    <main class="workbench" id="workbench">
+      <div class="contextbar"><div><span class="eyebrow">Временной анализ</span><h2 id="area-title">Северо-Казахстанская область</h2><p id="context-note">Выберите период и запустите анализ.</p></div><div class="context-actions"><button class="outline" id="share" type="button">Ссылка на параметры</button><button class="outline" id="export-csv" type="button" disabled>Экспорт CSV ↓</button><button class="outline" id="export-image" type="button" disabled>Изображение ↓</button><button class="subtle dark" id="export-json" type="button" disabled>JSON</button></div></div>
+      <div class="job-banner" id="job-banner" role="status" hidden><span class="spinner" aria-hidden="true"></span><div><strong id="job-message">Готовлю запрос</strong><span id="job-detail">Первый расчёт территории занимает больше времени. Повторные используют кэш.</span></div><progress id="job-progress" max="100" value="0" aria-label="Прогресс анализа"></progress></div>
+      <div class="error-banner" id="error-banner" role="alert" hidden></div>
+      <div class="work-panels">
+      <div class="workspace-top">
+        <section class="map-frame" aria-label="Область и активность на карте">
+          <div id="analysis-map" tabindex="0" aria-label="Карта выбора территории. Также можно ввести координаты в боковой панели."></div>
+          <div class="map-top"><span class="map-chip" id="map-period">Область исследования</span><div class="map-buttons"><button id="fit-area" title="Показать выбранную область" aria-label="Показать выбранную область">↗</button><button id="basemap" aria-pressed="false">Спутник</button></div></div>
+          <label class="map-mode-control">Показать на карте<select id="map-mode"><option value="activity">Активность</option><option value="anomaly">Отклонение от базы</option></select></label>
+          <div id="draw-instruction" class="draw-instruction" hidden>Нажмите на два противоположных угла области. Esc — отмена.</div>
+          <button id="retry-map" class="map-retry" type="button" hidden>Повторить карту</button>
+          <div class="map-bottom"><div class="map-key"><span class="color-ramp"></span><span id="map-key-text">Ячейки с зарегистрированной активностью</span></div><span id="map-count"></span></div>
         </section>
-        <p class="layer-caption area-sources"><a href="https://www.naturalearthdata.com/">Natural Earth</a> · <a href="https://www.geoboundaries.org/">geoBoundaries</a> · <a href="https://open-meteo.com/en/docs/geocoding-api">GeoNames через Open-Meteo</a></p>
-      </aside>
-
-      <aside id="map-layer-controls" class="map-layer-controls atlas-panel" aria-labelledby="layers-title" hidden>
-        <div class="drawer-heading">
-          <h2 id="layers-title">Слои карты</h2>
-          <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть слои">×</button>
-        </div>
-        <fieldset>
-          <legend>Подложка карты</legend>
-          <div class="view-switch" role="group" aria-label="Подложка карты">
-            <button type="button" id="satellite-view" aria-pressed="true" disabled>Снимок</button>
-            <button type="button" id="vector-view" aria-pressed="false" disabled>Схема</button>
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>Тепловые сигналы</legend>
-          <label style="--layer-color:#ffad55"><input type="checkbox" id="fire-layer" checked disabled> Показывать</label>
-        </fieldset>
-        <fieldset id="terrain-controls" disabled>
-          <legend>Местность · мир</legend>
-          <label style="--layer-color:#a9d7ef"><input type="checkbox" id="terrain-layer"> Рельеф</label>
-          <label class="terrain-strength" hidden>
-            <span>Интенсивность тени</span>
-            <input type="range" id="terrain-opacity" min="15" max="85" value="45" step="5">
-          </label>
-          <p id="terrain-status" class="layer-caption" role="status" hidden>Слой рельефа загрузился не полностью.</p>
-        </fieldset>
-        <fieldset id="local-layers" disabled>
-          <legend>Погода · СКО</legend>
-          <label style="--layer-color:#9ae3ef"><input type="checkbox" id="wind-layer"> Потоки ветра</label>
-          <label class="weather-choice"><span>Цветовое поле</span>
-            <select id="weather-field">
-              <option value="">Выключено</option>
-              <option value="cloud">Облачность</option>
-              <option value="temperature">Температура</option>
-              <option value="rain">Осадки</option>
-            </select>
-          </label>
-          <div id="weather-key" class="weather-key" hidden></div>
-          <p id="weather-state" class="layer-caption" hidden></p>
-          <div id="weather-inspector" class="weather-inspector" aria-live="polite" hidden></div>
-        </fieldset>
-        <div id="extra-layer-controls"></div>
-        <p id="map-layer-status" class="layer-caption" role="status" hidden></p>
-        <ul id="visible-layer-summary" class="layer-summary" hidden></ul>
-      </aside>
-
-      <details class="timeline" open>
-        <summary><span id="frame-date">Загрузка архива…</span> <span class="utc-label">UTC</span></summary>
-        <div class="timeline-heading">
-          <div class="view-switch fire-view" role="group" aria-label="Отображение тепловых сигналов">
-            <button type="button" id="fire-points" aria-pressed="true" disabled>Точки</button>
-            <button type="button" id="fire-heat" aria-pressed="false" disabled>Тепловая карта</button>
-          </div>
-          <div class="fire-key" id="world-point-legend"><i aria-hidden="true"></i> Тепловые детекции</div>
-          <div class="fire-key" id="heat-legend" hidden><i aria-hidden="true"></i> Плотность детекций</div>
-        </div>
-        <div class="timeline-controls">
-          <button id="play-frames" type="button" class="play-button" disabled><span aria-hidden="true">▶</span> Воспроизвести</button>
-          <label class="day-slider">
-            <span class="sr-only">День на шкале UTC</span>
-            <input type="range" id="day-slider" min="1" max="31" value="1" disabled>
-          </label>
-        </div>
-        <button id="show-period-days" class="quiet-button" type="button" hidden>Смотреть по дням</button>
-        <div class="map-caption">
-          <span id="map-summary" role="status"></span>
-          <span id="regional-count"></span>
-          <span id="archive-caption"></span>
-        </div>
-        <p id="imagery-status" class="layer-caption" role="status" hidden>Часть снимков Esri недоступна. На этих участках показан Blue Marble.</p>
-      </details>
-    </section>
-
-    <aside id="analysis-panel" class="atlas-panel analysis-panel" aria-label="Анализ СКО" hidden>
-      <div class="drawer-heading">
-        <h2 id="analysis-heading">Анализ СКО</h2>
-        <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть анализ">×</button>
-      </div>
-
-    <div class="analysis-row" id="calendar-analysis" hidden>
-      <section class="panel comparison" id="month-insight" aria-labelledby="deviation">
-        <div class="comparison-content" id="comparison-content" aria-live="polite">
-          <p class="comparison-period">Северо-Казахстанская область · <span id="comparison-period"></span></p>
-          <h2 class="deviation" id="deviation">Что видно за месяц</h2>
-          <p class="norm-context">Итог за весь месяц. Сравнение с тем же месяцем в 2020–2023 годах с учётом числа дней.</p>
-          <div class="bars" role="img" id="bar-chart" aria-label="Сравнение активности с нормой в ячейко-днях на шкале Aqua">
-            <div class="bar-row">
-              <span>Выбранный месяц</span><strong id="actual-bar-value"></strong>
-              <div class="bar-track"><div class="bar bar-actual" id="actual-bar"></div></div>
-            </div>
-            <div class="bar-row">
-              <span>Историческая норма</span><strong id="norm-bar-value"></strong>
-              <div class="bar-track"><div class="bar bar-norm" id="norm-bar"></div></div>
-            </div>
-            <p class="bar-unit">Ячейко-дни в шкале Aqua</p>
-          </div>
-          <p id="period-source" class="period-source"></p>
-          <p id="source-explanation" class="source-explanation"></p>
-          <p id="reference-check" class="reference-check" hidden></p>
-          <div class="coverage">
-            <span class="coverage-icon" aria-hidden="true">◷</span>
-            <div><strong id="coverage-title"></strong><p id="coverage-description"></p></div>
-          </div>
-        </div>
-      </section>
-    <section class="panel calendar-panel" id="season-calendar" aria-labelledby="calendar-title">
-      <div class="panel-heading calendar-heading">
-        <div>
-          <h2 id="calendar-title">Календарь активности СКО</h2>
-          <p>Выберите месяц для сравнения с нормой. Апрель — октябрь · 2020–2025 · UTC</p>
-        </div>
-        <label class="source-field">
-          <span class="sr-only">Ряд данных календаря СКО</span>
-          <select id="source" disabled>
-            <option value="unified">Единый ряд</option>
-            <option value="0">Aqua / MODIS</option>
-            <option value="1">Suomi NPP / VIIRS</option>
-            <option value="2">NOAA-20 / VIIRS</option>
-          </select>
-        </label>
-        <div class="view-switch" role="group" aria-label="Цветовая шкала календаря">
-          <button type="button" id="deviation-view" aria-pressed="true" disabled>К норме</button>
-          <button type="button" id="activity-view" aria-pressed="false" disabled>Ячейко-дни</button>
-        </div>
-      </div>
-      <p class="calendar-insight" id="calendar-insight" hidden></p>
-      <div class="calendar-scroll">
-        <table id="calendar" class="calendar" aria-label="Месячная активность по годам"></table>
-      </div>
-      <div class="calendar-footer">
-        <div class="calendar-key" id="calendar-key" aria-label="Легенда календаря"></div>
-        <a href="#observations" id="calendar-selection">День пика на карте ↗</a>
-      </div>
-    </section>
-    </div>
-
-    <section class="panel correlation-panel" id="correlations" hidden aria-labelledby="correlation-title">
-      <div class="panel-heading correlation-heading">
-        <div>
-          <h2 id="correlation-title">Что связано с тепловыми точками</h2>
-          <p>Апрель–октябрь · 2020–2025 · Северо-Казахстанская область</p>
-        </div>
-        <label class="factor-source"><span>Спутник</span>
-          <select id="factor-sensor" disabled>
-            <option value="aqua">Aqua / MODIS</option>
-            <option value="noaa20">NOAA‑20 / VIIRS</option>
-          </select>
-        </label>
-      </div>
-      <div class="view-switch factor-view" role="group" aria-label="Режим матрицы">
-        <button type="button" value="within" aria-pressed="true" disabled>Дни внутри месяца</button>
-        <button type="button" value="all" aria-pressed="false" disabled>Все дни</button>
-        <button type="button" value="space" aria-pressed="false" disabled>Участки 25 × 25 км</button>
-      </div>
-      <p id="factor-scope" class="factor-scope" role="status">Загрузка расчётов…</p>
-      <div class="factor-layout" id="factor-layout" hidden>
-        <div class="factor-grid">
-          <div class="factor-scroll" role="region" aria-label="Таблица корреляций, прокрутка по горизонтали" tabindex="0">
-            <table class="factor-matrix" id="factor-matrix" aria-label="Матрица ранговых корреляций"></table>
-          </div>
-          <div class="factor-key" aria-label="Цветовая шкала">
-            <span><i class="factor-negative"></i> −1 · обратная</span>
-            <span><i class="factor-neutral"></i> 0 · слабая</span>
-            <span><i class="factor-positive"></i> +1 · прямая</span>
-          </div>
-          <p class="factor-scroll-hint" aria-hidden="true">Прокрутите матрицу вправо, чтобы увидеть остальные показатели →</p>
-        </div>
-        <aside class="factor-result" aria-label="Вывод по выбранной паре" aria-live="polite">
-          <h3 id="factor-pair"></h3>
-          <p id="factor-value" class="factor-value"></p>
-          <p id="factor-reading"></p>
-          <p id="factor-check" class="factor-check"></p>
+        <aside class="insights" aria-label="Результат выбранного месяца">
+          <div class="insight-heading"><h3>Что необычного в периоде?</h3><span class="utc">UTC</span></div>
+          <label class="month-select-label"><span class="sr-only">Месяц анализа</span><select id="focus-month" disabled><option>Сначала построить анализ</option></select></label>
+          <div class="insight-main"><span class="metric-label">Обнаруженная активность</span><strong id="activity-value">—</strong><span class="metric-unit" id="activity-unit">ячейко-дни · сетка 10 км</span><p id="points-value">Не число отдельных пожаров</p></div>
+          <div class="insight-row"><span>Сезонный уровень</span><strong id="baseline-value">—</strong></div>
+          <div class="insight-row"><span>Отклонение</span><strong id="anomaly-value">—</strong></div>
+          <p id="anomaly-context" class="insight-explanation">Сравнение с тем же временем года в базовом периоде.</p>
+          <p id="reference-disagreement" class="science-warning" hidden></p>
+          <div class="season-callout"><span class="metric-label">Какие периоды требуют внимания?</span><strong id="season-months">—</strong><p>Месяцы обычно высокой активности. Не прогноз пожара.</p></div>
         </aside>
       </div>
-      <p class="factor-limits">Связи описывают наблюдения. Для вывода о причине нужно проверить облачность, пролёты спутников и землепользование.</p>
-      <p class="factor-limits">Наводнения сопоставляются только в дни с радарным покрытием. Для вулканов и других событий мирового каталога пока мало сопоставимых наблюдений в СКО. Для сухостоя нужны данные лесной инвентаризации.</p>
-      <details class="factor-method">
-        <summary>Как считали и откуда данные</summary>
-        <p><strong>По дням.</strong> Число ячеек 2 × 2 км с тепловым сигналом за дату UTC. «Все дни» сравнивает весь архив, «Дни внутри месяца» усредняет коэффициенты по отдельным месяцам каждого года с весом по числу дат. Даты известных сбоев исключены. Погода — среднее по 17 точкам ERA5. Осадки за 7 дней считаются до выбранной даты. <a href="https://open-meteo.com/en/docs/historical-weather-api">ERA5 / Open‑Meteo</a></p>
-        <p><strong>По участкам.</strong> Число ячейко-дней за шесть сезонов на км² внутри СКО. Расстояние считается от центра участка до ближайшего населённого пункта. Высота — медиана, перепад — разница 90-го и 10-го процентилей. Покров — доли леса, травы, пашни и заболоченной растительности по карте 2021 года. Доли связаны между собой, поскольку делят площадь одного участка. <a href="https://www.geonames.org/export/">GeoNames</a> · <a href="https://doi.org/10.5270/ESA-c5d3d65">Copernicus DEM GLO‑90</a> · <a href="https://esa-worldcover.org/en/data-access">ESA WorldCover, CC BY 4.0</a></p>
-        <p><strong>Облачность и наводнения.</strong> Облачность — средняя суточная по ERA5, отдельно от облачности в момент пролёта. Затопление — доля обследованных ячеек 500 м со спутниковым сигналом затопления по Sentinel‑1. В расчёте участвуют даты с покрытием от 25% площади СКО. Даты без покрытия исключаются. События NASA EONET доступны на мировой карте по датам сообщений. <a href="https://orbit.eodc.eu/dataset/GFM">Copernicus GFM</a> · <a href="https://eonet.gsfc.nasa.gov/docs/v3">NASA EONET</a></p>
-        <p>Рельеф получен из Copernicus WorldDEM‑90 © DLR e.V. 2010–2014 и © Airbus Defence and Space GmbH 2014–2018, предоставленного в рамках Copernicus ЕС и ESA. Карта покрова содержит производные данные ESA WorldCover 2021 © ESA WorldCover consortium. Расстояния рассчитаны по данным GeoNames, CC BY.</p>
-      </details>
-    </section>
-
-    <section id="kishkenekol-case" class="panel burn-case" hidden aria-labelledby="burn-case-title">
-      <div class="panel-heading">
-        <div>
-          <h2 id="burn-case-title">Что произошло к юго-западу от Кишкенеколя</h2>
-          <p>12 апреля 2025 · Северо-Казахстанская область</p>
+      <section class="analysis-panel" aria-labelledby="analysis-title">
+        <div class="analysis-heading"><div><h3 id="analysis-title">Когда здесь обычно горит?</h3><p id="series-note">Календарь наблюдений → выбранный период → карта и сравнение лет.</p></div><div class="view-controls"><label for="series-mode" class="sr-only">Шкала ряда</label><select id="series-mode"><option value="raw">Исходный ряд</option><option value="calibrated" disabled>В шкале Aqua · после проверки</option></select><button class="text-button" id="last-month" disabled>Последний месяц</button></div></div>
+        <div class="analysis-tabs" role="tablist" aria-label="Вид анализа">
+          <button class="active" id="tab-calendar" role="tab" aria-selected="true" aria-controls="view-calendar" data-view="calendar">Календарь</button>
+          <button id="tab-series" role="tab" aria-selected="false" aria-controls="view-series" data-view="series">Детали периода</button>
+          <button id="tab-compare" role="tab" aria-selected="false" aria-controls="view-compare" data-view="compare">Сравнить годы</button>
+          <button id="tab-season" role="tab" aria-selected="false" aria-controls="view-season" data-view="season">Сезонность</button>
+          <button id="tab-validation" role="tab" aria-selected="false" aria-controls="view-validation" data-view="validation">Согласование</button>
         </div>
-        <button type="button" class="quiet-button" id="case-atlas" hidden>Детекции в атласе ↑</button>
-      </div>
-      <p class="case-result" id="case-result">Загрузка сравнения Sentinel‑2…</p>
-      <div class="case-evidence">
-        <h3>Вероятно, горела трава. Плановый отжиг не подтверждён</h3>
-        <p>162 из 167 точек VIIRS от 12 апреля попали на травянистые участки по карте ESA WorldCover 2021. В открытых источниках не нашли записи об отжиге на этом месте 12 апреля.</p>
-        <details>
-          <summary>Источники и что нужно для подтверждения</summary>
-          <p>19 точек попадают в соседний Акжарский район. В комментарии от 30 апреля ДЧС сообщил о ежегодных отжигах в этом районе без дат и границ работ. Минэкологии сообщало о весенних отжигах в масштабах страны. <a href="https://qaz-media.kz/plodorodnost-pochvy-ne-narushena-stepnye-pozhary-prokommentirovali-v-dchs-sko/">Комментарий ДЧС</a> · <a href="https://www.gov.kz/org/ecogeo/press/news/details/977145?lang=ru">Доклад Минэкологии</a></p>
-          <p>Для подтверждения причины нужна запись об этом событии в журнале ДЧС или акт отжига с указанием даты и места. <a href="https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/blob/main/docs/kishkenekol-case.md#что-горело-и-был-ли-это-плановый-отжиг">Полный разбор</a></p>
-        </details>
-      </div>
-      <div class="case-layout" id="case-layout" hidden>
-        <div>
-          <div class="case-map" id="case-map" tabindex="0" aria-label="Сравнение спутниковых снимков и кадастровых участков"></div>
-          <label class="case-slider">
-            <span>6 апреля · До</span>
-            <input id="case-swipe" type="range" min="0" max="100" value="50" aria-label="Граница сравнения снимков до и после">
-            <span>16 апреля · После</span>
-          </label>
+        <div class="analysis-view" id="view-series" role="tabpanel" aria-labelledby="tab-series" hidden><div class="chart-toolbar"><span class="chart-legend"><i class="orange"></i><span id="series-source">NOAA-20 / VIIRS</span><i class="teal"></i>Aqua / MODIS</span><div class="segmented" role="group" aria-label="Временной шаг"><button class="selected" data-step="month">Месяцы</button><button data-step="week">Недели</button><button data-step="day">Дни</button></div></div><div id="series-chart" class="chart-container"><div class="empty-state"><strong>Начните с выбранной территории</strong><p>После расчёта здесь появится временной ряд. График и карта будут связаны с выбранным периодом.</p></div></div><p class="chart-caption" id="series-caption">Нажмите на месяц графика, чтобы исследовать его на карте.</p></div>
+        <div class="analysis-view" id="view-calendar" role="tabpanel" aria-labelledby="tab-calendar"><div class="chart-toolbar"><span>Годы × месяцы · нажмите ячейку</span><label class="checkbox"><input id="calendar-anomalies" type="checkbox"> Отклонения от базы</label></div><div id="calendar-grid" class="calendar-grid"></div><p class="chart-caption">«0» — записанных детекций нет; локальная видимость неизвестна. Штриховка — нет доступного ряда или базы для сравнения.</p>
+          <div class="calendar-season"><div class="chart-toolbar"><h4>Обычный ход сезона</h4><span class="chart-legend"><i class="teal"></i>Базовая медиана<i class="orange"></i><span id="season-year-label">Выбранный год</span></span></div><div id="calendar-season-chart" class="chart-container"></div><p id="seasonal-caption" class="chart-caption">Недельный профиль и исторический разброс появятся после анализа.</p></div>
         </div>
-        <div class="case-controls">
-          <fieldset>
-            <legend>Наложения на снимки</legend>
-            <label><input type="checkbox" id="case-scar" checked><i class="case-scar-key"></i> Вероятная гарь</label>
-            <label><input type="checkbox" id="case-parcels" checked><i class="case-parcel-key"></i> Участки ЕГКН</label>
-            <label><input type="checkbox" id="case-detections"><i class="case-fire-key"></i> Детекции VIIRS · 12 апреля</label>
-          </fieldset>
-          <p id="case-overlap"></p>
-          <p>Пересечение рассчитано по контурам ЕГКН на дату выгрузки в ноябре 2026 года.</p>
-          <p class="case-credit">Снимки Sentinel‑2 в условных цветах. Содержит изменённые данные Copernicus Sentinel (2025), данные ЕГКН и подложку NASA GIBS. <a href="https://map.gov4c.kz/egkn/">Кадастровая карта</a> · <a href="https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/blob/main/docs/kishkenekol-case.md">Методика</a></p>
+        <div class="analysis-view" id="view-season" role="tabpanel" aria-labelledby="tab-season" hidden><div class="chart-toolbar"><span>Базовая медиана и выбранный год</span><span id="season-unit">Ячейко-дни на доступный день</span></div><div id="season-chart" class="chart-container"></div><p id="season-detail-caption" class="chart-caption">Медиана и диапазон 10–90% по базовым годам. Это межгодовой разброс обнаруженной активности, не прогнозный интервал.</p></div>
+        <div class="analysis-view" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden>
+          <div class="compare-controls"><label>Первый год<select id="compare-year-a" disabled></select></label><label>Второй год<select id="compare-year-b" disabled></select></label></div>
+          <div class="chart-toolbar"><span class="chart-legend"><i class="teal"></i><span id="compare-label-a">Первый год</span><i class="orange"></i><span id="compare-label-b">Второй год</span></span><span>Недели ISO</span></div>
+          <div id="compare-chart" class="chart-container"></div>
+          <div id="compare-metrics" class="compare-metrics"></div>
+          <div class="compare-map-actions"><span>География зарегистрированной активности:</span><button class="outline" id="compare-map-a" type="button" disabled>Первый год на карте</button><button class="outline" id="compare-map-b" type="button" disabled>Второй год на карте</button></div>
+          <p class="chart-caption" id="compare-caption">Начало и конец здесь — первая и последняя неделя выше исторического порога, не даты начала и окончания отдельных пожаров. Порог и полнота наблюдений будут показаны после анализа.</p>
         </div>
+        <div class="analysis-view" id="view-validation" role="tabpanel" aria-labelledby="tab-validation" hidden><div class="validation-summary" id="validation-summary"></div><div id="validation-chart" class="chart-container"></div><p class="chart-caption" id="validation-note">Коэффициент обучается на базовых годах. Ошибка измеряется на последующих годах, которые не участвовали в обучении.</p></div>
+      </section>
       </div>
-    </section>
-
-    </aside>
-
-  </main>
-
-  <dialog id="method" aria-labelledby="method-title">
-    <div class="dialog-heading">
-      <h2 id="method-title">Карта и календарь</h2>
-      <form method="dialog"><button type="submit" class="quiet-button" aria-label="Закрыть методику">✕</button></form>
-    </div>
-    <p><strong>Единый ряд.</strong> С 2020 по 2023 год используются наблюдения Aqua/MODIS. Для сезонов 2024 и 2025 годов используется NOAA‑20/VIIRS с поправкой 0,2897 к месячной сумме. Источник фиксирован для каждого периода, включая месяцы без детекций. В меню доступны отдельные спутники для проверки наблюдений.</p>
-    <p><strong>Мировая карта.</strong> Точки показывают спутниковые детекции MODIS и VIIRS за выбранный день UTC. При приближении видны отдельные сигналы. Счётчик СКО использует тот же день и фильтр спутника, что и счётчик мира. Ноль записей означает, что в архиве за этот день и место нет подходящих детекций. Покрытие пролётами может быть неполным.</p>
-    <p><strong>Ячейко-день</strong> — участок 2 × 2 км, где спутник зарегистрировал хотя бы один подходящий тепловой сигнал за сутки UTC. Календарь суммирует их за месяц. Кнопка «День пика» открывает дату с наибольшим числом ячеек в СКО на мировой карте.</p>
-    <p><strong>Слои.</strong> Яркость тепловой карты показывает относительную плотность детекций. Ветер и погодные поля рассчитаны по 17 точкам ERA5 внутри СКО. Шкала UTC синхронизирует детекции, погоду и доступные датированные слои. Подложка использует Blue Marble и снимки Esri при приближении.</p>
-    <p><strong>Шкала Aqua.</strong> Месячные суммы Suomi NPP и NOAA‑20 умножаются на коэффициенты 0,2932 и 0,2897, рассчитанные по 2020–2023 годам. Коэффициенты применяются к суммам, а карта сохраняет исходные наблюдения.</p>
-    <p><strong>Историческая норма</strong> — медиана средних суточных значений Aqua за тот же месяц в 2020–2023 годах, умноженная на число включённых дней выбранного месяца. Для месяцев 2020–2023 сравнение включает выбранный год в базовый период. Отклонения до 10% включительно отмечены одним цветом. Этот цвет показывает размер отклонения.</p>
-    <p><strong>Календарь СКО.</strong> Стандартные данные FIRMS (SP) отфильтрованы по границе области, типу теплового сигнала и уверенности. Известные даты сбоев исключены. Число пожаров и площадь выгорания требуют отдельных данных.</p>
-    <p class="dialog-links"><a href="https://earthdata.nasa.gov/firms">NASA FIRMS / LANCE / ESDIS</a> <a href="https://source.coop/portolan-mirrors/firms-catalog">Portolan</a> <a href="https://open-meteo.com/en/docs/historical-weather-api">ERA5 / Open‑Meteo</a> <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> <a href="https://orbit.eodc.eu/dataset/GFM">Copernicus EMS</a> <a href="https://eonet.gsfc.nasa.gov/">NASA EONET</a> <a href="https://earthquake.usgs.gov/fdsnws/event/1/">USGS</a></p>
-    <p class="dialog-links"><a href="https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/tree/main/docs/sko-validation" target="_blank" rel="noreferrer">Отчёт и даты исключений ↗</a> <a href="https://www.earthdata.nasa.gov/data/projects/lance/disclaimer" target="_blank" rel="noreferrer">Дисклеймер NASA ↗</a></p>
-  </dialog>
-  <noscript><p class="app-status">Включите JavaScript, чтобы открыть карту и календарь.</p></noscript>
+      <div class="timeline-bar"><button class="outline" id="play-days" disabled>▶ По дням</button><output id="day-label" for="day-range">Весь месяц</output><input id="day-range" type="range" min="0" max="31" value="0" aria-label="День месяца на карте" disabled><button class="text-button" id="reset-day" disabled>Весь месяц</button><span>UTC</span></div>
+      <footer class="quality-bar"><span class="quality-mark">!</span><strong>Локальная видимость неизвестна</strong><span>Облачность и пригодность каждого пролёта пока не учтены.</span><button class="text-button" id="provenance-open">Качество и происхождение ↗</button></footer>
+    </main>
+  </div>
+  <dialog id="method-dialog"><div class="dialog-heading"><h2>Что измеряет NASA Space Apps</h2><button id="method-close" aria-label="Закрыть">×</button></div><div class="dialog-content"><p>Инструмент помогает исследовать сезонность, необычную обнаруженную активность и исторически активные периоды в выбранной области. Он не прогнозирует возгорания.</p><h3>Единица измерения</h3><p>Каждая ячейка равноплощадной сетки EPSG:6933 учитывается один раз за сутки и отдельно для каждого спутника. Сумма — ячейко-дни. Ни размер ячейки, ни число детекций не равны выгоревшей площади или числу пожаров.</p><h3>Сезонное сравнение</h3><p>Сравниваются одинаковые дни месяца. Оцениваемый год исключается из своей базы. Для устойчивой оценки нужны как минимум три других базовых года. Известные пропуски исключаются; наличие глобального продукта не доказывает ясное небо над выбранным участком.</p><h3>Экспериментальная калибровка</h3><p>Коэффициент VIIRS → Aqua считается заново для выбранной территории, сетки и фильтров на стандартных SP-данных. Проверка использует последующие годы. Режим в шкале Aqua доступен только при достаточных данных и пройденной отложенной проверке. Разброс коэффициента по выборкам целых лет не является полной неопределённостью результата. Это проверка согласования с Aqua, а не с наземным эталоном. NOAA-21 в зеркале начинается в январе 2024 года; ранний период требует догрузки.</p><h3>Сравнение сезонов</h3><p>Недельный профиль показывает ячейко-дни на день доступного глобального продукта. Первая и последняя недели выше исторического порога описывают обнаруженную активность; они не определяют фактические начало и конец пожара. Карта отклонений сравнивает одинаковую часть месяца и требует не менее трёх других базовых лет.</p><h3>Как использовать результат</h3><p>Сезонность помогает планировать внимание и ресурсы. Высокий ранг показывает необычность относительно доступной истории. Причину горения и опасность для людей нужно проверять по дополнительным данным.</p><h3>Источники запроса</h3><pre id="provenance-details">NASA FIRMS / ESDIS через Portolan / Source Cooperative. После расчёта здесь появятся параметры, дата снимка архива и контрольные суммы.</pre></div></dialog>
 </body>
 </html>

@@ -1,0 +1,299 @@
+{
+  "scope": "Regional SP cell-day prototype; Aqua-reference holdout, not independent fire-event truth",
+  "interval": "2020-01-01/2025-12-31",
+  "fit_years": [
+    2020,
+    2021,
+    2022,
+    2023
+  ],
+  "test_years": [
+    2024,
+    2025
+  ],
+  "source": "Actual shared global FIRMS archive; queried and independently recomputed 2026-11-14",
+  "timing_note": "Wall time includes network polling and shared-server load. SKO first measurement here already reused the spatial cache.",
+  "pilots": [
+    {
+      "preset": "california",
+      "job": "2b090413ec506cc802530163814ec748",
+      "repeat_job": "0dd731d6a978b6263f9af060043ad90b",
+      "config": {
+        "bbox": [
+          -124.5,
+          32.5,
+          -114,
+          42
+        ],
+        "preset": "california",
+        "start": "2020-01-01",
+        "end": "2025-12-31",
+        "baseline_start": 2020,
+        "baseline_end": 2023,
+        "grid_km": 10,
+        "quality": "sp",
+        "daynight": "all"
+      },
+      "first_seconds": 214.24,
+      "repeat_seconds": 4.35,
+      "extract_id": "c6bd36261323665d6ade8eec72fe5dcd",
+      "version": "nasa-temporal-v4",
+      "daily_rows": 7788,
+      "monthly_rows": 360,
+      "models": {
+        "Terra": {
+          "status": "experimental_validated",
+          "coefficient": 0.9727764476367828,
+          "fit_months": 48,
+          "test_months": 24,
+          "mae_before": 38.166666666666664,
+          "mae_after": 36.87710605657533
+        },
+        "Suomi-NPP": {
+          "status": "validation_not_passed",
+          "coefficient": 0.31610538770092056,
+          "fit_months": 48,
+          "test_months": 24,
+          "mae_before": 424.0416666666667,
+          "mae_after": 59.4335543339201
+        },
+        "NOAA-20": {
+          "status": "experimental_validated",
+          "coefficient": 0.3047582140781133,
+          "fit_months": 48,
+          "test_months": 24,
+          "mae_before": 452,
+          "mae_after": 56.937199555272606
+        },
+        "NOAA-21": {
+          "status": "insufficient_data",
+          "coefficient": null,
+          "fit_months": 0,
+          "test_months": 0,
+          "mae_before": null,
+          "mae_after": null
+        }
+      }
+    },
+    {
+      "preset": "brazil",
+      "job": "265b3357abb9aa9814bf13f07e3b8df3",
+      "repeat_job": "6c16388d4ff2d7b71c551f9b677df123",
+      "config": {
+        "bbox": [
+          -61.5,
+          -18,
+          -50,
+          -7
+        ],
+        "preset": "brazil",
+        "start": "2020-01-01",
+        "end": "2025-12-31",
+        "baseline_start": 2020,
+        "baseline_end": 2023,
+        "grid_km": 10,
+        "quality": "sp",
+        "daynight": "all"
+      },
+      "first_seconds": 112.14,
+      "repeat_seconds": 6.77,
+      "extract_id": "a56aed3e1bbe367217ebf15b066d71de",
+      "version": "nasa-temporal-v4",
+      "daily_rows": 8410,
+      "monthly_rows": 360,
+      "models": {
+        "Terra": {
+          "status": "experimental_validated",
+          "coefficient": 1.064055814583592,
+          "fit_months": 48,
+          "test_months": 24,
+          "mae_before": 416.2916666666667,
+          "mae_after": 313.41896734365173
+        },
+        "Suomi-NPP": {
+          "status": "experimental_validated",
+          "coefficient": 0.3572195045576571,
+          "fit_months": 48,
+          "test_months": 24,
+          "mae_before": 2758.8333333333335,
+          "mae_after": 442.19712519459625
+        },
+        "NOAA-20": {
+          "status": "experimental_validated",
+          "coefficient": 0.3492068777959084,
+          "fit_months": 48,
+          "test_months": 24,
+          "mae_before": 2950.4166666666665,
+          "mae_after": 450.93853534176213
+        },
+        "NOAA-21": {
+          "status": "insufficient_data",
+          "coefficient": null,
+          "fit_months": 0,
+          "test_months": 0,
+          "mae_before": null,
+          "mae_after": null
+        }
+      }
+    },
+    {
+      "preset": "sko",
+      "job": "ff45606e1db20f25d9708a7c3009e27b",
+      "repeat_job": "b782964efaaacaeea9fa3a8e78ed9961",
+      "config": {
+        "bbox": [
+          65.96311,
+          52.20696,
+          74.03496,
+          55.4804
+        ],
+        "preset": "sko",
+        "start": "2020-01-01",
+        "end": "2025-12-31",
+        "baseline_start": 2020,
+        "baseline_end": 2023,
+        "grid_km": 10,
+        "quality": "sp",
+        "daynight": "all"
+      },
+      "first_seconds": 7.23,
+      "repeat_seconds": 4.52,
+      "extract_id": "f1caea9f5489a3aa428adab53d6de214",
+      "version": "nasa-temporal-v4",
+      "daily_rows": 2857,
+      "monthly_rows": 360,
+      "models": {
+        "Terra": {
+          "status": "validation_not_passed",
+          "coefficient": 1.0022094564737074,
+          "fit_months": 48,
+          "test_months": 24,
+          "mae_before": 17.416666666666668,
+          "mae_after": 17.391718220651054
+        },
+        "Suomi-NPP": {
+          "status": "experimental_validated",
+          "coefficient": 0.31157635467980294,
+          "fit_months": 48,
+          "test_months": 24,
+          "mae_before": 57.958333333333336,
+          "mae_after": 11.1567118226601
+        },
+        "NOAA-20": {
+          "status": "experimental_validated",
+          "coefficient": 0.3092587564485474,
+          "fit_months": 48,
+          "test_months": 24,
+          "mae_before": 63,
+          "mae_after": 11.274481853561408
+        },
+        "NOAA-21": {
+          "status": "insufficient_data",
+          "coefficient": null,
+          "fit_months": 0,
+          "test_months": 0,
+          "mae_before": null,
+          "mae_after": null
+        }
+      }
+    }
+  ],
+  "missing_validation": [
+    "Local cloud/observation masks not ingested",
+    "US/Canada registered-fire independent validation not performed",
+    "Global transfer accuracy not established"
+  ],
+  "unit_tests": {
+    "command": "python3 -m unittest discover -s tests -q",
+    "tests": 52,
+    "result": "PASS",
+    "date": "2026-11-14"
+  },
+  "real_browser": {
+    "status": "PASS",
+    "base_url": "http://31.97.72.56:18089",
+    "javascript_errors": [],
+    "raw_analysis_rows": 360,
+    "csv_rows": 360,
+    "snapshot_at": "2026-11-14T11:15:32.211090+00:00",
+    "checks": [
+      "Current map renders after source/period changes without an unrecovered service error",
+      "Existing NASA Space Apps project name is preserved",
+      "Calendar is the default analysis tab",
+      "Main calendar is visible after real data load",
+      "Calendar contains the requested years and months",
+      "Map is left of the calendar and analysis in the main desktop workspace",
+      "Application received an actual completed server analysis",
+      "API supplies an actual weekly seasonal profile",
+      "Weekly seasonal graph is shown below the central calendar",
+      "Selected period has computed recorded activity",
+      "Unknown local observation coverage remains explicit",
+      "Calendar selection opens the corresponding weekly detail",
+      "Selecting a historical month updates the inspected period",
+      "Spatial anomaly map is served by the analysis API",
+      "Spatial anomaly comparison has at least three other baseline years",
+      "Anomaly map returns current, baseline and anomaly values per spatial cell",
+      "Current map renders after source/period changes without an unrecovered service error",
+      "Daily playback cannot masquerade as a daily anomaly calculation",
+      "Day drilldown selects the corresponding UTC frame",
+      "Current map renders after source/period changes without an unrecovered service error",
+      "Daily selection requests matching observations for the map",
+      "Manual comparison draws both selected years",
+      "Year comparison exposes calculated season metrics",
+      "Year comparison explicitly uses ISO years",
+      "Year comparison exposes actual interval bounds for 2024",
+      "Year comparison exposes actual interval bounds for 2025",
+      "Partial ISO years are explicitly labelled",
+      "Current map renders after source/period changes without an unrecovered service error",
+      "Comparison map identifies the same ISO-year window",
+      "Holdout validation metrics are inspectable",
+      "Corrected mode requires a measured validation result and eligible monthly rows",
+      "Corrected calendar uses row-level API equivalents and leaves invalid months as gaps",
+      "Unvalidated NOAA-21 cannot enter corrected mode",
+      "Image export keeps the NASA project name",
+      "Image export is a real readable SVG of the analysis",
+      "Image export includes source and observation-quality context",
+      "CSV export keeps the existing NASA project name",
+      "CSV exports actual rows and quality/provenance columns",
+      "Export does not invent clear-sky coverage",
+      "Current map renders after source/period changes without an unrecovered service error",
+      "390px mobile view has no horizontal overflow",
+      "Race test intercepts an in-flight map response",
+      "Delayed map response contains actual valid API data",
+      "Changing ROI keeps old map counts cleared after a delayed response",
+      "A stale response cannot redraw old cells under the new ROI",
+      "Drawing a map rectangle switches to an explicitly labelled custom area",
+      "Custom rectangle writes valid geographic bounds",
+      "Drawing race test holds a submitted analysis while busy",
+      "A second rectangle corner cannot change the submitted analysis area while busy",
+      "Starting an analysis exits unfinished drawing mode",
+      "A failed request exposes the service error to the analyst",
+      "Failure releases the analysis form and keeps stale exports unavailable",
+      "No unhandled JavaScript errors across the analysis workflow"
+    ],
+    "assets_sha256": {
+      "index.html": "cfde9a8a117565fb6cd3e07f6e9de22a12a66424111fbf9a43c3cf02fb393b2e",
+      "workbench.js": "d5d9cb4f26b7fd31f0c8393675ce2ebc418edb1c00cb09a67920027053cdc73a",
+      "workbench.css": "39d2e6f7919df7ca8cd90f7fd468c03629fcf946b1111dd6cef5b1d519c30771"
+    }
+  },
+  "integration_base": "81dcd17",
+  "independent_review": {
+    "result": "PASS for regional SP prototype",
+    "browser_checks": 53,
+    "cached_demo_seconds": 18.44,
+    "missing_full_uncertainty": true
+  },
+  "upstream_atlas_acceptance": {
+    "upstream_commit": "81dcd17",
+    "result": "PASS",
+    "browser_checks": 12,
+    "javascript_errors": 0,
+    "api_checks": [
+      "7-day filtered Aqua count equals sum of 7 real daily frames",
+      "Publisher annual count equals source catalog total",
+      "Unsupported long-period satellite filter rejected"
+    ],
+    "scope": "Exploratory raw/publisher atlas; separate from v1 SP calibration"
+  }
+}

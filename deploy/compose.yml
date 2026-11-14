@@ -31,6 +31,35 @@ services:
         max-size: 10m
         max-file: "3"
     networks: [platforms]
+  analysis:
+    image: nasa-space-apps-analysis:current
+    container_name: nasa-space-apps-analysis
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.analysis
+    restart: unless-stopped
+    volumes:
+      - /root/platforms/projects/nasa-space-apps/shared/data/firms-global:/data:ro
+      - /root/platforms/projects/nasa-space-apps/shared/cache/analysis:/cache
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 0.75
+    mem_limit: 1536m
+    pids_limit: 128
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/api/v1/health',timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "2"
+    networks: [platforms]
   global-fires:
     image: nasa-space-apps-fires-api:current
     container_name: nasa-space-apps-global-fires
