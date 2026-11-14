@@ -124,7 +124,7 @@ def download(root, job, previous=None):
     source = head_source(job["source_url"])
     if (previous and path.is_file() and path.stat().st_size == source["size"] == previous.get("size")
             and source["etag"] and source["etag"] == previous.get("upstream_etag")):
-        return {**previous, "checked_at": now()}
+        return {**previous, **parquet_info(path, job["kind"]), "checked_at": now()}
     if shutil.disk_usage(root).free < source["size"] + 2 * 1024**3:
         raise RuntimeError("Less than 2 GiB would remain after this download")
     part = path.with_suffix(".parquet.part")

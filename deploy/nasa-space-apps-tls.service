@@ -1,0 +1,11 @@
+[Unit]
+Description=Load renewed NASA Space Apps TLS certificate
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /root/platforms/projects/nasa-space-apps/repository/deploy/check-certificate.py
+TimeoutStartSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict

@@ -1,0 +1,9 @@
+[Unit]
+Description=Check renewed NASA Space Apps certificate hourly
+
+[Timer]
+OnBootSec=10min
+OnUnitInactiveSec=1h
+
+[Install]
+WantedBy=timers.target
