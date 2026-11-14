@@ -20,6 +20,6 @@
       "path": "/root/platforms/projects/nasa-space-apps/repository",
       "command": "docker exec nasa-space-apps-web wget -q -O - http://127.0.0.1:8080/health"
     },
-    "links": ["http://nasa.aican.cloud", "http://31.97.72.56:18088"]
+    "links": ["https://nasa.aican.cloud", "http://31.97.72.56:18088"]
   }
 }

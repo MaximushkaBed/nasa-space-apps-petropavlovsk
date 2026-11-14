@@ -1,0 +1,825 @@
+{
+  "scope": "world",
+  "status": "ready",
+  "updated_at": "2026-11-14T08:46:57.324323+00:00",
+  "producer": "NASA LANCE FIRMS / ESDIS",
+  "mirror": "Portolan / Source Cooperative",
+  "license": "CC0-1.0",
+  "base_rows": 641501367,
+  "incremental_rows": 81055,
+  "base_bytes": 11973049728,
+  "notes": [
+    "Detections are not individual fires or burned area; no global calibration applied.",
+    "STAC counts can lag actual files. Actual rows/coverage are read from Parquet footers.",
+    "Mirror NOAA-21 begins 2024-01-17; NASA SP begins 2023-03-01. Earlier data need separate backfill.",
+    "Aggregate files lack sensor-by-date cross-tabs. Use raw files for sensor-specific history.",
+    "Query yearly observations plus derived/live-tail.parquet, never plus unfiltered live.",
+    "NRT is preliminary; missing detections do not prove zero fire or clear-sky coverage."
+  ],
+  "errors": [],
+  "assets": [
+    {
+      "path": "aggregate/alltime-r10.parquet",
+      "kind": "aggregate",
+      "year": null,
+      "rows": 2456244,
+      "size": 319407523,
+      "sha256": "f372d9996a8fbceab409eebb2afa6fd51eb2c7b4ecedf59a96b4583cae2e3c9d",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/alltime-r10.parquet"
+    },
+    {
+      "path": "aggregate/alltime-r5.parquet",
+      "kind": "aggregate",
+      "year": null,
+      "rows": 7599,
+      "size": 3364679,
+      "sha256": "1be57e84ef0aa2b5f66d84ed99f9b4cfa9b0966db476314bd582147dadd34169",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/alltime-r5.parquet"
+    },
+    {
+      "path": "aggregate/alltime-r8.parquet",
+      "kind": "aggregate",
+      "year": null,
+      "rows": 229536,
+      "size": 42756730,
+      "sha256": "701bf34057bcd02cc2ae51a2c171fa44fe149b61b2b6ce1c79b0829f09d7c7ec",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/alltime-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2000/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2000,
+      "rows": 2559,
+      "size": 363514,
+      "sha256": "d13f1b9121a34b3fb8c6d3e6ef11f1f990ae4ab705dba24695d578baf2e0aaaa",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2000/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2000/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2000,
+      "rows": 27031,
+      "size": 2464785,
+      "sha256": "250a290f32cbeba3c429f464f91900ce202a4b8b4195a8e931801b6bcf252782",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2000/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2001/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2001,
+      "rows": 4094,
+      "size": 851686,
+      "sha256": "28250cbdb1383502191307d4de5a8be198509a4db431bc5fcdfe4b83b1b60f8f",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2001/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2001/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2001,
+      "rows": 96702,
+      "size": 8399698,
+      "sha256": "8009b8cbe6519e879c4b41267059bc290546eee340d2b2eff483f2c47524d8f9",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2001/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2002/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2002,
+      "rows": 4272,
+      "size": 974825,
+      "sha256": "0878df29cb22cb6fd1ee62d419a15a899d5de8616d772f9e59b6ce2ef824ac7c",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2002/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2002/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2002,
+      "rows": 109400,
+      "size": 10077163,
+      "sha256": "9355684a27867ad13b128dfb2da8d8b0a9de52a8f9d16b0d06a4605e2bf6c46c",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2002/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2003/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2003,
+      "rows": 4334,
+      "size": 1076328,
+      "sha256": "04e4c10ae8eb62ca85994a95afd26b486c54f59714ded35712daacb2273a991d",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2003/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2004/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2004,
+      "rows": 4328,
+      "size": 1074644,
+      "sha256": "a70728074248dbd327ae373d1955066fa4957c25377ced7154c9d82fcabdd84f",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2004/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2004/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2004,
+      "rows": 116410,
+      "size": 11094262,
+      "sha256": "ef3a45bb632c1c77a74d01c81369f6f78c284f3b71ffe6fa6e7f04c0372edab7",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2004/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2005/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2005,
+      "rows": 4380,
+      "size": 1076930,
+      "sha256": "066edfe931728f7539c114187a067581f01cc885a0ea0a2a1714d13611d75c28",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2005/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2005/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2005,
+      "rows": 116326,
+      "size": 11123770,
+      "sha256": "1d410af5e308b1d17dad7b90034ebc9cad1afbba0db76fb4aa2ae356537c1931",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2005/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2006/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2006,
+      "rows": 117954,
+      "size": 11128720,
+      "sha256": "5f653043392b1ac8a6e72e7a76e30fa578b6cbff226526e3b34ce1cfd69d33cc",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2006/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2007/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2007,
+      "rows": 4403,
+      "size": 1079071,
+      "sha256": "e02d3b854d14eee993fd776d440774f18771fe14198c952bc4b91faae425ebd7",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2007/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2007/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2007,
+      "rows": 116662,
+      "size": 11174112,
+      "sha256": "53598be0745bd77ca5ab0481513b9f42563c59defbab336aff5fbeb1d91a999d",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2007/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2008/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2008,
+      "rows": 4333,
+      "size": 1065337,
+      "sha256": "bc641ed788ad524e9f103644066dabd16fc946d32fdc43e4cce9cf786573dc83",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2008/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2008/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2008,
+      "rows": 115637,
+      "size": 10933837,
+      "sha256": "615a0a6bcbd05fbd11c2ec643bddf59fa7e7915dc8dc186bc4ea87aa0a93034c",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2008/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2009/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2009,
+      "rows": 114561,
+      "size": 10807443,
+      "sha256": "27ff909238b1c321421e0610e3a361aa87b1224a2da460cb1d34016ba0e0a67c",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2009/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2010/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2010,
+      "rows": 4362,
+      "size": 1050379,
+      "sha256": "202c3f6bcbd4bf4eaa482bcb35c6a672b5e4fb1b27a36e68adfbe26cce18c9d2",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2010/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2010/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2010,
+      "rows": 114939,
+      "size": 10865912,
+      "sha256": "de5d2bf8d5ebf6a6a3abf6426a0d77235c037f8535bde731611c64abe1ef9175",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2010/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2011/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2011,
+      "rows": 4384,
+      "size": 1058760,
+      "sha256": "20a6bf2b3cafe9c8bdf0e969104ee2aa12965fe808709da09f66bcf8173c2003",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2011/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2011/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2011,
+      "rows": 118015,
+      "size": 11153853,
+      "sha256": "dacc0ad33300f6e5b160d9a437b63dcf67b6ba048c3a06f0105a1e2f34f79055",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2011/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2012/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2012,
+      "rows": 4888,
+      "size": 1592774,
+      "sha256": "1598d2fbf2ed9cee86324f9caef51ca93280b33c1cc442f2c20401e1b0da6a39",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2012/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2012/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2012,
+      "rows": 149352,
+      "size": 17326752,
+      "sha256": "c930b1950cfc69476557132397dc287fd13ec614a87024d883241184c9620511",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2012/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2013/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2013,
+      "rows": 4922,
+      "size": 1560576,
+      "sha256": "16a2dd0c50e716913e09ed6e886706818adf078e7fb2886270f4bc1d18eab443",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2013/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2013/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2013,
+      "rows": 145544,
+      "size": 16954329,
+      "sha256": "12f76798b96d2d21a07d2e051ce25ab22682a16a1985a6e88aeab40b1f27b8da",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2013/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2014/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2014,
+      "rows": 4897,
+      "size": 1581577,
+      "sha256": "2e6f0c6e904f9b89f013acc35d47d97a1193c4493694fda75054d5f199671c3f",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2014/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2014/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2014,
+      "rows": 145830,
+      "size": 17100181,
+      "sha256": "9edffefeeb8416abbe6adc9ced2b56bebaef0d63d241a2aa5771e7dbf58ed406",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2014/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2015/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2015,
+      "rows": 4922,
+      "size": 1611233,
+      "sha256": "a4e93b0655b30a6cf0765c83ce6b3fffd993ab27a521c248c81ffc1a19103b5a",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2015/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2015/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2015,
+      "rows": 146604,
+      "size": 17396932,
+      "sha256": "546e5a767197ee69852b58cf011e6f32f2da0f3e5ffa2ec6f4ac18fa73fc870e",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2015/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2016/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2016,
+      "rows": 4977,
+      "size": 1579005,
+      "sha256": "dd8d007ff69e60d0323caac9df6d3e2a9e91092b626614b2c27e85127d21b077",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2016/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2016/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2016,
+      "rows": 143861,
+      "size": 16963990,
+      "sha256": "cf0b658396a9b04e1da92f66299d445b603a0775c92a5fc021fe8972f32aaf46",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2016/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2017/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2017,
+      "rows": 4943,
+      "size": 1571314,
+      "sha256": "3456f2ef99d68d7f88dafc28cc14d3d382e0bd3cf6da28c94f1c27f41e2c21b4",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2017/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2017/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2017,
+      "rows": 146186,
+      "size": 17017748,
+      "sha256": "3cd2ad0690dd2f19127cf1bde05427e90ddc99705e6d88fc8503646a08c47289",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2017/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2018/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2018,
+      "rows": 5039,
+      "size": 1790818,
+      "sha256": "d7e00d7a9b4f463358ceee452302ecb07c24e288fabf5290cece6f46c72552f0",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2018/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2018/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2018,
+      "rows": 151948,
+      "size": 18526745,
+      "sha256": "ac998705cf9bf6fe4d69ddb6086eb0194d3c7966d4ce8f1cad9cd04955001edf",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2018/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2019/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2019,
+      "rows": 5104,
+      "size": 1922334,
+      "sha256": "e3b0706934fab70edf6b27842f49fea92e58f6df16daba46c55be3ffa54a659c",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2019/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2019/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2019,
+      "rows": 154361,
+      "size": 19405277,
+      "sha256": "7dcfa2761528c4eff637e784dcfb01701a21325d8a04137f71ea9d19a8bbb345",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2019/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2020/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2020,
+      "rows": 5125,
+      "size": 1908506,
+      "sha256": "06ba05653507514a8bb8e6c623129b97c38761d9bfbac8bd257ce35882e2236f",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2020/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2020/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2020,
+      "rows": 153673,
+      "size": 19262178,
+      "sha256": "c0dc6ab9553877a7e78dde5057833828272af2afd03916d4eb205f0ab713623d",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2020/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2021/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2021,
+      "rows": 5112,
+      "size": 1875636,
+      "sha256": "f348cf5ee11113a7c16ac81cc4017e9d664b37dcccd099ef3640cd883f6d5329",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2021/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2021/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2021,
+      "rows": 152093,
+      "size": 19006007,
+      "sha256": "52a02be2ca6b91a285415fd43c484fc518c7c4dc775f25f8742251f46829a6f8",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2021/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2022/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2022,
+      "rows": 5115,
+      "size": 1830009,
+      "sha256": "46a4c70792b46159b8a2145324848e30f3d66a55b31a5b0bb2954ba30fadb20c",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2022/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2022/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2022,
+      "rows": 150439,
+      "size": 18536502,
+      "sha256": "e0b5e8605ed3d0082c948663928303197e4a82ae6cc08f1625861b948ef63186",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2022/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2023/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2023,
+      "rows": 5107,
+      "size": 1933807,
+      "sha256": "0c96a3b510efa1cc5cb3929038928941aa3dcdb354d665a233dbec0ecd18ec8c",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2023/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2023/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2023,
+      "rows": 154711,
+      "size": 19356722,
+      "sha256": "3e91b00a79f09123b8dabf85b62e8e1c6058ef4258a56b61203be678da35eccd",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2023/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2024/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2024,
+      "rows": 5302,
+      "size": 2123651,
+      "sha256": "f680d75400f4aa44fa886426925c9dd57d3edeaff3a82a5d66d3478011caff2d",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2024/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2024/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2024,
+      "rows": 156474,
+      "size": 20558490,
+      "sha256": "f0ca4c38ab2c86e0ae1f7696c813d86a82edf139a4be2db4963da994cf621362",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2024/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2025/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2025,
+      "rows": 5262,
+      "size": 2042246,
+      "sha256": "83b7bd6296e65f56416da46d2e3407a4bc14325d8914cec9114770fbce4cf1e1",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2025/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2025/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2025,
+      "rows": 156795,
+      "size": 19995248,
+      "sha256": "9516c65c768456760e198aa84957decb87ebd65fd14d8db740f0ca7282834286",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2025/aggregate-r8.parquet"
+    },
+    {
+      "path": "aggregate/year=2026/aggregate-r5.parquet",
+      "kind": "aggregate",
+      "year": 2026,
+      "rows": 5386,
+      "size": 1895321,
+      "sha256": "d5b961bf29c640542ca3e66da4b82dbb6e895c955125182e4735d7bfbd17ede2",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2026/aggregate-r5.parquet"
+    },
+    {
+      "path": "aggregate/year=2026/aggregate-r8.parquet",
+      "kind": "aggregate",
+      "year": 2026,
+      "rows": 156878,
+      "size": 19424100,
+      "sha256": "12c91da857996a05479b8a36fef914e6a239e7f4692c9f7296c3e63a0e70751a",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2026/aggregate-r8.parquet"
+    },
+    {
+      "path": "live/year=2026/live.parquet",
+      "kind": "live",
+      "year": 2026,
+      "rows": 853568,
+      "size": 14818826,
+      "sha256": "29c96ac5496fc21e589f150efc2d1a0fbc55a20107c56c5a573eeceef96c0018",
+      "start": "2026-11-07T00:00:00Z",
+      "end": "2026-11-14T04:14:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2026/live.parquet"
+    },
+    {
+      "path": "observations/year=2000/detections.parquet",
+      "kind": "observations",
+      "year": 2000,
+      "rows": 264718,
+      "size": 4073019,
+      "sha256": "b7aba0993c99716b5744f59536c69823ad99d3b41a4a4c0726e7758a9088f4e6",
+      "start": "2000-11-01T00:13:00Z",
+      "end": "2000-12-31T23:47:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2000/detections.parquet"
+    },
+    {
+      "path": "observations/year=2001/detections.parquet",
+      "kind": "observations",
+      "year": 2001,
+      "rows": 1789790,
+      "size": 28196960,
+      "sha256": "7319b06b81d96a6aea12997cbeffab46646919a4c2eb717469da2e2757a6b140",
+      "start": "2001-01-01T01:23:00Z",
+      "end": "2001-12-31T23:52:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2001/detections.parquet"
+    },
+    {
+      "path": "observations/year=2002/detections.parquet",
+      "kind": "observations",
+      "year": 2002,
+      "rows": 3726003,
+      "size": 58376185,
+      "sha256": "1fda72c60ffccdbc9f2c26e36e3b5988d98401871e93052e5062fbe145772026",
+      "start": "2002-01-01T00:40:00Z",
+      "end": "2002-12-31T23:45:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2002/detections.parquet"
+    },
+    {
+      "path": "observations/year=2003/detections.parquet",
+      "kind": "observations",
+      "year": 2003,
+      "rows": 5184272,
+      "size": 81014506,
+      "sha256": "4c7916669c16749af7094fb69a01a03b4da142549702fe1e59f08c51114cfaad",
+      "start": "2003-01-01T00:11:00Z",
+      "end": "2003-12-31T23:57:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2003/detections.parquet"
+    },
+    {
+      "path": "observations/year=2004/detections.parquet",
+      "kind": "observations",
+      "year": 2004,
+      "rows": 5127336,
+      "size": 80037330,
+      "sha256": "8da1800023c03193b6d81fccc03e1f1222ae0d2eb0dd6d74b732c8cb9079e6c4",
+      "start": "2004-01-01T00:06:00Z",
+      "end": "2004-12-31T23:54:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2004/detections.parquet"
+    },
+    {
+      "path": "observations/year=2005/detections.parquet",
+      "kind": "observations",
+      "year": 2005,
+      "rows": 5158284,
+      "size": 80751206,
+      "sha256": "26dc1eefb68eeda822c7081ff16ca195ea15d174a134310152e1a67fc63f9dce",
+      "start": "2005-01-01T00:03:00Z",
+      "end": "2005-12-31T23:49:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2005/detections.parquet"
+    },
+    {
+      "path": "observations/year=2006/detections.parquet",
+      "kind": "observations",
+      "year": 2006,
+      "rows": 4721882,
+      "size": 73842229,
+      "sha256": "f0c2cf9180d2a2dfad6fa5526676d0ff822d07303f7b9678d47355d419412ef4",
+      "start": "2006-01-01T00:56:00Z",
+      "end": "2006-12-31T23:38:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2006/detections.parquet"
+    },
+    {
+      "path": "observations/year=2007/detections.parquet",
+      "kind": "observations",
+      "year": 2007,
+      "rows": 5172627,
+      "size": 80809869,
+      "sha256": "612d5bee2aaf95a4102aa179c9df752f581b1697bd9116a73b29dfd0173b4a9d",
+      "start": "2007-01-01T00:25:00Z",
+      "end": "2007-12-31T23:35:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2007/detections.parquet"
+    },
+    {
+      "path": "observations/year=2008/detections.parquet",
+      "kind": "observations",
+      "year": 2008,
+      "rows": 4855531,
+      "size": 75847944,
+      "sha256": "09a1f97d35cc5673e1c3a42f86ae5da66a16014bc0ea11bf96053cb09b27cb18",
+      "start": "2008-01-01T00:01:00Z",
+      "end": "2008-12-31T23:19:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2008/detections.parquet"
+    },
+    {
+      "path": "observations/year=2009/detections.parquet",
+      "kind": "observations",
+      "year": 2009,
+      "rows": 4488383,
+      "size": 70212060,
+      "sha256": "6367eca03ffbcd9762be27360ba1edaade7dde7e1a46fedbb4c3d43502d96c47",
+      "start": "2009-01-01T00:11:00Z",
+      "end": "2009-12-31T23:41:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2009/detections.parquet"
+    },
+    {
+      "path": "observations/year=2010/detections.parquet",
+      "kind": "observations",
+      "year": 2010,
+      "rows": 4742107,
+      "size": 73974381,
+      "sha256": "77dab26d0eb45c2693d60fb16b07928281640e4f68e5de424397de6cf94c0cee",
+      "start": "2010-01-01T00:00:00Z",
+      "end": "2010-12-31T23:54:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2010/detections.parquet"
+    },
+    {
+      "path": "observations/year=2011/detections.parquet",
+      "kind": "observations",
+      "year": 2011,
+      "rows": 4722658,
+      "size": 73753337,
+      "sha256": "89ce9a7e9932ef51a25c0f76a5d0cbebad4c230d5ef2d563b4f7498522342b36",
+      "start": "2011-01-01T00:42:00Z",
+      "end": "2011-12-31T23:44:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2011/detections.parquet"
+    },
+    {
+      "path": "observations/year=2012/detections.parquet",
+      "kind": "observations",
+      "year": 2012,
+      "rows": 25951560,
+      "size": 456885925,
+      "sha256": "6c6a02fdccda8dc262b9b6c3778270e0f099c2da066fa504f9a6e6cc4768c4fd",
+      "start": "2012-01-01T00:12:00Z",
+      "end": "2012-12-31T23:46:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2012/detections.parquet"
+    },
+    {
+      "path": "observations/year=2013/detections.parquet",
+      "kind": "observations",
+      "year": 2013,
+      "rows": 23653487,
+      "size": 418438140,
+      "sha256": "a09c112ff90d62f8cecff80a9530ee9dfa38732358be4926917e89022cdb4d9a",
+      "start": "2013-01-01T00:06:00Z",
+      "end": "2013-12-31T23:59:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2013/detections.parquet"
+    },
+    {
+      "path": "observations/year=2014/detections.parquet",
+      "kind": "observations",
+      "year": 2014,
+      "rows": 24775965,
+      "size": 436905650,
+      "sha256": "c97755d5fd969c97c5f1147c75750f1942bfedce0d33b0f1a8cfcea6d229d9d8",
+      "start": "2014-01-01T00:00:00Z",
+      "end": "2014-12-31T23:59:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2014/detections.parquet"
+    },
+    {
+      "path": "observations/year=2015/detections.parquet",
+      "kind": "observations",
+      "year": 2015,
+      "rows": 26223945,
+      "size": 463224358,
+      "sha256": "ea17094ce7aee7ab32d4ad69026fef9b795dde67d4456f0c1e351e1e1a2ef16b",
+      "start": "2015-01-01T00:00:00Z",
+      "end": "2015-12-31T23:43:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2015/detections.parquet"
+    },
+    {
+      "path": "observations/year=2016/detections.parquet",
+      "kind": "observations",
+      "year": 2016,
+      "rows": 24801488,
+      "size": 438129984,
+      "sha256": "bf24aa5bb72037fe3875291ce1320b415127af20eb659a4ff4a8f415168c2c34",
+      "start": "2016-01-01T00:05:00Z",
+      "end": "2016-12-31T23:55:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2016/detections.parquet"
+    },
+    {
+      "path": "observations/year=2017/detections.parquet",
+      "kind": "observations",
+      "year": 2017,
+      "rows": 24565794,
+      "size": 433740286,
+      "sha256": "049500f4322253e843698b5074db9d238945799e733681828a0f7f35f9ef3301",
+      "start": "2017-01-01T00:47:00Z",
+      "end": "2017-12-31T23:57:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2017/detections.parquet"
+    },
+    {
+      "path": "observations/year=2018/detections.parquet",
+      "kind": "observations",
+      "year": 2018,
+      "rows": 37980401,
+      "size": 664605696,
+      "sha256": "d161b4f3213939e21cf6cb5f638be63641bc729516a8485162d78d359fbdcb94",
+      "start": "2018-01-01T00:15:00Z",
+      "end": "2018-12-31T23:59:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2018/detections.parquet"
+    },
+    {
+      "path": "observations/year=2019/detections.parquet",
+      "kind": "observations",
+      "year": 2019,
+      "rows": 46546650,
+      "size": 810949611,
+      "sha256": "887e22eb0634e7beeaff8cff5275d0e03f5220bb0554769cd5a6ae2231aedc0e",
+      "start": "2019-01-01T00:00:00Z",
+      "end": "2019-12-31T23:59:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2019/detections.parquet"
+    },
+    {
+      "path": "observations/year=2020/detections.parquet",
+      "kind": "observations",
+      "year": 2020,
+      "rows": 45667027,
+      "size": 797505286,
+      "sha256": "8ea1740e03a881874c0de83919cb5b67f5dc00857718c80400122a60a79db70c",
+      "start": "2020-01-01T00:00:00Z",
+      "end": "2020-12-31T23:58:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2020/detections.parquet"
+    },
+    {
+      "path": "observations/year=2021/detections.parquet",
+      "kind": "observations",
+      "year": 2021,
+      "rows": 44911159,
+      "size": 782342515,
+      "sha256": "46a821507f51497f13ce95ec5e6becfd5d002d2643cabb1ca34806efb4f72ca9",
+      "start": "2021-01-01T00:00:00Z",
+      "end": "2021-12-31T23:59:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2021/detections.parquet"
+    },
+    {
+      "path": "observations/year=2022/detections.parquet",
+      "kind": "observations",
+      "year": 2022,
+      "rows": 39191885,
+      "size": 685630403,
+      "sha256": "16d0a92be41c8e81bed25c59636c9113c7ff95b5d1c5c6cfd3c9b9ed0dc5a6c0",
+      "start": "2022-01-01T00:01:00Z",
+      "end": "2022-12-31T23:58:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2022/detections.parquet"
+    },
+    {
+      "path": "observations/year=2023/detections.parquet",
+      "kind": "observations",
+      "year": 2023,
+      "rows": 47904858,
+      "size": 832198293,
+      "sha256": "3f4a50657c7042f930f4bf2593fd08b89829a3edb07950afc088dcca7f298290",
+      "start": "2023-01-01T00:00:00Z",
+      "end": "2023-12-31T23:59:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2023/detections.parquet"
+    },
+    {
+      "path": "observations/year=2024/detections.parquet",
+      "kind": "observations",
+      "year": 2024,
+      "rows": 69183241,
+      "size": 1222022237,
+      "sha256": "1090bf53838fb93d8cf1bacd88db72078046022bc3253ed41812d6feee64c626",
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-12-31T23:59:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2024/detections.parquet"
+    },
+    {
+      "path": "observations/year=2025/detections.parquet",
+      "kind": "observations",
+      "year": 2025,
+      "rows": 58352900,
+      "size": 1031532301,
+      "sha256": "cbf70e4d656c0b3d6121a13f75aff94d1fda4f3647e815eb646e3bc2160527d5",
+      "start": "2025-01-01T00:00:00Z",
+      "end": "2025-12-31T23:49:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2025/detections.parquet"
+    },
+    {
+      "path": "observations/year=2026/detections.parquet",
+      "kind": "observations",
+      "year": 2026,
+      "rows": 51837416,
+      "size": 915157222,
+      "sha256": "ff9bd5cd91324e3d558383def005509896a4ddcccede541dd15c960aef979eed",
+      "start": "2026-01-01T00:07:00Z",
+      "end": "2026-11-13T07:16:00Z",
+      "source_url": "https://data.source.coop/portolan-mirrors/firms-catalog/detections/year=2026/detections.parquet"
+    }
+  ],
+  "live_tail": {
+    "path": "derived/live-tail.parquet",
+    "kind": "live_tail",
+    "rows": 81055,
+    "size": 1760161,
+    "sha256": "af6e8195de52652eff2ca52f898a1a1274bb4cb66263d7ff59d07f18ca5ce799",
+    "start": "2026-11-13T06:35:00Z",
+    "end": "2026-11-14T04:14:00Z"
+  }
+}

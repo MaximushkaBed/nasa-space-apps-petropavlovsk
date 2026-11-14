@@ -2,7 +2,9 @@ FROM python@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements-global.txt .
-RUN pip install --no-cache-dir --disable-pip-version-check -r requirements-global.txt
+RUN pip install --no-cache-dir --disable-pip-version-check -r requirements-global.txt \
+    && pip uninstall -y pip \
+    && python -c "import ensurepip, shutil; shutil.rmtree(ensurepip.__path__[0])"
 COPY scripts/sync_global_firms.py scripts/sync_global_firms.py
 USER 10001:10001
 ENV PYTHONUNBUFFERED=1

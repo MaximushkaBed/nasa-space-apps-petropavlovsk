@@ -203,6 +203,19 @@ def build_live_tail(root, assets):
             "identity": ["sensor", "acq_datetime", "geometry"]}
 
 
+def public_catalog(state):
+    fields = ("path", "kind", "year", "rows", "size", "sha256", "start", "end", "source_url")
+    records = [{key: item[key] for key in fields if key in item}
+               for item in state["assets"].values()]
+    tail = state.get("live_tail")
+    return {"scope": "world", "status": state["status"], "updated_at": state["updated_at"],
+            "producer": state["producer"], "mirror": state["mirror"], "license": state["license"],
+            "base_rows": state["observation_rows"], "incremental_rows": tail["rows"] if tail else None,
+            "base_bytes": state["downloaded_bytes"], "notes": state["notes"], "errors": state["errors"],
+            "assets": sorted(records, key=lambda item: item["path"]),
+            "live_tail": {key: tail[key] for key in fields if key in tail} if tail else None}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=Path(os.environ.get("SPACEAPPS_DATA_DIR", "data/raw/firms/global")))
@@ -269,6 +282,7 @@ def sync(root, args):
     state["observation_rows"] = sum(item["rows"] for item in state["assets"].values() if item["kind"] == "observations")
     state["downloaded_bytes"] = sum(item["size"] for item in state["assets"].values())
     atomic_json(state_path, state)
+    atomic_json(root / "catalog.json", public_catalog(state))
     print(f"Global sync {state['status']}: {state['observation_rows']:,} base rows", flush=True)
     return 1 if state["errors"] else 0
 

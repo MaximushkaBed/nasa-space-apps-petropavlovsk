@@ -19,16 +19,17 @@ Komodo: <https://komodo.aican.cloud>, stack `nasa-space-apps`.
 GitHub host keys получены из официального HTTPS API `/meta` и сохранены отдельно.
 Ключ вебхука задаётся внутри Komodo и GitHub, в Git не хранится.
 
-Адрес: `nasa.aican.cloud`. Требуется DNS A → `31.97.72.56`; пока DNS не настроен,
-приложение доступно по <http://31.97.72.56:18088>. Для проверки vhost без DNS:
+Адрес: <https://nasa.aican.cloud>, DNS A → `31.97.72.56`.
+Сертификат выдан через существующий аккаунт Let's Encrypt на сервере.
+Приложение также доступно по <http://31.97.72.56:18088>. Для проверки vhost без DNS:
 
 ```bash
-curl --resolve nasa.aican.cloud:80:31.97.72.56 http://nasa.aican.cloud/health
+curl --resolve nasa.aican.cloud:443:31.97.72.56 https://nasa.aican.cloud/health
 ```
 
 `public-nginx.conf` — отдельный vhost общего nginx. Перед reload обязательно
-`docker exec nginx nginx -t`. HTTPS включается после настройки DNS и выдачи
-сертификата существующим Certbot. Порт 18088 обслуживает только этот проект.
+`docker exec nginx nginx -t`. HTTP перенаправляется на HTTPS, кроме ACME.
+Порт 18088 обслуживает только этот проект.
 
 Проверка: `/health` возвращает `ok`, JSON приложения доступен из `/data/`,
 контейнер должен иметь статус healthy. Образы баз закреплены по digest;
