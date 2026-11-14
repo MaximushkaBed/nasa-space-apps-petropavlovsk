@@ -1,0 +1,37 @@
+name: nasa-space-apps-workspace
+services:
+  oksana:
+    image: nasa-space-apps-workspace:current
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.workspace
+      args:
+        WORKSPACE_UID: ${NASA_OKSANA_UID:?Set NASA_OKSANA_UID}
+        WORKSPACE_GID: ${NASA_OKSANA_GID:?Set NASA_OKSANA_GID}
+    container_name: nasa-space-apps-oksana
+    restart: unless-stopped
+    init: true
+    read_only: true
+    user: "${NASA_OKSANA_UID}:${NASA_OKSANA_GID}"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 1
+    mem_limit: 2g
+    pids_limit: 256
+    tmpfs:
+      - /tmp:rw,nosuid,size=256m,mode=1777
+    volumes:
+      - /root/platforms/projects/nasa-space-apps/workspaces/oksana/repository:/workspace
+      - /root/platforms/projects/nasa-space-apps/workspaces/oksana/home:/home/oksana
+      - /root/platforms/projects/nasa-space-apps/shared/data/firms-global:/data:ro
+      - /root/platforms/projects/nasa-space-apps/shared/results/oksana:/results
+    healthcheck:
+      test: [CMD, test, -d, /workspace/.git]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "2"

@@ -8,11 +8,15 @@
 
 ## Приложение
 
-Komodo: <https://komodo.aican.cloud>, stack `nasa-space-apps`.
-Конфигурация ресурса — `komodo-stack.json`, Compose — `compose.yml`.
-Вебхук push в `main` запускает deploy. Перед сборкой `update-checkout.sh`
+Komodo: <https://komodo.aican.cloud>, stack `nasa-space-apps`,
+процедура [nasa-space-apps-deploy](https://komodo.aican.cloud/procedures/6af82a7a3434ddcf958fb601).
+Конфигурация ресурсов — `komodo-stack.json` и `komodo-procedure.json`, Compose — `compose.yml`.
+Вебхук push в `main` запускает процедуру, которая вызывает DeployStack.
+Прямой webhook stack отключён. Перед сборкой `update-checkout.sh`
 делает fetch + fast-forward. Ветка на сервере не предназначена для ручных правок;
 если появились локальные коммиты, деплой останавливается без reset/force.
+
+SSH-доступ Оксаны и изолированная рабочая среда описаны в [oksana-access.md](oksana-access.md).
 
 Для GitHub создан отдельный SSH deploy key, только чтение этой репы.
 Приватный ключ — `shared/keys/github-readonly`, права 0600, каталог 0700.

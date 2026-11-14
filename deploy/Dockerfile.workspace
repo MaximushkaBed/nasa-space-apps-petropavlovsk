@@ -1,0 +1,14 @@
+FROM python@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72
+ARG WORKSPACE_UID=1000
+ARG WORKSPACE_GID=1000
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends git openssh-client openssh-sftp-server less nano \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir pip==26.3 duckdb==2.0.0 \
+    && python -c "import ensurepip, shutil; shutil.rmtree(ensurepip.__path__[0])" \
+    && groupadd -g "$WORKSPACE_GID" oksana \
+    && useradd -m -u "$WORKSPACE_UID" -g "$WORKSPACE_GID" -s /bin/bash oksana
+USER oksana
+ENV HOME=/home/oksana USER=oksana LOGNAME=oksana
+WORKDIR /workspace
+CMD ["sleep", "infinity"]

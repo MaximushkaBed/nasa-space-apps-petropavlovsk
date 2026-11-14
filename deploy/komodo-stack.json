@@ -10,7 +10,7 @@
     "auto_pull": false,
     "poll_for_updates": false,
     "auto_update": false,
-    "webhook_enabled": true,
+    "webhook_enabled": false,
     "webhook_force_deploy": true,
     "pre_deploy": {
       "path": "/root/platforms/projects/nasa-space-apps/repository",

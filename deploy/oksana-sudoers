@@ -1,0 +1,3 @@
+# Only the root-owned wrapper is permitted, with no arguments or host shell.
+Defaults!/usr/local/sbin/nasa-space-apps-shell env_keep += "SSH_ORIGINAL_COMMAND"
+oksana ALL=(root) NOPASSWD: /usr/local/sbin/nasa-space-apps-shell ""

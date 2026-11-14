@@ -1,0 +1,23 @@
+{
+  "name": "nasa-space-apps-deploy",
+  "config": {
+    "schedule_enabled": false,
+    "schedule_alert": false,
+    "webhook_enabled": true,
+    "stages": [
+      {
+        "name": "Update checkout, build and deploy NASA web",
+        "enabled": true,
+        "executions": [
+          {
+            "enabled": true,
+            "execution": {
+              "type": "DeployStack",
+              "params": {"stack": "nasa-space-apps"}
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
