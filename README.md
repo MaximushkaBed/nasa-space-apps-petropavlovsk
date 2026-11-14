@@ -6,7 +6,7 @@ Selected challenge: **Harmonization of MODIS and VIIRS Hot Spots**.
 
 Local challenge label supplied by the team: `15 - Harmonization of MODIS and VIIRS Hot Spots_4.3`.
 
-This repository currently contains project setup only. The implementation scope, team roster, and application stack are still to be defined.
+The repository includes a Python downloader for NASA FIRMS hotspot observations. The application scope, team roster, and web stack are still to be defined.
 
 ## Next steps
 
@@ -26,7 +26,29 @@ This repository currently contains project setup only. The implementation scope,
 
 ## Development
 
-The application stack and setup commands will be added after the prototype scope is chosen.
+The downloader requires Python 3.10 or newer and no external packages.
+
+1. Obtain a free [FIRMS MAP_KEY](https://firms.modaps.eosdis.nasa.gov/api/map_key/).
+2. Copy `.env.example` to `.env` and fill in `FIRMS_MAP_KEY`. An environment variable with the same name takes precedence.
+3. Run a regional download. This example requests historical observations for a rectangle around Petropavlovsk, not an administrative boundary:
+
+```bash
+python3 scripts/fetch_firms.py \
+  --bbox 68,54,71,56 \
+  --start 2024-07-01 \
+  --end 2024-07-10 \
+  --sources MODIS_SP VIIRS_SNPP_SP
+```
+
+The bounding box order is **west,south,east,north**. Dates are inclusive. The script splits the period into requests of at most five days, then writes one CSV per source into `data/raw/firms/`. Original NASA columns and values are preserved. The output is raw input for future harmonization; the downloader does not harmonize sensors.
+
+For recent observations, select sources such as `MODIS_NRT VIIRS_NOAA20_NRT` and use dates covered by those feeds. Check [current product availability](https://firms.modaps.eosdis.nasa.gov/api/data_availability/) before choosing dates. For large historical exports, use the FIRMS archive download service.
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Tests use simulated API responses; live downloads require a valid MAP_KEY.
 
 ## Open data
 
