@@ -1,0 +1,6 @@
+# Applies only to the workspace scan, not to web/data images.
+# pip vendors pkg_resources from setuptools, but not setuptools.package_index.
+# CVE-2025-47273 affects PackageIndex.download; that code is absent here.
+# Dockerfile.workspace asserts that the affected package/module is absent.
+# https://github.com/pypa/setuptools/security/advisories/GHSA-5rjg-fvgr-3xxf
+CVE-2025-47273

@@ -1,0 +1,12 @@
+{
+  "release_url": "https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/releases/tag/data-global-2026-11-14",
+  "tag": "data-global-2026-11-14",
+  "release_id": 445182585,
+  "verified_assets": 89,
+  "total_bytes": 11976740492,
+  "base_rows": 641501367,
+  "live_tail_rows": 81055,
+  "verified_at": "2026-11-14T09:48:44.396815+00:00",
+  "verification": "Each asset size and GitHub SHA-256 matched the pinned server snapshot; see release-manifest.json and SHA256SUMS.",
+  "scope": "FIRMS mirror only; national registries/weather are not included; early NOAA21 gap is documented."
+}

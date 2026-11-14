@@ -6,6 +6,7 @@ RUN apt-get update && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir pip==26.3 duckdb==2.0.0 \
     && python -c "import ensurepip, shutil; shutil.rmtree(ensurepip.__path__[0])" \
+    && python -c "import importlib.util, pathlib; assert importlib.util.find_spec('setuptools') is None; assert not list(pathlib.Path('/usr/local/lib/python3.13/site-packages').rglob('package_index.py'))" \
     && groupadd -g "$WORKSPACE_GID" oksana \
     && useradd -m -u "$WORKSPACE_UID" -g "$WORKSPACE_GID" -s /bin/bash oksana
 USER oksana

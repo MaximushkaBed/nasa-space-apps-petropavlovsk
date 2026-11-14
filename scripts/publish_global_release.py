@@ -194,6 +194,9 @@ def publish(destination, plan, gh, token):
     for item in plan['assets']:
         verify_asset(final[item['name']], item)
     command(['release', 'edit', plan['tag'], '--repo', REPO, '--draft=false', '--latest=false', '--notes-file', str(notes)])
+    release = api(f'repos/{REPO}/releases/{release["id"]}')
+    if release['draft'] or release['tag_name'] != plan['tag']:
+        raise RuntimeError('GitHub has not confirmed publication of the expected release')
     result = {'status': 'published', 'release_url': release['html_url'], 'tag': plan['tag'],
               'assets': results, 'verified_at': datetime.now(timezone.utc).isoformat()}
     (destination / 'published.json').write_text(json.dumps(result, indent=2) + '\n')
