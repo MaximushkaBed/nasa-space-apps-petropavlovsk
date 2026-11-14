@@ -129,6 +129,45 @@ class TemporalAnalysisTests(unittest.TestCase):
 
 
 class SpatialQueryTests(unittest.TestCase):
+    def test_world_calendar_refresh_reuses_historical_days_when_live_tail_changes(self):
+        from contextlib import contextmanager
+        from api import server, world_calendar
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            data = root / 'data'
+            data.mkdir()
+            cache = root / 'cache'
+            archive = dict(kind='observations', rows=1, path='archive', fd='archive', sha256='archive',
+                           start='2026-11-13T00:00:00Z', end='2026-11-13T03:00:00Z')
+            tail = dict(kind='live_tail', rows=1, path='tail', fd='tail', sha256='tail-v1',
+                        start='2026-11-14T00:00:00Z', end='2026-11-14T03:00:00Z')
+            state = dict(status='ready', updated_at='first', assets={'archive': archive}, live_tail=tail)
+
+            @contextmanager
+            def pin(_):
+                yield state, [archive, tail]
+
+            server.atomic_json(data / 'manifest.json', state)
+            with patch.object(world_calendar, 'read_days', side_effect=[
+                [('2026-11-13', 'Terra', 4, 0, True)],
+                [('2026-11-14', 'Terra', 2, 2, False)],
+                [('2026-11-15', 'Terra', 3, 3, False)],
+            ]) as read:
+                world_calendar.refresh(data, cache, pin, server.atomic_json)
+                published = cache / 'world-calendar' / 'published.json'
+                previous = json.loads(published.read_bytes())
+                self.assertEqual(previous['end'], '2026-11-14')
+                tail.update(sha256='tail-v2', end='2026-11-15T03:00:00Z')
+                state['updated_at'] = 'second'
+                server.atomic_json(data / 'manifest.json', state)
+                world_calendar.refresh(data, cache, pin, server.atomic_json)
+                fresh = json.loads(published.read_bytes())
+                self.assertEqual(fresh['end'], '2026-11-15')
+                self.assertNotEqual(fresh['revision'], previous['revision'])
+                self.assertEqual([call.args[0] for call in read.call_args_list], ['archive', 'tail', 'tail'])
+                self.assertEqual(next(row for row in fresh['monthly'] if row['platform'] == 'Terra')['points'], 7)
+
     def test_world_calendar_keeps_platforms_and_nrt_separate(self):
         from api.world_calendar import monthly_rows
         records = [
