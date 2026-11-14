@@ -77,15 +77,22 @@ export function createFireOverlay(map, platformNames, number) {
     bins = new Map();
     const scale = map.getZoomScale(map.getZoom(), 0);
     const origin = map.getPixelBounds().min;
+    const worldWidth = 256 * scale;
+    const firstCopy = interactive ? Math.floor((origin.x - 24) / worldWidth) : 0;
+    const lastCopy = interactive ? Math.floor((origin.x + width + 24) / worldWidth) : 0;
     const stride = Math.ceil(width / step) + 10;
     for (const point of points) {
-      const x = point.x * scale - origin.x;
       const y = point.y * scale - origin.y;
-      if (x < -24 || y < -24 || x > width + 24 || y > height + 24) continue;
-      const key = Math.floor(y / step) * stride + Math.floor(x / step);
-      const bin = bins.get(key);
-      if (bin) bin.count += point.weight;
-      else bins.set(key, { x, y, lon: point.lon, lat: point.lat, platform: point.platform, count: point.weight });
+      if (y < -24 || y > height + 24) continue;
+      const baseX = point.x * scale - origin.x;
+      for (let copy = firstCopy; copy <= lastCopy; copy++) {
+        const x = baseX + copy * worldWidth;
+        if (x < -24 || x > width + 24) continue;
+        const key = Math.floor(y / step) * stride + Math.floor(x / step);
+        const bin = bins.get(key);
+        if (bin) bin.count += point.weight;
+        else bins.set(key, { x, y, lon: point.lon, lat: point.lat, platform: point.platform, count: point.weight });
+      }
     }
     if (mode === 'heat') {
       drawHeat(ctx, width, height, ratio);

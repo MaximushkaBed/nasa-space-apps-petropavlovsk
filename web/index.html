@@ -8,9 +8,9 @@
   <title>Атлас пожаров · NASA FIRMS</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=global-atlas">
+  <link rel="stylesheet" href="styles.css?v=world-wrap">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=global-atlas" type="module"></script>
+  <script src="app.js?v=world-wrap" type="module"></script>
   <script src="correlations.js?v=sko-layers" type="module"></script>
   <script src="burn-case.js?v=2025-04-12" type="module"></script>
 </head>
@@ -102,6 +102,7 @@
             <div class="map-caption">
               <span id="regional-boundary-key"><i aria-hidden="true"></i> Граница СКО</span>
               <span id="archive-caption" hidden>Мозаика детекций · время UTC</span>
+              <span id="scope-note" role="status" hidden></span>
               <span id="imagery-status" role="status" hidden>Часть снимков Esri недоступна. В этих местах показан Blue Marble.</span>
               <span id="map-summary" role="status"></span>
             </div>

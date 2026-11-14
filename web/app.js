@@ -2,7 +2,7 @@
 
 import { createExtraLayers } from './map-layers.js?v=esri-imagery';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
-import { createFireOverlay } from './fire-overlay.js?v=global-atlas';
+import { createFireOverlay } from './fire-overlay.js?v=world-wrap';
 
 const $ = (id) => document.getElementById(id);
 const sources = ['Aqua / MODIS', 'Suomi NPP / VIIRS', 'NOAA-20 / VIIRS'];
@@ -79,7 +79,7 @@ function addTerrainControl(map) {
   const strength = opacity.closest('label');
   const status = $('terrain-status');
   const tiles = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/ASTER_GDEM_Greyscale_Shaded_Relief/default/GoogleMapsCompatible_Level12/{z}/{y}/{x}.jpeg', {
-    pane: 'terrain-shading', noWrap: true, maxNativeZoom: 12, maxZoom: map.getMaxZoom(),
+    pane: 'terrain-shading', maxNativeZoom: 12, maxZoom: map.getMaxZoom(),
     opacity: opacity.valueAsNumber / 100,
     attribution: '<a href="https://worldview.earthdata.nasa.gov/?l=ASTER_GDEM_Greyscale_Shaded_Relief">ASTER GDEM · NASA GIBS</a>',
   });
@@ -99,6 +99,22 @@ function addTerrainControl(map) {
   showTerrain();
 }
 
+function createWorldOverview() {
+  const Overview = L.GridLayer.extend({
+    createTile({ x, y, z }) {
+      const tile = L.DomUtil.create('div', 'blue-marble-tile');
+      const size = 256 * 2 ** z;
+      tile.style.backgroundSize = `${size}px ${size}px`;
+      tile.style.backgroundPosition = `${-x * 256}px ${-y * 256}px`;
+      return tile;
+    },
+  });
+  return new Overview({
+    maxNativeZoom: 2, maxZoom: atlasMaxZoom, zIndex: 1,
+    attribution: '<a href="https://nasa-gibs.github.io/gibs-api-docs/">Blue Marble · NASA GIBS</a>',
+  });
+}
+
 function createMap(basemap, boundary) {
   const styles = {
     country: { color: '#7890a0', weight: 1.1, fillColor: '#162846', fillOpacity: 1 },
@@ -108,7 +124,7 @@ function createMap(basemap, boundary) {
     river: { color: '#6498af', weight: .85, opacity: .67 },
   };
   map = L.map('map', {
-    zoomControl: false, minZoom: 5, maxZoom: atlasMaxZoom, zoomSnap: .25,
+    zoomControl: false, minZoom: 5, maxZoom: atlasMaxZoom, zoomSnap: .25, worldCopyJump: true,
     maxBounds: [[47, 58], [60, 83]], maxBoundsViscosity: .8, zoomAnimation: false,
   });
   map.attributionControl.setPrefix(false);
@@ -118,16 +134,13 @@ function createMap(basemap, boundary) {
     pane: 'tilePane', zIndex: 2,
     attribution: '<a href="https://nasa-gibs.github.io/gibs-api-docs/">Blue Marble · NASA GIBS</a>',
   });
-  const world = L.imageOverlay('assets/world-blue-marble.webp', [[-85.0511288, -180], [85.0511288, 180]], {
-    pane: 'tilePane', zIndex: 1,
-    attribution: '<a href="https://nasa-gibs.github.io/gibs-api-docs/">Blue Marble · NASA GIBS</a>',
-  });
+  const world = createWorldOverview();
   const worldDetails = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg', {
-    noWrap: true, minZoom: 3, maxNativeZoom: 8, maxZoom: atlasMaxZoom, zIndex: 2,
+    minZoom: 3, maxNativeZoom: 8, maxZoom: atlasMaxZoom, zIndex: 2,
   });
   const detailedImagery = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?blankTile=false', {
     className: 'esri-imagery', minZoom: detailedImageryMinZoom, maxZoom: atlasMaxZoom,
-    noWrap: true, zIndex: 3,
+    zIndex: 3,
     attribution: '<a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9">Esri World Imagery</a> · Vantor, Earthstar Geographics, GIS User Community',
   });
   const imageryStatus = $('imagery-status');
@@ -204,7 +217,7 @@ function createMap(basemap, boundary) {
     }).addTo(map);
   }
   L.control.scale({ metric: true, imperial: false, position: 'bottomright', maxWidth: 88 }).addTo(map);
-  const reset = () => {
+  const reset = (keepDate = true) => {
     world.remove();
     worldDetails.remove();
     map.setMinZoom(5);
@@ -213,7 +226,7 @@ function createMap(basemap, boundary) {
     $('world-view').textContent = 'Весь мир ↗';
     $('map-layer-status').hidden = true;
     map.fitBounds(region.getBounds(), { padding: [25, 24], animate: false });
-    changeScope(false);
+    changeScope(false, keepDate);
   };
   const showWorld = () => {
     if (map.hasLayer(world)) {
@@ -242,7 +255,7 @@ function createMap(basemap, boundary) {
   });
   $('zoom-in').addEventListener('click', () => map.zoomIn());
   $('zoom-out').addEventListener('click', () => map.zoomOut());
-  $('reset-map').addEventListener('click', reset);
+  $('reset-map').addEventListener('click', () => reset());
   const section = $('observations');
   const expand = $('expand-map');
   const setExpanded = (active) => {
@@ -263,7 +276,7 @@ function createMap(basemap, boundary) {
   new ResizeObserver(() => map.invalidateSize({ pan: true })).observe($('map'));
   reset();
   addTerrainControl(map);
-  return showWorld;
+  return { showWorld, reset };
 }
 
 function mapStatus(message) {
@@ -412,11 +425,15 @@ function setWorldDate(day) {
     : new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).getUTCDate();
   slider.value = Number(day.slice(-2));
   slider.setAttribute('aria-valuetext', $('frame-date').textContent);
+  const through = worldArchive.through;
+  $('archive-caption').textContent = day === worldArchive.last && through?.startsWith(day)
+    ? `Последняя детекция в архиве · ${through.slice(11, 16)} UTC`
+    : 'Архив FIRMS · время UTC';
   renderLayers();
   return loadWorldFrame();
 }
 
-async function changeScope(global) {
+async function changeScope(global, keepDate = true) {
   const changed = worldScope !== global;
   worldScope = global;
   if (!changed) return;
@@ -433,7 +450,18 @@ async function changeScope(global) {
   $('day-slider').min = global ? 1 : 0;
   $('timeline-ticks').replaceChildren();
   $('peak-day').hidden = $('timeline-outages').hidden = true;
+  $('scope-note').hidden = true;
   if (!global) {
+    const day = $('world-date').value;
+    if (keepDate && day) {
+      const index = calendar.months.findIndex((row) => row.month === day.slice(0, 7));
+      if (index >= 0) {
+        await chooseMonth(index, Number(day.slice(-2)));
+        return;
+      }
+      $('scope-note').textContent = `В календаре СКО нет данных за ${periodLabel(day.slice(0, 7))}. Показан выбранный период СКО.`;
+      $('scope-note').hidden = false;
+    }
     renderLayers();
     await renderMap(calendar.months[monthIndex]);
     return;
@@ -456,10 +484,10 @@ async function changeScope(global) {
     }
     if (!worldScope) return;
     for (const id of ['world-satellite', 'world-date', 'day-slider', 'play-frames']) $(id).disabled = false;
-    $('archive-caption').textContent = 'Архив FIRMS · время UTC';
     $('archive-caption').title = `Последнее наблюдение в архиве: ${worldArchive.through ?? worldArchive.last} · возможны предварительные данные`;
-    const previous = $('world-date').value;
-    await setWorldDate(previous || worldArchive.last);
+    const regionalDate = displayedDay !== null ? frameDate(calendar.months[monthIndex].month, displayedDay) : '';
+    const sharedDate = regionalDate >= worldArchive.first && regionalDate <= worldArchive.last ? regionalDate : '';
+    await setWorldDate(sharedDate || $('world-date').value || worldArchive.last);
   } catch (error) {
     worldArchiveRequest = undefined;
     if (!worldScope) return;
@@ -660,7 +688,7 @@ function renderCalendarInsight() {
   }
 }
 
-function makeCalendar() {
+function makeCalendar(openRegional) {
   const table = $('calendar');
   const header = table.createTHead().insertRow();
   for (const [month, name] of ['Год', ...monthNames].entries()) {
@@ -691,8 +719,8 @@ function makeCalendar() {
       button.type = 'button';
       button.dataset.index = index;
       button.addEventListener('click', () => {
-        if (worldScope) $('reset-map').click();
-        chooseMonth(index);
+        if (worldScope) openRegional();
+        chooseMonth(index, null);
       });
       td.append(button);
     }
@@ -725,7 +753,7 @@ function renderCalendar() {
   }));
 }
 
-function chooseMonth(index) {
+function chooseMonth(index, day) {
   const row = calendar.months[index];
   if (!row) return;
   if (displayedMonth !== row.month) {
@@ -739,6 +767,8 @@ function chooseMonth(index) {
     $('peak-day').hidden = true;
     $('timeline-outages').hidden = true;
   }
+  if (day !== undefined) displayedDay = day;
+  if (day === null) $('scope-note').hidden = true;
   monthIndex = index;
   $('period').value = String(index);
   $('previous').disabled = index === 0;
@@ -752,7 +782,7 @@ function chooseMonth(index) {
 
 async function start() {
   $('open-method').addEventListener('click', () => $('method').showModal());
-  let showWorld;
+  let mapViews;
   try {
     calendar = await getJSON('data/calendar.json?v=sko-series');
   } catch (error) {
@@ -764,7 +794,7 @@ async function start() {
   }
   try {
     const [basemap, boundary] = await Promise.all([getJSON('data/basemap.geojson'), getJSON('data/region.geojson')]);
-    showWorld = createMap(basemap, boundary);
+    mapViews = createMap(basemap, boundary);
     mapAvailable = true;
     for (const id of ['fire-layer', 'fire-points', 'fire-heat']) $(id).disabled = false;
     $('local-layers').disabled = false;
@@ -793,7 +823,7 @@ async function start() {
     option.value = index;
     $('period').append(option);
   }
-  makeCalendar();
+  makeCalendar(() => mapViews.reset(false));
   for (const id of ['source', 'period', 'activity-view', 'deviation-view']) $(id).disabled = false;
   $('source').addEventListener('change', (event) => {
     source = event.target.value;
@@ -826,7 +856,7 @@ async function start() {
     showDay(Number(event.currentTarget.dataset.day));
   });
   $('calendar-selection').addEventListener('click', () => {
-    if (worldScope) $('reset-map').click();
+    if (worldScope) mapViews.reset(false);
   });
   const redrawFires = () => worldScope ? loadWorldFrame() : renderMap(calendar.months[monthIndex]);
   $('fire-layer').addEventListener('change', redrawFires);
@@ -863,7 +893,7 @@ async function start() {
     caseButton.hidden = false;
     caseButton.addEventListener('click', async () => {
       stopPlayback();
-      if ($('world-view').getAttribute('aria-pressed') === 'true') $('reset-map').click();
+      if (worldScope) mapViews.reset(false);
       source = '2';
       $('source').value = source;
       $('fire-layer').checked = true;
@@ -876,7 +906,7 @@ async function start() {
   $('app-status').hidden = true;
   const initial = calendar.months.findIndex((row) => row.month === '2025-04');
   chooseMonth(initial < 0 ? 0 : initial);
-  showWorld?.();
+  mapViews?.showWorld();
 }
 
 start();

@@ -95,6 +95,7 @@ a { color: inherit; text-underline-offset: 4px; }
 .map-body { position: relative; border: 1px solid #425e8b; background: #142647; border-radius: 6px; overflow: hidden; }
 #map { width: 100%; height: var(--map-height); z-index: 0; background: #122747; font-family: inherit; }
 #map .satellite-image { filter: brightness(.74) saturate(.73); }
+#map .blue-marble-tile { background-image: url('assets/world-blue-marble.webp'); background-repeat: no-repeat; }
 #map .leaflet-terrain-shading-pane { mix-blend-mode: soft-light; }
 .map-tools { position: absolute; top: 13px; right: 13px; z-index: 500; display: grid; gap: 5px; }
 .map-tools button { display: grid; place-items: center; border: 1px solid #62799f; border-radius: 4px; width: 35px; height: 35px; background: #07173fee; font-size: 20px; }
