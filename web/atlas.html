@@ -8,9 +8,9 @@
   <title>Атлас пожаров · NASA FIRMS</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=map-controls">
+  <link rel="stylesheet" href="styles.css?v=fire-detail">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=map-controls" type="module"></script>
+  <script src="app.js?v=fire-detail" type="module"></script>
   <script src="correlations.js?v=ndvi" type="module"></script>
   <script src="burn-case.js?v=atlas-workspace" type="module"></script>
 </head>
@@ -194,6 +194,10 @@
           <button class="quiet-button" id="sko-example" type="button" title="Открыть 12 апреля 2025 года" hidden>СКО · открыть пример ↗</button>
           <span id="archive-caption"></span>
         </div>
+        <div class="fire-detail-caption">
+          <span id="fire-detail-status" role="status" hidden></span>
+          <button id="fire-detail-retry" class="quiet-button" type="button" hidden>Повторить</button>
+        </div>
         <p id="imagery-status" class="layer-caption" role="status" hidden>Часть снимков Esri недоступна. На этих участках показан Blue Marble.</p>
       </details>
     </section>
@@ -361,7 +365,7 @@
       <form method="dialog"><button type="submit" class="quiet-button" aria-label="Закрыть методику">✕</button></form>
     </div>
     <p><strong>Единый ряд.</strong> С 2020 по 2023 год используются наблюдения Aqua/MODIS. Для сезонов 2024 и 2025 годов используется NOAA‑20/VIIRS с поправкой 0,2897 к месячной сумме. Источник фиксирован для каждого периода, включая месяцы без детекций. В меню доступны отдельные спутники для проверки наблюдений.</p>
-    <p><strong>Мировая карта.</strong> При приближении детекции за конкретный день UTC видны как квадраты по номинальному размеру спутникового пикселя. MODIS — 1 км, VIIRS — 375 м. При отдалении и в сводках за период детекции объединяются в группы. Счётчик СКО использует ту же дату и фильтр спутника, что и счётчик мира. Покрытие пролётами может быть неполным.</p>
+    <p><strong>Мировая карта.</strong> При приближении отдельных детекций видны пиксели номинального размера: MODIS — 1 км, VIIRS — 375 м. Для нескольких дней карта загружает исходные координаты в пределах видимой области, а на обзорном масштабе показывает плотность. Счётчик СКО использует тот же период и фильтр спутника, что и счётчик мира. Покрытие пролётами может быть неполным.</p>
     <p><strong>Ячейко-день</strong> — участок 2 × 2 км, где спутник зарегистрировал хотя бы один подходящий тепловой сигнал за сутки UTC. Календарь суммирует их за месяц. Кнопка «День пика» открывает дату с наибольшим числом ячеек в СКО на мировой карте.</p>
     <p><strong>Слои.</strong> Яркость тепловой карты показывает относительную плотность детекций. Ветер и погодные поля рассчитаны по 17 точкам ERA5 внутри СКО. Шкала UTC синхронизирует детекции, погоду и доступные датированные слои. Подложка использует Blue Marble и снимки Esri при приближении.</p>
     <p><strong>Шкала Aqua.</strong> Месячные суммы Suomi NPP и NOAA‑20 умножаются на коэффициенты 0,2932 и 0,2897, рассчитанные по 2020–2023 годам. Коэффициенты применяются к суммам, а карта сохраняет исходные наблюдения.</p>

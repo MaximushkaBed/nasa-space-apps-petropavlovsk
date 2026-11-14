@@ -38,6 +38,7 @@ function polygonSelection(geometry) {
     - rings.slice(1).reduce((sum, ring) => sum + sphericalArea(ring), 0), 0);
   return {
     area,
+    extents: prepared,
     contains(lon, lat) {
       return prepared.some(({ rings, center, south, north, west, east }) => {
         if (lat < south || lat > north) return false;
@@ -72,8 +73,10 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry) {
     if (!selection) return;
     const counts = new Map();
     let total = 0;
-    const points = archiveFrame?.points;
-    const regionalCounts = selection.geometry === skoGeometry ? archiveFrame?.regionalByPlatform : undefined;
+    const detail = archiveFrame?.viewport;
+    const withinDetail = detail?.contains && selection.extents.every(detail.contains);
+    const points = withinDetail ? detail.points : archiveFrame?.points;
+    const regionalCounts = !withinDetail && selection.geometry === skoGeometry ? archiveFrame?.regionalByPlatform : undefined;
     if (regionalCounts) {
       for (const [satellite, weight] of Object.entries(regionalCounts)) {
         counts.set(Number(satellite), weight);
@@ -88,14 +91,15 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry) {
     }
     byId('area-name').textContent = selection.name;
     byId('area-meta').textContent = `${number.format(selection.area)} км² · ${archiveFrame?.date ?? 'выберите дату'} UTC · ${selection.details}`;
-    const approximate = archiveFrame?.approximate && !(regionalCounts && archiveFrame.regionalExact);
+    const approximate = !withinDetail && archiveFrame?.approximate && !(regionalCounts && archiveFrame.regionalExact);
+    const missing = withinDetail && detail.missing?.length > 0;
     byId('area-count').textContent = points ? `Тепловые детекции · ${approximate ? '≈ ' : ''}${number.format(total)}`
       : archiveFrame?.failed ? 'Детекции за эту дату недоступны' : 'Данные ещё не загружены';
     const coverage = byId('area-coverage');
-    coverage.hidden = !points || (!approximate && total > 0);
+    coverage.hidden = !points || (!approximate && !missing && total > 0);
     const cell = archiveFrame?.cellDegrees;
-    coverage.textContent = approximate ? `Оценка по ячейкам${cell ? ` ${number.format(cell)}°` : ''}. Для небольшой зоны откройте конкретный день.`
-      : 'В архиве нет точек внутри границы. Покрытие спутниками неизвестно.';
+    coverage.textContent = approximate ? `Оценка по ячейкам${cell ? ` ${number.format(cell)}°` : ''}. Приблизьте карту так, чтобы вся зона попала в кадр.`
+      : missing ? 'Часть дат в архиве недоступна.' : 'В архиве нет точек внутри границы. Покрытие спутниками неизвестно.';
     byId('area-platforms').replaceChildren(...[...counts].sort((a,b) => b[1] - a[1]).map(([id, count]) => {
       const item = document.createElement('li');
       const label = archiveFrame.platforms[id] ?? (regionalCounts && !archiveFrame.regionalExact ? 'Все спутники' : 'Другие спутники');
@@ -162,10 +166,15 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry) {
     const km = radius.valueAsNumber;
     const distance = Math.sin(km / (2 * earthRadius)) ** 2;
     const latitude = center.lat * radians;
+    const angularRadius = km / earthRadius;
+    const dx = Math.abs(latitude) + angularRadius >= Math.PI / 2 ? 180
+      : Math.asin(Math.sin(angularRadius) / Math.cos(latitude)) / radians;
+    const dy = angularRadius / radians;
     selection = {
       name: `Радиус ${number.format(km)} км`, area: 4 * Math.PI * earthRadius ** 2 * distance,
       details: `${center.lat.toFixed(4)}°, ${L.Util.wrapNum(center.lng, [-180,180]).toFixed(4)}°`,
       circle: true, center, radius: km,
+      extents: [{ west: center.lng - dx, east: center.lng + dx, south: center.lat - dy, north: center.lat + dy }],
       contains: (lon, lat) => Math.sin((lat * radians - latitude) / 2) ** 2
         + Math.cos(latitude) * Math.cos(lat * radians) * Math.sin((lon - center.lng) * radians / 2) ** 2 <= distance,
     };

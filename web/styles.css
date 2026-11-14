@@ -140,7 +140,12 @@ body { overflow: hidden; }
 .timeline-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 .fire-key { color: var(--muted); display: inline-flex; gap: 5px; align-items: center; font-size: 10px; }
 .fire-key i { width: 6px; height: 6px; background: #ff382d; }
+.fire-key.grouped i { border-radius: 50%; background: #ffc55c; box-shadow: 0 0 7px #ffad48; }
+.fire-detail-caption { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 11px; color: var(--sky); }
+.fire-detail-caption > :not([hidden]) { margin-top: 5px; }
+#fire-detail-retry { padding: 2px 5px; font-size: inherit; }
 #heat-legend i { width: 22px; border-radius: 2px; background: linear-gradient(90deg,#ff962d,#f44918,#ffbc36,#fff288); }
+#heat-legend.grouped i { background: linear-gradient(90deg,#de8d32,#ffe7a1); }
 #frame-date { font: 13px var(--mono); }
 .utc-label { color: var(--muted); font: 9px var(--mono); }
 .timeline-controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; margin-top: 6px; }

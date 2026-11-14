@@ -8,9 +8,10 @@ import struct
 from collections import OrderedDict, defaultdict
 from datetime import date, timedelta
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 from pathlib import Path
+from threading import BoundedSemaphore, Event, Lock, Timer
 from urllib.parse import parse_qs, urlsplit
 
 import duckdb
@@ -21,6 +22,10 @@ PLATFORM_INDEX = {name: index for index, name in enumerate(PLATFORMS)}
 PLATFORM_INDEX["Suomi-NPP"] = PLATFORM_INDEX["Suomi NPP"]
 POINT = {0: struct.Struct(">Idd"), 1: struct.Struct("<Idd")}
 PERIOD_DETAIL_DAYS = 31
+VIEWPORT_LIMIT = 25000
+VIEWPORT_WIDTH = 20
+VIEWPORT_HEIGHT = 15
+VIEWPORT_TIMEOUT = 18
 WORLD_CELL_DEGREES = 1
 SKO_CELL_DEGREES = 0.08
 DETECTION_FILTER = """AND (type = 0 OR type IS NULL)
@@ -32,7 +37,7 @@ PLATFORM_SQL = "CASE satellite " + " ".join(
 
 
 class InvalidPeriod(ValueError):
-    """Invalid user-supplied period dates or satellite selection."""
+    """Invalid user-supplied dates, satellite selection or viewport."""
 
 
 def archive_range(root, catalog=None):
@@ -51,16 +56,19 @@ def archive_range(root, catalog=None):
         "through": max(item["end"] for item in archives),
         "platforms": PLATFORMS,
         "periodDetailDays": PERIOD_DETAIL_DAYS,
+        "viewportMaxWidth": VIEWPORT_WIDTH,
+        "viewportMaxHeight": VIEWPORT_HEIGHT,
     }
 
 
-def pack_points(rows):
-    for geometry, satellite in rows:
+def pack_points(rows, *, exact=False):
+    for geometry, satellite, *details in rows:
         if not geometry or len(geometry) != 21 or geometry[0] not in POINT:
             continue
         kind, lon, lat = POINT[geometry[0]].unpack_from(geometry, 1)
         if kind == 1 and math.isfinite(lon) and math.isfinite(lat) and abs(lon) <= 180 and abs(lat) <= 90:
-            yield [round(lon, 5), round(lat, 5), PLATFORM_INDEX.get(satellite, -1)]
+            x, y = (lon, lat) if exact else (round(lon, 5), round(lat, 5))
+            yield [x, y, PLATFORM_INDEX.get(satellite, -1), *details]
 
 
 def dates_between(start, end):
@@ -86,6 +94,57 @@ def parse_date(value):
     if value != day.isoformat():
         raise ValueError("expected YYYY-MM-DD")
     return day
+
+
+def parse_viewport(value):
+    try:
+        west, south, east, north = map(float, value.split(","))
+    except ValueError as error:
+        raise InvalidPeriod("Expected a bbox in west,south,east,north order") from error
+    if not all(math.isfinite(degree) for degree in (west, south, east, north)):
+        raise InvalidPeriod("Expected finite viewport coordinates")
+    if not (-180 <= west <= 180 and -180 <= east <= 180 and -90 <= south < north <= 90):
+        raise InvalidPeriod("Viewport is out of bounds")
+    width = (east - west) % 360
+    if not 0 < width <= VIEWPORT_WIDTH + 1e-9 or north - south > VIEWPORT_HEIGHT + 1e-9:
+        raise InvalidPeriod(f"Viewport must be no larger than {VIEWPORT_WIDTH} by {VIEWPORT_HEIGHT} degrees")
+    return west, south, east, north
+
+
+def parse_period_query(query, viewport=False):
+    required = {"start", "end"} | ({"bbox"} if viewport else set())
+    args = parse_qs(query, keep_blank_values=True, max_num_fields=len(required) + 1)
+    if not required <= args.keys() <= required | {"satellite"} or any(len(value) != 1 for value in args.values()):
+        fields = ", ".join(sorted(required))
+        raise InvalidPeriod(f"Expected single values for {fields} and an optional satellite index")
+    platform = args.get("satellite", [""])[0]
+    if platform and platform not in {str(index) for index in range(len(PLATFORMS))}:
+        raise InvalidPeriod("Invalid satellite index")
+    start, end = parse_date(args["start"][0]), parse_date(args["end"][0])
+    return start, end, int(platform) if platform else None, parse_viewport(args["bbox"][0]) if viewport else None
+
+
+def viewport_rectangles(bbox):
+    west, south, east, north = bbox
+    intervals = [(west, east)] if west <= east else [(west, 180), (-180, east)]
+    for left, right in intervals:
+        yield struct.pack("<BIII10d", 1, 3, 1, 5, left, south, right, south, right, north, left, north, left, south)
+
+
+def observation_sources(root, catalog, start, end):
+    for item in catalog["assets"]:
+        if item["kind"] != "observations" or not item["rows"]:
+            continue
+        first, last = parse_date(item["start"][:10]), parse_date(item["end"][:10])
+        path = root / "observations" / f"year={first.year}" / "detections.parquet"
+        if first <= end and start <= last and path.is_file():
+            yield path, first, last
+    tail = catalog.get("live_tail")
+    path = root / "derived/live-tail.parquet"
+    if tail and tail["rows"] and path.is_file():
+        first, last = parse_date(tail["start"][:10]), parse_date(tail["end"][:10])
+        if first <= end and start <= last:
+            yield path, first, last
 
 
 def add_to_grid(cells, lon, lat, platform, weight, regional, degrees):
@@ -142,6 +201,9 @@ class FireArchive:
         self.connection = duckdb.connect(config={"threads": 1, "memory_limit": "192MB"})
         self.cache = OrderedDict()
         self.period_cache = OrderedDict()
+        self.viewport_cache = OrderedDict()
+        self.standard_lock = Lock()
+        self.viewport_lock = Lock()
         self.boundary = RegionalBoundary(Path(__file__).resolve().parents[1] / "web/data/region.geojson")
 
     def frame(self, day):
@@ -183,6 +245,86 @@ class FireArchive:
         if len(self.cache) > 12:
             self.cache.popitem(last=False)
         return body
+
+    def viewport(self, start, end, bbox, platform=None):
+        catalog_path = self.root / "catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        limits = archive_range(self.root, catalog)
+        if start > end or not limits["first"] <= start.isoformat() <= end.isoformat() <= limits["last"]:
+            raise InvalidPeriod("Period is outside the FIRMS archive")
+        dates = dates_between(start, end)
+        filtered = len(dates) <= PERIOD_DETAIL_DAYS
+        if not filtered and platform is not None:
+            raise InvalidPeriod(f"Satellite filtering is available for at most {PERIOD_DETAIL_DAYS} days")
+        sources = list(observation_sources(self.root, catalog, start, end))
+        if not sources:
+            return None
+        available = {day for day in dates if any(first <= day <= last for _, first, last in sources)}
+        response = {
+            "start": start.isoformat(), "end": end.isoformat(), "bbox": bbox,
+            "method": "filtered" if filtered else "archive", "limit": VIEWPORT_LIMIT,
+            "coveredStart": min(available).isoformat(), "coveredEnd": max(available).isoformat(),
+            "missing": missing_intervals(dates, available), "points": [],
+        }
+
+        def compress():
+            return gzip.compress(json.dumps(response, separators=(",", ":")).encode(), compresslevel=4, mtime=0)
+
+        key = (start, end, bbox, platform, tuple((path, path.stat().st_mtime_ns) for path, _, _ in sources))
+        if not self.viewport_lock.acquire(blocking=False):
+            response.update(status="too_slow", reason="busy")
+            return compress()
+        try:
+            if key in self.viewport_cache:
+                self.viewport_cache.move_to_end(key)
+                return self.viewport_cache[key]
+            rectangles = list(viewport_rectangles(bbox))
+            extent = " OR ".join("ST_Intersects_Extent(geometry, ST_GeomFromWKB(?))" for _ in rectangles)
+            matching_names = [name for name, index in PLATFORM_INDEX.items() if index == platform]
+            satellite = "AND satellite IN (SELECT unnest(?::VARCHAR[]))" if platform is not None else ""
+            quality = DETECTION_FILTER if filtered else ""
+            params = [[str(path) for path, _, _ in sources], start, end, *rectangles]
+            if platform is not None:
+                params.append(matching_names)
+            with duckdb.connect(config={"threads": 1, "memory_limit": "64MB",
+                                        "max_temp_directory_size": "0MB", "preserve_insertion_order": False}) as con:
+                expired = Event()
+
+                def interrupt():
+                    expired.set()
+                    con.interrupt()
+
+                timer = Timer(VIEWPORT_TIMEOUT, interrupt)
+                timer.start()
+                try:
+                    rows = con.execute(f"""WITH observations AS (
+                        SELECT * FROM read_parquet(?, hive_partitioning=false, union_by_name=true)
+                        UNION ALL BY NAME SELECT NULL::TIMESTAMP AS acq_datetime WHERE false
+                    )
+                    SELECT ST_AsWKB(geometry), satellite, 1,
+                           coalesce(strftime(acq_datetime, '%Y-%m-%dT%H:%M:%SZ'), acq_date::VARCHAR)
+                    FROM observations
+                    WHERE acq_date BETWEEN ? AND ? AND ({extent}) {quality} {satellite}
+                    LIMIT {VIEWPORT_LIMIT + 1}""", params).fetchall()
+                except duckdb.InterruptException:
+                    if not expired.is_set():
+                        raise
+                    response.update(status="too_slow", reason="deadline")
+                    return compress()
+                finally:
+                    timer.cancel()
+                    timer.join()
+            if len(rows) > VIEWPORT_LIMIT:
+                response["status"] = "too_dense"
+            else:
+                response.update(status="ok", points=list(pack_points(rows, exact=True)))
+            body = compress()
+            self.viewport_cache[key] = body
+            if len(self.viewport_cache) > 16:
+                self.viewport_cache.popitem(last=False)
+            return body
+        finally:
+            self.viewport_lock.release()
 
     def observation_bins(self, paths, start, end, platform, filtered):
         if not paths:
@@ -286,18 +428,9 @@ class FireArchive:
                 tail = (tail_path, tail_start, tail_end)
 
         if filtered:
-            paths, available = [], set()
-            for item in catalog["assets"]:
-                if item["kind"] != "observations" or not item["rows"]:
-                    continue
-                first, last = parse_date(item["start"][:10]), parse_date(item["end"][:10])
-                path = self.root / "observations" / f"year={first.year}" / "detections.parquet"
-                if path.is_file() and first <= end and start <= last:
-                    paths.append(path)
-                    available.update(day for day in dates if first <= day <= last)
-            if tail:
-                paths.append(tail[0])
-                available.update(day for day in dates if tail[1] <= day <= tail[2])
+            sources = list(observation_sources(self.root, catalog, start, end))
+            paths = [path for path, _, _ in sources]
+            available = {day for day in dates if any(first <= day <= last for _, first, last in sources)}
             rows = self.observation_bins(paths, start, end, platform, filtered=True)
         else:
             rows, available = self.publisher_bins(dates, tail)
@@ -324,11 +457,41 @@ class FireArchive:
         return body
 
 
+class FiresHTTPServer(ThreadingHTTPServer):
+    # A viewport request may scan the archive while normal map requests continue.
+    # Bound simultaneous HTTP workers independently of the two query locks.
+    slots = BoundedSemaphore(8)
+
+    def process_request(self, request, client_address):
+        if not self.slots.acquire(blocking=False):
+            try:
+                request.setblocking(False)
+                request.send(b"HTTP/1.0 503 Service Unavailable\r\nConnection: close\r\n"
+                             b"Retry-After: 1\r\nContent-Length: 0\r\n\r\n")
+            except OSError:
+                pass
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self.slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.slots.release()
+
+
 class Handler(BaseHTTPRequestHandler):
-    def respond(self, status, body, compressed=False):
+    timeout = 20
+
+    def respond(self, status, body, compressed=False, cache=True):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Cache-Control", "public, max-age=60" if status == HTTPStatus.OK else "no-store")
+        self.send_header("Cache-Control", "public, max-age=60" if cache and status == HTTPStatus.OK else "no-store")
         self.send_header("Vary", "Accept-Encoding")
         if compressed and "gzip" in self.headers.get("Accept-Encoding", ""):
             self.send_header("Content-Encoding", "gzip")
@@ -345,25 +508,24 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/fires/range":
                 self.respond(HTTPStatus.OK, json.dumps(archive_range(self.server.archive.root)).encode())
                 return
-            if path == "/api/fires/period":
+            if path in ("/api/fires/period", "/api/fires/viewport"):
+                viewport = path.endswith("/viewport")
                 try:
-                    args = parse_qs(url.query, keep_blank_values=True, max_num_fields=3)
-                    if not {"start", "end"} <= args.keys() <= {"start", "end", "satellite"} or any(len(value) != 1 for value in args.values()):
-                        raise ValueError("Expected single start and end dates and an optional satellite index")
-                    platform = args.get("satellite", [""])[0]
-                    if platform and platform not in {str(index) for index in range(len(PLATFORMS))}:
-                        raise ValueError("Invalid satellite index")
-                    start, end = parse_date(args["start"][0]), parse_date(args["end"][0])
+                    start, end, platform, bounds = parse_period_query(url.query, viewport)
                 except ValueError as error:
                     self.respond(HTTPStatus.BAD_REQUEST, json.dumps({"error": str(error)}).encode())
                     return
                 try:
-                    frame = self.server.archive.period(start, end, int(platform) if platform else None)
+                    if viewport:
+                        frame = self.server.archive.viewport(start, end, bounds, platform)
+                    else:
+                        with self.server.archive.standard_lock:
+                            frame = self.server.archive.period(start, end, platform)
                 except InvalidPeriod as error:
                     self.respond(HTTPStatus.BAD_REQUEST, json.dumps({"error": str(error)}).encode())
                     return
                 if frame is not None:
-                    self.respond(HTTPStatus.OK, frame, compressed=True)
+                    self.respond(HTTPStatus.OK, frame, compressed=True, cache=not viewport)
                 else:
                     self.respond(HTTPStatus.NOT_FOUND, b'{"error":"archive period unavailable"}')
                 return
@@ -374,7 +536,8 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError:
                     self.respond(HTTPStatus.BAD_REQUEST, b'{"error":"expected YYYY-MM-DD"}')
                     return
-                frame = self.server.archive.frame(day)
+                with self.server.archive.standard_lock:
+                    frame = self.server.archive.frame(day)
                 if frame is not None:
                     self.respond(HTTPStatus.OK, frame, compressed=True)
                     return
@@ -388,6 +551,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("0.0.0.0", 8081), Handler)
+    server = FiresHTTPServer(("0.0.0.0", 8081), Handler)
     server.archive = FireArchive(Path(os.environ.get("FIRMS_DATA_DIR", "/data")))
     server.serve_forever()

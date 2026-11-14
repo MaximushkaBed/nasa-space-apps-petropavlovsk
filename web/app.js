@@ -2,8 +2,9 @@
 
 import { createExtraLayers } from './map-layers.js?v=area-tools';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
-import { createFireOverlay } from './fire-overlay.js?v=map-controls';
-import { createAreaAnalysis, inRing } from './area-analysis.js?v=map-controls';
+import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=fire-detail';
+import { createFireViewport } from './fire-viewport.js?v=fire-detail';
+import { createAreaAnalysis, inRing } from './area-analysis.js?v=fire-detail';
 import { addDays, createPeriodPicker, daysBetween } from './period-picker.js?v=atlas-periods';
 
 const $ = (id) => document.getElementById(id);
@@ -25,6 +26,8 @@ let calendar;
 let map;
 let weatherOverlay;
 let fireOverlay;
+let fireViewport;
+let viewportFrame;
 let areaAnalysis;
 let fireDisplay = 'points';
 let worldArchive;
@@ -42,6 +45,7 @@ let monthIndex;
 let source = 'unified';
 let mode = 'deviation';
 const cachedCells = new Map();
+const noFirePoints = [];
 
 function periodLabel(key) {
   const [year, month] = key.split('-');
@@ -206,6 +210,13 @@ function createMap(basemap, boundary, closePanel) {
   const activityPane = map.createPane('activity-cells');
   activityPane.style.zIndex = 415;
   fireOverlay = createFireOverlay(map, () => worldArchive?.platforms ?? [], number, withinRegion, () => !areaAnalysis.drawing());
+  fireViewport = createFireViewport(map, fireDetailZoom, (frame) => {
+    if (frame === viewportFrame) return;
+    viewportFrame = frame;
+    map.closePopup();
+    renderFireLayer();
+    renderAreaFrame();
+  });
   areaAnalysis = createAreaAnalysis(map, () => { map.closePopup(); closePanel(); }, getJSON, boundary.geometry);
   weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)));
 
@@ -309,26 +320,73 @@ async function renderLayers() {
   summary.hidden = items.length === 0;
 }
 
+function firePoints() {
+  const points = worldFrame?.points ?? noFirePoints;
+  const satellite = $('world-satellite').value;
+  if (satellite === '' || worldFrame?.approximate) return points;
+  return points.filter((point) => point[2] === Number(satellite));
+}
+
+function renderFireLayer(points = firePoints()) {
+  const visible = $('fire-layer').checked;
+  const grouped = Boolean(activePeriod && activePeriod.start !== activePeriod.end);
+  const detail = viewportFrame?.status === 'ok' ? viewportFrame.points : undefined;
+  const waitingForDetail = grouped && !detail && map.getZoom() >= fireDetailZoom;
+  $('heat-legend').hidden = !visible || fireDisplay !== 'heat' || waitingForDetail;
+  $('heat-legend').classList.toggle('grouped', grouped && !detail);
+  $('heat-legend').lastChild.textContent = grouped && !detail ? ' Плотность по сводке' : ' Плотность детекций';
+  $('world-point-legend').hidden = !visible || fireDisplay !== 'points' || waitingForDetail;
+  $('world-point-legend').classList.toggle('grouped', grouped && !detail);
+  $('world-point-legend').lastChild.textContent = grouped && !detail ? ' Плотность по сводке' : ' Пиксели MODIS / VIIRS';
+  const status = viewportFrame?.status;
+  const coverage = viewportFrame?.missing?.length ? ' В архиве есть пропуски дат.' : '';
+  const message = status === 'ok' ? `${detail.length ? (viewportFrame.method === 'archive' ? 'Исходный архив · без фильтра качества.' : '')
+    : 'В архиве для этого участка нет детекций.'}${coverage}`.trim() : {
+    loading: 'Загружаем отдельные детекции…',
+    too_wide: 'Приблизьте карту, чтобы увидеть отдельные детекции.',
+    too_dense: 'Слишком много детекций. Приблизьте карту или сократите период.',
+    too_slow: viewportFrame?.reason === 'busy' ? 'Сервер ещё загружает предыдущий участок. Повторите запрос.'
+      : 'Область загружается долго. Приблизьте карту или сократите период.',
+    unavailable: 'Исходные детекции за этот период недоступны.',
+    error: 'Детекции на этом участке не загрузились.',
+  }[status];
+  $('fire-detail-status').textContent = visible && grouped ? message ?? '' : '';
+  $('fire-detail-status').hidden = !visible || !grouped || !message;
+  $('fire-detail-retry').hidden = !visible || !grouped || !['error', 'too_slow'].includes(status);
+  return fireOverlay(points, fireDisplay, visible, grouped, detail);
+}
+
+function updateFireViewport() {
+  const satellite = $('world-satellite').value;
+  const visible = $('fire-layer').checked;
+  const span = activePeriod;
+  fireViewport.select(visible && span && span.start !== span.end ? {
+    start: span.start, end: span.end, satellite,
+    maxWidth: worldArchive.detailMaxWidth ?? 20, maxHeight: worldArchive.detailMaxHeight ?? 15,
+    key: `${span.start}/${span.end}/${satellite}`,
+  } : undefined);
+}
+
+function renderAreaFrame(points = firePoints(), failed = false) {
+  const approximate = Boolean(worldFrame?.approximate);
+  const date = activePeriod?.start === activePeriod?.end ? $('world-date').value : $('frame-date').textContent;
+  areaAnalysis.render({ date, points: worldFrame ? points : undefined, failed,
+    platforms: worldArchive.platforms, approximate, cellDegrees: worldFrame?.cellDegrees,
+    regionalByPlatform: worldFrame?.regionalByPlatform, regionalExact: worldFrame?.regionalExact, viewport: viewportFrame });
+}
+
 function showWorldFrame() {
   mapStatus('');
   const visible = $('fire-layer').checked;
-  $('heat-legend').hidden = !visible || fireDisplay !== 'heat';
-  $('world-point-legend').hidden = !visible || fireDisplay !== 'points';
-  const selected = $('world-satellite').value;
-  const points = worldFrame?.points ?? [];
-  const selectedPoints = selected === '' ? points : points.filter((point) => point[2] === Number(selected));
+  const selectedPoints = firePoints();
   const approximate = Boolean(worldFrame?.approximate);
-  const drawnRegionalCount = fireOverlay(selectedPoints, fireDisplay, visible, approximate);
+  const drawnRegionalCount = renderFireLayer(selectedPoints);
   const regionalCount = worldFrame?.regionalCount ?? drawnRegionalCount;
-  const frameLabel = approximate ? $('frame-date').textContent : $('world-date').value;
-  areaAnalysis.render({ date: frameLabel, points: worldFrame ? selectedPoints : undefined,
-    platforms: worldArchive.platforms, approximate, cellDegrees: worldFrame?.cellDegrees,
-    regionalByPlatform: worldFrame?.regionalByPlatform, regionalExact: worldFrame?.regionalExact });
+  renderAreaFrame(selectedPoints);
   $('map-summary').textContent = !visible ? 'Слой выключен'
     : worldFrame ? `Мир · ${number.format(worldFrame.total ?? selectedPoints.length)} детекций` : 'Загрузка детекций…';
   const regionalPrefix = approximate && !worldFrame.regionalExact ? '≈ ' : '';
   $('regional-count').textContent = visible && worldFrame ? `СКО · ${regionalPrefix}${number.format(regionalCount)}` : '';
-  $('world-point-legend').lastChild.textContent = approximate ? ' Группы детекций за период' : ' Пиксели MODIS / VIIRS';
   $('sko-example').hidden = !visible || !worldFrame || regionalCount > 0 || approximate
     || kishkenekolDay < worldArchive.first || kishkenekolDay > worldArchive.last;
   if (worldFrame?.method === 'publisher') {
@@ -350,15 +408,21 @@ async function loadWorldFrame() {
   if (satellite !== '') params.set('satellite', satellite);
   const path = range ? `/api/fires/period?${params}` : `/api/fires/${start}`;
   if (worldFrame?.path === path) {
+    updateFireViewport();
     showWorldFrame();
     return;
   }
-  if (pendingFrame === path) return;
+  if (pendingFrame === path) {
+    updateFireViewport();
+    renderFireLayer();
+    return;
+  }
   worldRequest?.abort();
   const request = new AbortController();
   worldRequest = request;
   pendingFrame = path;
   worldFrame = undefined;
+  updateFireViewport();
   showWorldFrame();
   try {
     const response = await fetch(path, { signal: request.signal });
@@ -369,7 +433,7 @@ async function loadWorldFrame() {
     showWorldFrame();
   } catch (error) {
     if (request.signal.aborted) return;
-    areaAnalysis.render({ date: $('frame-date').textContent, failed: true });
+    renderAreaFrame(undefined, true);
     $('regional-count').textContent = '';
     $('sko-example').hidden = true;
     $('map-summary').textContent = 'Данные мира недоступны';
@@ -421,7 +485,7 @@ function setWorldPeriod(span) {
   $('show-period-days').hidden = !range && !inspectionPeriod;
   $('show-period-days').textContent = range ? 'Смотреть по дням' : 'Сводка за период';
   const through = worldArchive.through;
-  $('archive-caption').textContent = range ? `Группы детекций · слои на ${shortDate.format(new Date(end))}`
+  $('archive-caption').textContent = range ? `Слои на ${shortDate.format(new Date(end))}`
     : day === worldArchive.last && through?.startsWith(day)
     ? `Данные до ${through.slice(11, 16)} UTC`
     : 'Архив FIRMS · время UTC';
@@ -768,6 +832,7 @@ async function start() {
     });
     $('local-layers').addEventListener('change', renderLayers);
     $('fire-layer').addEventListener('change', loadWorldFrame);
+    $('fire-detail-retry').addEventListener('click', fireViewport.retry);
     for (const [id, view] of [['fire-points', 'points'], ['fire-heat', 'heat']]) {
       $(id).addEventListener('click', () => {
         fireDisplay = view;
