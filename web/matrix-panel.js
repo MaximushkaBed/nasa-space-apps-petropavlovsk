@@ -151,7 +151,7 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={}}){
   const copy=plot.cloneNode(true);copy.setAttribute('x',24);copy.setAttribute('y',118);copy.setAttribute('width',width-48);copy.setAttribute('height',270);doc.append(copy,svg('text',{x:28,y:414},`Снимок архива ${result.snapshot_at||'не указан'} · матрица ${id}`),svg('text',{x:28,y:437},'Показаны исходные парные наблюдения. Пропуски не заменены нулями. Локальная видимость неизвестна.'),svg('text',{x:28,y:460},'Корреляция не доказывает причину. Для режима внутри месяцев итоговая ρ объединяет отдельные внутримесячные связи.'));
   save(new Blob([new XMLSerializer().serializeToString(doc)],{type:'image/svg+xml;charset=utf-8'}),`nasa-space-apps-matrix-${platform}-${mode}.svg`);
  }
- function reset(){++epoch;++pollEpoch;id=result=analysisId=null;busy=false;pair=[0,1];lastSource=null;hideResults();status('Матрица рассчитывается отдельным запросом после временного анализа.');refresh();}
+ function reset(){++epoch;++pollEpoch;id=result=analysisId=null;busy=false;pair=[0,1];lastSource=null;hideResults();status('Матрица рассчитывается отдельно по данным календаря.');refresh();}
  function pause(){paused=true;++pollEpoch;}
  function resume(){paused=false;if(busy&&id&&!result)poll();}
  async function restore(matrixId,state={}){const analysis=getAnalysis();if(!analysis)return;reset();analysisId=analysis.id;id=String(matrixId);busy=true;restorePlatform=state?.platform||null;if(state&&['within','pooled','space'].includes(state.mode)){mode=state.mode;$('.matrix-mode').value=mode;}if(Array.isArray(state?.pair)&&state.pair.length===2&&state.pair.every(index=>Number.isInteger(index)&&index>=0))pair=[...state.pair];refresh();status('Восстанавливаю сохранённую матрицу…');if(!paused)await poll();}

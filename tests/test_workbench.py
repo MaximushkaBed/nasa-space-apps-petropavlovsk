@@ -161,6 +161,11 @@ class SpatialQueryTests(unittest.TestCase):
                 self.assertEqual(maps['cells'][0][4:],(1,2))
                 self.assertEqual(server.map_cells('a'*32,'2020-04','NOAA-20','2020-04-02')['cells'],[])
                 with self.assertRaises(ValueError):server.map_cells('../../secret','2020-04','NOAA-20')
+                world = server.validate({**cfg, 'preset': 'world'})
+                self.assertEqual((world['bbox'], world['grid_km']), ([-180, -85, 180, 85], 250))
+                with server.pinned_sources(world) as (_, sources):
+                    global_row = server.extract('test', world, sources, 'b'*32)['daily'][0]
+                self.assertEqual((global_row['points'], global_row['cells']), (3, 2))
 
     def test_anomaly_map_uses_cell_days_and_same_baseline_dates(self):
         from api import server

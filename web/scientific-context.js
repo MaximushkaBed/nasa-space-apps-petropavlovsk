@@ -11,7 +11,8 @@ function geometryKey(geometry){
 function core(config){
  if(!config||!Array.isArray(config.bbox)||config.bbox.length!==4||!config.bbox.every(number))throw new TypeError('Scientific config requires finite bbox');
  const result={preset:config.preset||'custom',bbox:config.bbox.map(rounded),start:config.start,end:config.end,baseline_start:Number(config.baseline_start),baseline_end:Number(config.baseline_end),grid_km:Number(config.grid_km??10),quality:config.quality||'sp',daynight:config.daynight||'all'};
- if(!/^\d{4}-\d{2}-\d{2}$/.test(result.start||'')||!/^\d{4}-\d{2}-\d{2}$/.test(result.end||'')||!Number.isInteger(result.baseline_start)||!Number.isInteger(result.baseline_end)||![2,5,10,20].includes(result.grid_km)||!['sp','all'].includes(result.quality)||!['all','D','N'].includes(result.daynight))throw new TypeError('Invalid scientific filters');
+ const validGrid=result.preset==='world'?result.grid_km===250:[2,5,10,20].includes(result.grid_km);
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(result.start||'')||!/^\d{4}-\d{2}-\d{2}$/.test(result.end||'')||!Number.isInteger(result.baseline_start)||!Number.isInteger(result.baseline_end)||!validGrid||!['sp','all'].includes(result.quality)||!['all','D','N'].includes(result.daynight))throw new TypeError('Invalid scientific filters');
  return result;
 }
 export function scientificSignature(config){

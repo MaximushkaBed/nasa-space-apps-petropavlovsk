@@ -117,6 +117,7 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
       const legend = document.createElement('legend');
       legend.textContent = spec.group;
       group.append(legend);
+      if (spec.id === 'gfm') group.dataset.skoLayer = '';
       groups.set(spec.group, group);
       controls.append(group);
     }
@@ -221,7 +222,7 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
     const next = ++revision;
     return Promise.all(layers.map(async (entry) => {
       const { spec, input, shown } = entry;
-      if (!input.checked) {
+      if (!input.checked || input.closest('fieldset').hidden) {
         clearRaster(entry);
         return null;
       }

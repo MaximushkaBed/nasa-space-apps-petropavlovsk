@@ -30,6 +30,7 @@ PRESETS = [
     {'id': 'brazil', 'name': 'Мату-Гросу · окно исследования', 'bbox': [-61.5, -18, -50, -7]},
     {'id': 'canada', 'name': 'Альберта · окно исследования', 'bbox': [-120, 49, -110, 60]},
 ]
+WORLD_BOUNDS = [-180, -85, 180, 85]
 JOBS = {}
 JOBS_LOCK = threading.Lock()
 POOL = ThreadPoolExecutor(max_workers=1)
@@ -87,7 +88,10 @@ def validate(value):
     if not isinstance(value, dict):
         raise ValueError('Ожидается объект параметров анализа.')
     geometry=None
-    if value.get('preset')!='sko' and (value.get('geometry') is not None or value.get('circle') is not None):
+    preset = value.get('preset', 'custom')
+    if preset == 'world':
+        bbox = WORLD_BOUNDS
+    elif preset != 'sko' and (value.get('geometry') is not None or value.get('circle') is not None):
         with GEOMETRY_LIMIT:
             geometry,bbox=normalize_geometry(circle_polygon(value['circle']) if value.get('circle') is not None else value['geometry'],connection)
     else:bbox = value.get('bbox')
@@ -96,7 +100,7 @@ def validate(value):
     west, south, east, north = bbox
     if not (-180 <= west < east <= 180 and -85 <= south < north <= 85):
         raise ValueError('Границы: долгота −180…180, широта −85…85; запад < восток, юг < север.')
-    if geometry is None and (east - west) * (north - south) > 5000:
+    if preset != 'world' and geometry is None and (east - west) * (north - south) > 5000:
         raise ValueError('Для детального анализа выделите область меньше 5000 квадратных градусов.')
     start, end = date.fromisoformat(value['start']), date.fromisoformat(value['end'])
     if not date(2000, 11, 1) <= start <= end <= date.today():
@@ -109,15 +113,14 @@ def validate(value):
     a, b = integer('baseline_start'), integer('baseline_end')
     if not start.year <= a <= b <= end.year:
         raise ValueError('Годы базового периода должны находиться внутри выбранной истории.')
-    grid = integer('grid_km',10)
-    if grid not in (2, 5, 10, 20):
+    grid = 250 if preset == 'world' else integer('grid_km',10)
+    if preset != 'world' and grid not in (2, 5, 10, 20):
         raise ValueError('Размер сетки: 2, 5, 10 или 20 км.')
     quality = value.get('quality', 'sp')
     daytime = value.get('daynight', 'all')
     if quality not in ('sp', 'all') or daytime not in ('all', 'D', 'N'):
         raise ValueError('Неверный фильтр качества или времени суток.')
-    preset = value.get('preset', 'custom')
-    if preset != 'custom' and preset not in {p['id'] for p in PRESETS}:
+    if preset not in ('custom', 'world') and preset not in {p['id'] for p in PRESETS}:
         raise ValueError('Неизвестная область.')
     if preset=='sko':
         bbox=region_bounds()
@@ -259,35 +262,39 @@ def extract(job, config, sources, key):
                 available = [{'date': str(day), 'platform': platform, 'sp': standard} for day, platform, standard in rows]
                 atomic_json(global_path, available)
             availability.extend(available)
-            west, south, east, north = config['bbox']
-            geom = json.dumps(query_geometry(config))
+            world = config['preset'] == 'world'
+            spatial = 'AND ST_Y(geometry) BETWEEN -85 AND 85' if world else 'AND ST_Intersects(geometry,ST_GeomFromGeoJSON(?))'
             quality = "AND lower(quality)='sp' AND type=0" if config['quality'] == 'sp' else 'AND (type=0 OR type IS NULL)'
             daytime = '' if config['daynight'] == 'all' else 'AND daynight=?'
-            params = [config['grid_km'] * 1000, config['grid_km'] * 1000, paths, config['start'], config['end'], geom]
+            params = [config['grid_km'] * 1000, config['grid_km'] * 1000, paths, config['start'], config['end']]
+            if not world:
+                params.append(json.dumps(query_geometry(config)))
             if daytime:
                 params.append(config['daynight'])
-            con.execute(f"""CREATE OR REPLACE TEMP TABLE selected AS
+            con.execute(f"""CREATE OR REPLACE TEMP TABLE selected AS WITH pixels AS (
                 SELECT acq_datetime::DATE AS day,satellite AS platform,quality,
                   floor(ST_X(ST_Transform(geometry,'EPSG:6933'))/?)::INTEGER AS gx,
                   floor(ST_Y(ST_Transform(geometry,'EPSG:6933'))/?)::INTEGER AS gy
                 FROM read_parquet(?,hive_partitioning=false,union_by_name=true)
-                WHERE acq_datetime::DATE BETWEEN ?::DATE AND ?::DATE
-                  AND ST_Intersects(geometry,ST_GeomFromGeoJSON(?))
+                WHERE acq_datetime >= ?::DATE AND acq_datetime < ?::DATE + INTERVAL 1 DAY
+                  {spatial}
                   AND NOT EXISTS(SELECT 1 FROM excluded e WHERE e.day=acq_datetime::DATE AND e.platform=satellite)
                   AND ((instrument='MODIS' AND confidence_pct>=30) OR
                        (instrument='VIIRS' AND lower(confidence) IN ('n','h','nominal','high')))
-                  {quality} {daytime}""", params)
-            rows = con.execute("""SELECT day,platform,count(*),count(DISTINCT (gx,gy)),
-                   count(DISTINCT (gx,gy)) FILTER(WHERE lower(quality)='sp'),
-                   count(*) FILTER(WHERE lower(quality)<>'sp')
-                   FROM selected GROUP BY 1,2 ORDER BY 1,2""").fetchall()
+                  {quality} {daytime}
+                )
+                SELECT day,platform,gx,gy,count(*) AS points,bool_or(lower(quality)='sp') AS sp,
+                       count(*) FILTER(WHERE lower(quality)<>'sp') AS nrt
+                FROM pixels GROUP BY 1,2,3,4""", params)
+            rows = con.execute("""SELECT day,platform,sum(points),count(*),
+                   count(*) FILTER(WHERE sp),sum(nrt) FROM selected GROUP BY 1,2 ORDER BY 1,2""").fetchall()
             daily.extend({'date': str(day), 'platform': platform, 'points': points, 'cells': cells,
                           'sp_cells': sp, 'nrt_points': nrt} for day, platform, points, cells, sp, nrt in rows)
             map_path = folder / f'{year}.parquet'
             temporary = map_path.with_suffix('.parquet.part')
             con.execute("""COPY (SELECT day,strftime(day,'%Y-%m') AS month,platform,gx,gy,
-                     1 AS days,count(*) AS points
-                     FROM selected GROUP BY 1,2,3,4,5) TO ? (FORMAT PARQUET,COMPRESSION ZSTD)""", [str(temporary)])
+                     1 AS days,points
+                     FROM selected) TO ? (FORMAT PARQUET,COMPRESSION ZSTD)""", [str(temporary)])
             temporary.replace(map_path)
             con.execute('DROP TABLE selected')
         result = {'daily': daily, 'availability': availability}

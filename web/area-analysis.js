@@ -1,4 +1,3 @@
-const byId = (id) => document.getElementById(id);
 const number = new Intl.NumberFormat('ru', { maximumFractionDigits: 2 });
 const normalize = (name) => name.toLocaleLowerCase().replace(/ё/g, 'е').normalize('NFD')
   .replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -49,7 +48,7 @@ function polygonSelection(geometry) {
   };
 }
 
-export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scope = document, onChange, onMode } = {}) {
+export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scope = document, onChange } = {}) {
   const byId = (id) => scope.querySelector('#' + id);
   const layer = L.layerGroup().addTo(map);
   map.createPane('analysis-area').style.zIndex = 407;
@@ -67,16 +66,28 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
   let lastDistrictSearch;
   let searchRevision = 0;
   const modes = [['area-circle', 'circle'], ['area-polygon', 'polygon'], ['area-search-mode', 'search']];
+  const region = polygonSelection(skoGeometry);
 
   function renderSummary() {
-    byId('area-summary').hidden = !selection;
-    byId('area-report').hidden = !selection || !panel.hidden;
-    if (!selection) return;
+    byId('area-clear').hidden = !selection;
+    if (!selection) {
+      byId('area-name').textContent = 'Весь мир';
+      byId('area-meta').textContent = archiveFrame?.date ? `${archiveFrame.date} UTC` : 'Выберите дату наблюдений.';
+      byId('area-count').textContent = archiveFrame?.worldTotal !== undefined
+        ? `Тепловые детекции · ${number.format(archiveFrame.worldTotal)}`
+        : archiveFrame?.local ? 'Показаны данные видимого участка' : 'Загрузка детекций…';
+      byId('area-platforms').replaceChildren();
+      byId('area-coverage').hidden = true;
+      return;
+    }
     const counts = new Map();
     let total = 0;
     const detail = archiveFrame?.viewport;
     const withinDetail = detail?.contains && selection.extents.every(detail.contains);
-    const points = withinDetail ? detail.points : archiveFrame?.points;
+    const partialView = archiveFrame?.local && !withinDetail;
+    const points = withinDetail || partialView ? detail?.points : archiveFrame?.points;
+    const bounds = partialView ? map.getBounds() : undefined;
+    const center = partialView ? map.getCenter().lng : undefined;
     const regionalCounts = !withinDetail && selection.geometry === skoGeometry ? archiveFrame?.regionalByPlatform : undefined;
     if (regionalCounts) {
       for (const [satellite, weight] of Object.entries(regionalCounts)) {
@@ -86,6 +97,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     } else if (points) {
       for (const [lon, lat, satellite, weight = 1] of points) {
         if (!selection.contains(lon, lat)) continue;
+        if (bounds && !bounds.contains([lat, wrapNear(lon, center)])) continue;
         counts.set(satellite, (counts.get(satellite) ?? 0) + weight);
         total += weight;
       }
@@ -94,13 +106,13 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     byId('area-meta').textContent = `${number.format(selection.area)} км² · ${archiveFrame?.date ?? 'выберите дату'} UTC · ${selection.details}`;
     const approximate = !withinDetail && archiveFrame?.approximate && !(regionalCounts && archiveFrame.regionalExact);
     const missing = withinDetail && detail.missing?.length > 0;
-    byId('area-count').textContent = points ? `Тепловые детекции · ${approximate ? '≈ ' : ''}${number.format(total)}`
-      : archiveFrame?.local ? 'Часть области за пределами загруженного кадра'
+    byId('area-count').textContent = points || regionalCounts ? `Тепловые детекции${partialView ? ' в видимой части' : ''} · ${approximate ? '≈ ' : ''}${number.format(total)}`
       : archiveFrame?.failed ? 'Детекции за эту дату недоступны' : 'Данные ещё не загружены';
     const coverage = byId('area-coverage');
-    coverage.hidden = !points || (!approximate && !missing && total > 0);
+    coverage.hidden = !(points || regionalCounts) || (!approximate && !partialView && !missing && total > 0);
     const cell = archiveFrame?.cellDegrees;
-    coverage.textContent = approximate ? `Оценка по ячейкам${cell ? ` ${number.format(cell)}°` : ''}. Приблизьте карту так, чтобы вся зона попала в кадр.`
+    coverage.textContent = partialView ? 'Отдалите карту, чтобы увидеть счётчик для всей области.'
+      : approximate ? `Оценка по ячейкам${cell ? ` ${number.format(cell)}°` : ''}. Приблизьте карту так, чтобы вся зона попала в кадр.`
       : missing ? 'Часть дат в архиве недоступна.' : 'В архиве нет точек внутри границы. Покрытие спутниками неизвестно.';
     byId('area-platforms').replaceChildren(...[...counts].sort((a,b) => b[1] - a[1]).map(([id, count]) => {
       const item = document.createElement('li');
@@ -139,7 +151,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
   function renderTools() {
     map.getContainer().classList.toggle('selecting-area', drawing());
     panel.hidden = !(method === 'search' || (method === 'circle' && selection?.circle)
-      || (method === 'polygon' && vertices.length) || method === 'report');
+      || (method === 'polygon' && vertices.length) || (method === 'report' && selection?.circle));
     instruction.hidden = !panel.hidden || !drawing();
     instruction.textContent = method === 'circle' ? 'Поставьте точку на карте.' : 'Поставьте первую вершину на карте.';
     byId('area-radius-label').hidden = byId('area-presets').hidden = !selection?.circle || method === 'search' || method === 'polygon';
@@ -147,7 +159,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     byId('area-search').hidden = method !== 'search';
     byId('area-sources').hidden = method !== 'search';
     byId('area-title').textContent = method === 'search' ? 'Поиск территории'
-      : method === 'polygon' ? 'Новый полигон' : 'Выделенная территория';
+      : method === 'polygon' ? 'Новый полигон' : 'Точка и радиус';
     guide.textContent = method === 'polygon' ? 'Добавьте хотя бы три вершины и замкните полигон.'
       : method === 'search' ? 'Для района укажите название и страну через запятую.'
       : method === 'circle' ? 'Щёлкните по карте, чтобы переместить центр.' : '';
@@ -161,7 +173,6 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     for (const [id, value] of modes) byId(id).setAttribute('aria-pressed', String(method === value));
     if (method !== 'search') results.replaceChildren();
     renderTools();
-    onMode?.(method);
   }
 
   function selectCircle(center) {
@@ -214,13 +225,12 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     const active = method === value;
     onActivate();
     if (active) return;
-    if (value === 'polygon') { selection = undefined; vertices = []; redraw(); }
+    if (value === 'polygon') { vertices = []; redraw(); }
     setMethod(value);
     if (value === 'search') byId('area-query').focus();
   });
-  byId('area-report').addEventListener('click', () => { onActivate(); setMethod('report'); });
   byId('area-close').addEventListener('click', () => {
-    const tool = modes.find(([, value]) => method === value)?.[0] ?? 'area-report';
+    const tool = modes.find(([, value]) => method === value)?.[0] ?? 'area-circle';
     resetDraft();
     if (!byId(tool).hidden) byId(tool).focus();
   });
@@ -254,13 +264,14 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     selectPolygon({ type: 'Polygon', coordinates: [ring] }, 'Пользовательский полигон', `${vertices.length} вершин`);
   });
   byId('area-undo').addEventListener('click', () => { vertices.pop(); redraw(); renderTools(); });
-  byId('area-clear').addEventListener('click', () => {
+  function clearSelection() {
     selection = undefined;
     vertices = [];
     redraw();
     setMethod('');
     onChange?.(null);
-  });
+  }
+  byId('area-clear').addEventListener('click', clearSelection);
 
   function namesFor([name, , aliases]) {
     return [name, ...aliases].map(normalize);
@@ -387,6 +398,12 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     else if (roi.geometry) selectPolygon(roi.geometry, roi.name || 'Выбранная территория', roi.source || 'Переданная граница');
     else if (roi.bbox) { const [w,s,e,n] = roi.bbox; selectPolygon({ type: 'Polygon', coordinates: [[[w,s],[e,s],[e,n],[w,n],[w,s]]] }, roi.name || 'Прямоугольник', roi.source || 'Граница окна'); }
   }
-  return { render(frame) { archiveFrame = frame; renderSummary(); }, resetDraft, drawing, getSelection, setSelection,
-    active: () => Boolean(method) };
+  function intersectsRegion() {
+    return !selection || selection.extents.some(a => region.extents.some(b => {
+      const shift = 360 * Math.round((b.west + b.east - a.west - a.east) / 720);
+      return a.west + shift <= b.east && a.east + shift >= b.west && a.south <= b.north && a.north >= b.south;
+    }));
+  }
+  return { render(frame) { archiveFrame = frame; renderSummary(); }, resetDraft, drawing, getSelection, setSelection, clearSelection,
+    intersectsRegion, active: () => Boolean(method) };
 }

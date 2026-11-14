@@ -35,11 +35,10 @@
           </label>
         </div>
         <nav class="tool-nav" aria-label="Панели атласа">
+          <button type="button" class="quiet-button" id="open-area" aria-controls="selected-area-panel" aria-expanded="false">Обзор</button>
+          <a class="quiet-button" href="#activity-calendar" aria-controls="analysis-panel" aria-expanded="false">Календарь активности</a>
+          <a class="quiet-button" href="#external-factors" aria-controls="analysis-panel" aria-expanded="false">Внешние связи</a>
           <button type="button" class="quiet-button" id="open-layers" aria-controls="map-layer-controls" aria-expanded="false">Слои</button>
-          <a class="quiet-button" href="#season-calendar" aria-controls="analysis-panel" aria-expanded="false">Календарь СКО</a>
-          <a class="quiet-button" href="#correlations" aria-controls="analysis-panel" aria-expanded="false">Связи</a>
-          <a class="quiet-button" href="#kishkenekol-case" aria-controls="analysis-panel" aria-expanded="false">Кейс</a>
-          <button class="quiet-button" id="open-method" type="button" aria-label="Методика">ⓘ</button>
         </nav>
       </header>
 
@@ -55,9 +54,6 @@
           </button>
           <button type="button" id="area-search-mode" aria-label="Поиск места или границы" title="Поиск места или границы" aria-pressed="false" aria-controls="area-panel" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.7"/><path d="m15 15 4.5 4.5"/></svg>
-          </button>
-          <button type="button" id="area-report" aria-label="Показать сводку по выделению" title="Показать сводку по выделению" aria-controls="area-panel" hidden>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 8h6m-6 4h6m-6 4h4"/></svg>
           </button>
         </div>
       </div>
@@ -116,15 +112,22 @@
           <button class="quiet-button" type="submit">Найти</button>
         </form>
         <div id="area-results" class="area-results"></div>
-        <section id="area-summary" class="area-summary" aria-live="polite" hidden>
+        <p class="layer-caption area-sources" id="area-sources" hidden><a href="https://www.naturalearthdata.com/">Natural Earth</a> · <a href="https://www.geoboundaries.org/">geoBoundaries</a> · <a href="https://open-meteo.com/en/docs/geocoding-api">GeoNames через Open-Meteo</a></p>
+      </aside>
+
+      <aside id="selected-area-panel" class="atlas-panel selected-area-panel" aria-labelledby="selected-area-title" hidden>
+        <div class="drawer-heading">
+          <h2 id="selected-area-title">Выбранная область</h2>
+          <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть обзор">×</button>
+        </div>
+        <section id="area-summary" class="area-summary" aria-live="polite">
           <h3 id="area-name"></h3>
           <p class="layer-caption" id="area-meta"></p>
           <strong class="area-count" id="area-count"></strong>
           <p class="layer-caption" id="area-coverage" hidden></p>
           <ul id="area-platforms" class="area-platforms"></ul>
-          <button type="button" class="quiet-button" id="area-clear">Очистить выделение</button>
+          <button type="button" class="quiet-button" id="area-clear" hidden>Очистить выделение</button>
         </section>
-        <p class="layer-caption area-sources" id="area-sources" hidden><a href="https://www.naturalearthdata.com/">Natural Earth</a> · <a href="https://www.geoboundaries.org/">geoBoundaries</a> · <a href="https://open-meteo.com/en/docs/geocoding-api">GeoNames через Open-Meteo</a></p>
       </aside>
 
       <aside id="map-layer-controls" class="map-layer-controls atlas-panel" aria-labelledby="layers-title" hidden>
@@ -132,6 +135,7 @@
           <h2 id="layers-title">Слои карты</h2>
           <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть слои">×</button>
         </div>
+        <p id="layer-scope" class="layer-caption">Слои на всей карте</p>
         <fieldset>
           <legend>Подложка карты</legend>
           <div class="view-switch" role="group" aria-label="Подложка карты">
@@ -211,10 +215,33 @@
       </details>
     </section>
 
-    <aside id="analysis-panel" class="atlas-panel analysis-panel" aria-label="Анализ СКО" hidden>
+    <aside id="analysis-panel" class="atlas-panel analysis-panel" aria-labelledby="analysis-heading" hidden>
       <div class="drawer-heading">
-        <h2 id="analysis-heading">Анализ СКО</h2>
+        <h2 id="analysis-heading">Календарь активности</h2>
         <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть анализ">×</button>
+      </div>
+
+      <div id="atlas-study" class="atlas-study analysis-workbench" hidden>
+        <div class="study-controls">
+          <strong id="study-area">Весь мир</strong>
+          <label>С <input id="study-start" type="date"></label>
+          <label>По <input id="study-end" type="date"></label>
+          <button type="button" id="study-run" class="primary">Рассчитать</button>
+        </div>
+        <p id="study-status" class="layer-caption" role="status"></p>
+        <details id="study-settings">
+          <summary>Историческая норма и спутники</summary>
+          <div class="study-controls">
+            <label>Базовый год с <input id="study-baseline-start" type="number"></label>
+            <label>по <input id="study-baseline-end" type="number"></label>
+            <label>Ряд <select id="study-platform"></select></label>
+          </div>
+        </details>
+        <section id="activity-calendar" aria-label="Календарь активности">
+          <p id="study-calendar-detail" class="layer-caption"></p>
+          <div id="study-calendar" class="calendar-scroll"></div>
+        </section>
+        <section id="external-factors" aria-label="Внешние связи" hidden></section>
       </div>
 
     <div class="analysis-row" id="calendar-analysis" hidden>

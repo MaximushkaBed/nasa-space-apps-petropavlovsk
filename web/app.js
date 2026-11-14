@@ -1,11 +1,13 @@
 'use strict';
 
-import { createExtraLayers } from './map-layers.js?v=paired-days';
+import { createExtraLayers } from './map-layers.js?v=territory';
 import { createWorldWind } from './world-wind.js?v=paired-days';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
 import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=fire-contrast';
 import { createFireViewport } from './fire-viewport.js?v=paired-days';
-import { createAreaAnalysis, inRing } from './area-analysis.js?v=viewport-playback';
+import { createAreaAnalysis, inRing } from './area-analysis.js?v=territory';
+import { createAreaLayerClip } from './area-layer-clip.js';
+import { createAtlasStudy } from './atlas-study.js';
 import { addDays, createPeriodPicker, daysBetween } from './period-picker.js?v=atlas-periods';
 
 export function mountAtlas(root, bridge = {}) {
@@ -13,6 +15,7 @@ const $ = (id) => root.querySelector('#' + id);
 let active = bridge.isActive?.('atlas') !== false;
 let activation = 0;
 let showPanel;
+let currentPanel;
 let savedCamera;
 const sources = ['Aqua / MODIS', 'Suomi NPP / VIIRS', 'NOAA-20 / VIIRS'];
 const sourceTags = ['MODIS', 'Suomi', 'NOAA‑20'];
@@ -37,6 +40,8 @@ let fireViewport;
 let viewportFrame;
 let displayedViewport;
 let areaAnalysis;
+let areaClip;
+let study;
 let fireDisplay = 'points';
 let worldArchive;
 let worldFrame;
@@ -231,7 +236,32 @@ function createMap(basemap, boundary, closePanel) {
     if (requestedFire.local !== useLocalDay()) loadWorldFrame();
     else if (worldFrame?.local) showWorldFrame();
   });
-  areaAnalysis = createAreaAnalysis(map, () => { map.closePopup(); closePanel(); }, getJSON, boundary.geometry, { scope: root, onChange: roi => bridge.setContext?.({ roi }), onMode: mode => bridge.selectionMode?.(Boolean(mode && mode !== 'report')) });
+  areaClip = createAreaLayerClip(map);
+  const scopedLayers = (roi) => {
+    areaClip.select(roi);
+    const scopeName = roi?.name || 'Весь мир';
+    $('layer-scope').textContent = roi ? `Наложения внутри границы · ${scopeName}` : 'Слои на всей карте';
+    $('open-area').textContent = roi ? 'Выбранная область' : 'Обзор мира';
+    const regional = !roi || areaAnalysis.intersectsRegion();
+    $('local-layers').hidden = !regional;
+    root.querySelector('[data-sko-layer]')?.toggleAttribute('hidden', !regional);
+    renderLayers();
+  };
+  areaAnalysis = createAreaAnalysis(map, () => { map.closePopup(); closePanel(); }, getJSON, boundary.geometry, {
+    scope: root,
+    onChange: roi => {
+      bridge.setContext?.({ roi });
+      study.setScope(roi);
+      scopedLayers(roi);
+      if (roi) showPanel('#selected-area');
+    },
+  });
+  $('world-view').addEventListener('click', () => {
+    if (areaAnalysis.getSelection()) areaAnalysis.clearSelection();
+  });
+  $('reset-map').addEventListener('click', () => areaAnalysis.setSelection({
+    preset: 'sko', source: boundary.properties?.source || 'Граница СКО · geoBoundaries',
+  }));
   weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)), root);
   worldWind = createWorldWind(map, $('world-wind-status'));
 
@@ -344,7 +374,7 @@ function displayWeather({ day, world, local }) {
 
 function prepareDayWeather(day, previousDayAllowed) {
   const worldEnabled = $('world-wind-flow').checked;
-  const localEnabled = Boolean($('weather-field').value || $('wind-layer').checked);
+  const localEnabled = !$('local-layers').hidden && Boolean($('weather-field').value || $('wind-layer').checked);
   const key = `${day}/${worldEnabled}/${localEnabled}/${previousDayAllowed}`;
   if (dayWeather?.key === key) return dayWeather;
   const current = { day, key, ready: !worldEnabled && !localEnabled };
@@ -455,6 +485,7 @@ function renderAreaFrame(points = firePoints(), failed = false) {
   const span = worldFrame ?? activePeriod;
   const date = span.start === span.end ? span.start : firePeriodLabel(span);
   areaAnalysis.render({ date, points: worldFrame && !worldFrame.local ? points : undefined, failed, local: worldFrame?.local,
+    worldTotal: worldFrame && !worldFrame.local ? worldFrame.total ?? points.length : undefined,
     platforms: worldArchive.platforms, approximate, cellDegrees: worldFrame?.cellDegrees,
     regionalByPlatform: worldFrame?.regionalByPlatform, regionalExact: worldFrame?.regionalExact, viewport: displayedViewport });
 }
@@ -648,6 +679,7 @@ function setWorldDate(day, keepInspection = false) {
 async function loadArchive() {
   try {
     worldArchive = await getJSON('/api/fires/range');
+    study.setArchive(worldArchive);
     for (const [index, label] of worldArchive.platforms.entries()) {
       $('world-satellite').add(new Option(label, index));
     }
@@ -876,14 +908,18 @@ function chooseMonth(index) {
 function setupPanels() {
   const analysis = $('analysis-panel');
   const layers = $('map-layer-controls');
+  const area = $('selected-area-panel');
   const layersToggle = $('open-layers');
+  const areaToggle = $('open-area');
   const tabs = [...root.querySelectorAll('.tool-nav a')];
-  const toggles = [...tabs, layersToggle];
+  const toggles = [...tabs, layersToggle, areaToggle];
   const toolbar = root.querySelector('.topbar');
   new ResizeObserver(() => {
     $('top').style.setProperty('--panel-top', `${Math.ceil(toolbar.getBoundingClientRect().bottom - root.getBoundingClientRect().top + 7)}px`);
   }).observe(toolbar);
   const sections = {
+    '#activity-calendar': ['atlas-study', 'Календарь активности'],
+    '#external-factors': ['atlas-study', 'Внешние связи'],
     '#season-calendar': ['calendar-analysis', 'Календарь и норма · СКО'],
     '#correlations': ['correlations', 'Связи · СКО'],
     '#kishkenekol-case': ['kishkenekol-case', 'Кейс Кишкенеколя'],
@@ -891,19 +927,33 @@ function setupPanels() {
   function closePanel() {
     const active = toggles.find((tab) => tab.getAttribute('aria-expanded') === 'true');
     for (const tab of toggles) tab.setAttribute('aria-expanded', 'false');
-    analysis.hidden = layers.hidden = true;
+    analysis.hidden = layers.hidden = area.hidden = true;
+    currentPanel = undefined;
+    study.show();
     areaAnalysis?.resetDraft();
-    if (Object.hasOwn(sections, location.hash)) bridge.setLocalHash?.('#observations');
+    if (location.hash !== '#observations' && location.hash) bridge.setLocalHash?.('#observations');
     active?.focus({ preventScroll: true });
   }
   function openAnalysis(hash) {
+    currentPanel = hash;
+    if (hash === '#selected-area' || hash === '#layers') {
+      const isArea = hash === '#selected-area';
+      area.hidden = !isArea;
+      layers.hidden = isArea;
+      analysis.hidden = true;
+      study.show();
+      for (const tab of toggles) tab.setAttribute('aria-expanded', String(tab === (isArea ? areaToggle : layersToggle)));
+      return;
+    }
     const selected = sections[hash];
     if (!Object.hasOwn(sections, hash)) return closePanel();
-    layers.hidden = true;
+    layers.hidden = area.hidden = true;
     areaAnalysis?.resetDraft();
     layersToggle.setAttribute('aria-expanded', 'false');
+    areaToggle.setAttribute('aria-expanded', 'false');
     for (const tab of tabs) tab.setAttribute('aria-expanded', String(tab.hash === hash));
     for (const [id] of Object.values(sections)) $(id).hidden = id !== selected[0];
+    study.show(selected[0] === 'atlas-study' ? hash : undefined);
     $('analysis-heading').textContent = selected[1];
     analysis.hidden = false;
     analysis.scrollTop = 0;
@@ -912,22 +962,22 @@ function setupPanels() {
     tab.addEventListener('click', (event) => {
       event.preventDefault();
       if (tab.getAttribute('aria-expanded') === 'true') return closePanel();
-      if (tab.hash === '#kishkenekol-case' && bridge.navigate) return bridge.navigate('cases', { caseId: 'kishkenekol-2025-04-12' });
       bridge.setLocalHash?.(tab.hash);
       openAnalysis(tab.hash);
     });
   }
-  layersToggle.addEventListener('click', () => {
-    if (!layers.hidden) return closePanel();
-    closePanel();
-    layers.hidden = false;
-    layersToggle.setAttribute('aria-expanded', 'true');
-  });
+  for (const [toggle, hash] of [[layersToggle, '#layers'], [areaToggle, '#selected-area']]) {
+    toggle.addEventListener('click', () => {
+      if (currentPanel === hash) return closePanel();
+      areaAnalysis?.resetDraft();
+      openAnalysis(hash);
+    });
+  }
   for (const button of root.querySelectorAll('[data-close-panel]')) button.addEventListener('click', closePanel);
   document.addEventListener('keydown', (event) => {
     if (!active) return;
     if (event.key === 'Escape' && !$('method').open && !$('period-picker').open
-      && (!analysis.hidden || !layers.hidden || areaAnalysis?.active())) closePanel();
+      && (currentPanel || areaAnalysis?.active())) closePanel();
   });
   window.addEventListener('hashchange', () => { if (active) openAnalysis(location.hash); });
   showPanel = openAnalysis;
@@ -936,7 +986,20 @@ function setupPanels() {
 }
 
 async function start() {
-  $('open-method').addEventListener('click', () => $('method').showModal());
+  study = createAtlasStudy(root, () => {
+    const source = $('world-satellite').value;
+    return source ? normalizePlatform(worldArchive.platforms[Number(source)]) : undefined;
+  }, (span, platform) => {
+    stopPlayback();
+    inspectionPeriod = undefined;
+    const id = worldArchive.platforms.findIndex(source => normalizePlatform(source) === platform);
+    if (id >= 0) {
+      dailySatellite = String(id);
+      $('world-satellite').value = dailySatellite;
+    }
+    setWorldPeriod(span);
+  });
+  study.setScope(null);
   const closePanel = setupPanels();
   try {
     const [basemap, boundary, regionalCalendar] = await Promise.all([
@@ -944,6 +1007,7 @@ async function start() {
     ]);
     calendar = regionalCalendar;
     const reset = createMap(basemap, boundary, closePanel);
+    $('open-area').textContent = 'Обзор мира';
     $('sko-example').addEventListener('click', () => {
       stopPlayback();
       dailySatellite = '';
@@ -959,7 +1023,13 @@ async function start() {
       $('map-layer-status').hidden = false;
     });
     createExtraLayers(map, extraControls, getJSON, renderLayers)
-      .then((render) => { renderExtraLayers = render; $('play-weather').disabled = !worldArchive; renderLayers(); })
+      .then((render) => {
+        renderExtraLayers = render;
+        root.querySelector('[data-sko-layer]')?.toggleAttribute('hidden', !areaAnalysis.intersectsRegion());
+        areaClip.update();
+        $('play-weather').disabled = !worldArchive;
+        renderLayers();
+      })
       .catch((error) => {
         $('map-layer-status').textContent = 'Не удалось загрузить каталог дополнительных слоёв.';
         $('map-layer-status').hidden = false;
@@ -1077,7 +1147,7 @@ function getState() {
       platform, atlasQuality: worldFrame?.method === 'publisher' || viewportFrame?.method === 'archive' ? 'publisher_all' : 'atlas_filtered',
     },
     camera: map ? { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() } : null,
-    fireDisplay, localPanel: !root.querySelector('#analysis-panel')?.hidden ? location.hash : null,
+    fireDisplay, localPanel: currentPanel,
   };
 }
 function publishContext() {
@@ -1094,7 +1164,10 @@ return {
     map?.invalidateSize({ pan: false });
     const state = options.state;
     const context = options.context || state?.context;
-    if (context?.roi) areaAnalysis?.setSelection?.(context.roi);
+    if (context && Object.hasOwn(context, 'roi')) {
+      if (context.roi) areaAnalysis?.setSelection(context.roi);
+      else if (areaAnalysis?.getSelection()) areaAnalysis.clearSelection();
+    }
     if (context?.platform && worldArchive) {
       const id = context.platform === 'all' ? -1 : worldArchive.platforms.findIndex(p => normalizePlatform(p) === context.platform);
       if (context.platform !== 'all' && id < 0) bridge.notice?.('Эта платформа недоступна в текущем архиве атласа. Фильтр не изменён.');
@@ -1141,7 +1214,6 @@ return {
     worldWind?.display();
     for (const dialog of root.querySelectorAll('dialog[open]')) dialog.close();
   },
-  beginSelection(mode = 'search') { root.querySelector(mode === 'polygon' ? '#area-polygon' : mode === 'circle' ? '#area-circle' : '#area-search-mode')?.click(); },
   openPanel(hash) { showPanel?.(hash); },
 };
 }

@@ -6,7 +6,7 @@ const viewNames = new Set(['atlas','analysis','cases']);
 const platformNames = new Set(['all','Aqua','Terra','Suomi-NPP','NOAA-20','NOAA-21']);
 const storageKey = 'nasa-space-apps-context-v1';
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
-let currentView = 'atlas', navigation = 0, statusTimer, launcherCollapsed = false, selectionBusy = false;
+let currentView = 'atlas', navigation = 0, statusTimer;
 let context = { roi:null, history:{start:'2020-01-01',end:'2025-12-31'}, baseline:{start:2020,end:2023}, focus:null, platform:'all', quality:'sp', daynight:'all' };
 let restored = null;
 try { restored = JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch { /* An unavailable storage does not prevent the app. */ }
@@ -17,7 +17,6 @@ function mergeContext(patch = {}) {
   if (!platformNames.has(next.platform)) next.platform = 'all';
   context = next;
   renderHeaderContext();
-  renderLauncher();
   return clone(context);
 }
 function notice(message) {
@@ -40,7 +39,6 @@ function bridgeFor(owner) {
     getContext:()=>clone(context),
     setContext:patch=>{if(isActive(owner)){mergeContext(patch);persist();}},
     isActive,
-    selectionMode:drawing=>{selectionBusy=drawing;renderLauncher();},
     setLocalHash:hash=>{if(isActive('atlas')){const url=new URL(location.href);url.hash=hash;history.replaceState(history.state,'',url);renderHeaderContext();}},
   };
 }
@@ -70,13 +68,10 @@ async function ensureView(name) {
     if(key==='atlas'){
       root=await fragment('atlas.html');root.id='atlas-view';root.className='app-view atlas-view';
       $('app-outlet').append(root);views.set('atlas',root);visibility();
-      const [{mountAtlas},{mountCorrelations},{mountBurnCase}]=await Promise.all([import('./app.js?v=paired-days'),import('./correlations.js?v=shell'),import('./burn-case.js?v=shell')]);
+      const [{mountAtlas},{mountCorrelations},{mountBurnCase}]=await Promise.all([import('./app.js?v=territory'),import('./correlations.js?v=shell'),import('./burn-case.js?v=shell')]);
       controller=mountAtlas(root,bridgeFor('atlas'));
       controllers.set('atlas',controller);
       mountCorrelations(root);mountBurnCase(root);
-      addLauncher(root);
-      const oldCalendar=root.querySelector('.tool-nav a[href="#season-calendar"]');if(oldCalendar)oldCalendar.textContent='Пример СКО';
-      const oldMatrix=root.querySelector('.tool-nav a[href="#correlations"]');if(oldMatrix)oldMatrix.textContent='Связи СКО';
     }else{
       root=await fragment('analysis-view.html');root.id='analysis-view';root.className='app-view analysis-workbench';
       $('app-outlet').append(root);views.set('analysis',root);visibility();
@@ -99,7 +94,6 @@ function visibility() {
   document.title=`NASA Space Apps · ${currentView==='analysis'?'Анализ территории':currentView==='cases'?'Кейсы':'Атлас'}`;
   renderHeaderContext();
   $('shell-loading').hidden=views.has(atlas?'atlas':'analysis');
-  renderLauncher();
 }
 function urlFor(view) {const url=new URL(location.href);url.search='';url.searchParams.set('view',view);url.hash=view==='cases'?'kishkenekol-case':'';return url;}
 async function navigate(view,payload={}) {
@@ -136,36 +130,6 @@ function analysisContext() {
   if(next.focus?.end>next.history.end)next.history.end=next.focus.end;
   if(next.focus?.start<next.history.start)next.history.start=next.focus.start;
   return next;
-}
-function addLauncher(root) {
-  const launcher=document.createElement('section');launcher.id='atlas-launcher';launcher.className='app-launcher';launcher.setAttribute('aria-label','Начать исследование территории');
-  launcher.innerHTML='<button class="app-launcher-close" id="launcher-close" type="button" aria-label="Свернуть исследование">×</button><h1 id="launcher-title">История выбранной территории</h1><p id="launcher-note">Выберите область на карте, чтобы изучить сезонность, необычную активность и периоды внимания.</p><button class="app-launcher-action app-area-action" id="app-select-area" type="button">Найти или выделить территорию</button><button class="app-launcher-action" id="app-start-analysis" type="button" disabled>История и сезонность →</button><p class="app-demo-note">Готовые примеры · NOAA-20 · SP · 2020–2025</p><div class="app-demos"><button type="button" data-demo="sko">СКО</button><button type="button" data-demo="california">Калифорния</button><button type="button" data-demo="brazil">Мату-Гросу</button></div>';
-  const reopen=document.createElement('button');reopen.id='launcher-reopen';reopen.className='app-launcher-reopen';reopen.textContent='История и сезонность';reopen.type='button';reopen.hidden=true;
-  root.querySelector('.map-panel').append(launcher,reopen);
-  $('launcher-close').addEventListener('click',()=>{launcherCollapsed=true;renderLauncher();});
-  reopen.addEventListener('click',()=>{launcherCollapsed=false;renderLauncher();});
-  $('app-select-area').addEventListener('click',()=>controllers.get('atlas')?.beginSelection?.('search'));
-  $('app-start-analysis').addEventListener('click',()=>{const next=analysisContext();navigate('analysis',{context:next,run:next.platform!=='all',from:'atlas'});});
-  for(const button of root.querySelectorAll('[data-demo]'))button.addEventListener('click',()=>openDemo(button.dataset.demo));
-  renderLauncher();
-}
-function renderLauncher() {
-  const launcher=$('atlas-launcher');if(!launcher)return;
-  if(currentView==='cases'){launcher.hidden=true;$('launcher-reopen').hidden=true;return;}
-  launcher.hidden=selectionBusy||launcherCollapsed;
-  $('launcher-reopen').hidden=selectionBusy||!launcherCollapsed;
-  const roi=context.roi;
-  $('launcher-title').textContent=roi?.name||'История выбранной территории';
-  $('app-start-analysis').disabled=!roi;
-  $('launcher-note').textContent=roi?'Изучите календарь, отклонения от истории и связи факторов для этой границы. Атлас показывает исходные детекции.':'Выберите область на карте, чтобы изучить сезонность, необычную активность и периоды внимания.';
-}
-async function openDemo(preset) {
-  try{
-    const response=await fetch('/api/v1/config');if(!response.ok)throw new Error('Примеры временно недоступны.');
-    const config=await response.json(),region=config.presets.find(p=>p.id===preset);if(!region)throw new Error('Пример не найден.');
-    const next={roi:{preset,name:region.name,bbox:region.bbox,source:'Подготовленный региональный пример'},history:{start:'2020-01-01',end:'2025-12-31'},baseline:{start:2020,end:2023},focus:{start:'2025-04-01',end:'2025-04-30',grain:'month',basis:'UTC'},platform:'NOAA-20',quality:'sp',daynight:'all'};
-    await navigate('analysis',{context:next,run:true,from:'demo'});
-  }catch(error){notice(error.message);}
 }
 async function share(view,state) {
   try{
