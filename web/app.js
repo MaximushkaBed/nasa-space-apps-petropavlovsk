@@ -872,7 +872,8 @@ async function start() {
         fireDisplay = view;
         $('fire-points').setAttribute('aria-pressed', String(view === 'points'));
         $('fire-heat').setAttribute('aria-pressed', String(view === 'heat'));
-        loadWorldFrame();
+        map.closePopup();
+        renderFireLayer();
       });
     }
     $('world-satellite').addEventListener('change', loadWorldFrame);
