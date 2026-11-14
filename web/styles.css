@@ -286,6 +286,10 @@ h1 em { color: var(--yellow); font-style: normal; white-space: nowrap; }
 .case-jump { display: inline-block; margin-top: 5px; color: var(--sky); font-size: 11px; }
 .burn-case { padding: 10px 0 20px; border-top: 1px solid var(--line); }
 .case-result { margin: 7px 0 12px; color: var(--text); line-height: 1.5; }
+.case-evidence { margin-bottom: 12px; padding: 11px 14px; border-left: 2px solid var(--yellow); background: var(--surface); }
+.case-evidence h3 { margin: 0; color: var(--text); font-size: 15px; font-weight: 650; }
+.case-evidence p, .case-evidence details { margin-top: 5px; color: #c5d5ef; font-size: 12px; line-height: 1.5; }
+.case-evidence summary { color: var(--sky); cursor: pointer; }
 .case-layout { display: grid; grid-template-columns: minmax(0, 1fr) 255px; gap: 12px; }
 .case-map { height: clamp(390px, 59vh, 560px); background: #112543; z-index: 0; border: 1px solid #355787; border-radius: 6px; }
 .case-map-background { filter: brightness(.55) saturate(.65); }

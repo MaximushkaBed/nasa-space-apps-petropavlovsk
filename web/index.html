@@ -8,7 +8,7 @@
   <title>Пожары СКО · Спутниковый календарь</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=sko-burn-case">
+  <link rel="stylesheet" href="styles.css?v=kishkenekol-evidence">
   <script src="vendor/leaflet.js" defer></script>
   <script src="app.js?v=sko-burn-case" type="module"></script>
   <script src="correlations.js?v=sko-layers" type="module"></script>
@@ -262,6 +262,15 @@
         <button type="button" class="quiet-button" id="case-atlas" hidden>Детекции в атласе ↑</button>
       </div>
       <p class="case-result" id="case-result">Загрузка сравнения Sentinel‑2…</p>
+      <div class="case-evidence">
+        <h3>Вероятно, горела трава. Плановый отжиг не подтверждён</h3>
+        <p>162 из 167 точек VIIRS от 12 апреля попали на травянистые участки по карте ESA WorldCover 2021. В открытых источниках не нашли записи об отжиге на этом месте 12 апреля.</p>
+        <details>
+          <summary>Источники и что нужно для подтверждения</summary>
+          <p>19 точек попадают в соседний Акжарский район. В комментарии от 30 апреля ДЧС сообщил о ежегодных отжигах в этом районе без дат и границ работ. Минэкологии сообщало о весенних отжигах в масштабах страны. <a href="https://qaz-media.kz/plodorodnost-pochvy-ne-narushena-stepnye-pozhary-prokommentirovali-v-dchs-sko/">Комментарий ДЧС</a> · <a href="https://www.gov.kz/org/ecogeo/press/news/details/977145?lang=ru">Доклад Минэкологии</a></p>
+          <p>Для подтверждения причины нужна запись об этом событии в журнале ДЧС или акт отжига с указанием даты и места. <a href="https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/blob/main/docs/kishkenekol-case.md#что-горело-и-был-ли-это-плановый-отжиг">Полный разбор</a></p>
+        </details>
+      </div>
       <div class="case-layout" id="case-layout" hidden>
         <div>
           <div class="case-map" id="case-map" tabindex="0" aria-label="Сравнение спутниковых снимков и кадастровых участков"></div>
@@ -279,7 +288,7 @@
             <label><input type="checkbox" id="case-detections"><i class="case-fire-key"></i> Детекции VIIRS · 12 апреля</label>
           </fieldset>
           <p id="case-overlap"></p>
-          <p>Причина горения пока неизвестна. Пересечение рассчитано по контурам ЕГКН на дату выгрузки в ноябре 2026 года.</p>
+          <p>Пересечение рассчитано по контурам ЕГКН на дату выгрузки в ноябре 2026 года.</p>
           <p class="case-credit">Снимки Sentinel‑2 в условных цветах. Содержит изменённые данные Copernicus Sentinel (2025), данные ЕГКН и подложку NASA GIBS. <a href="https://map.gov4c.kz/egkn/">Кадастровая карта</a> · <a href="https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/blob/main/docs/kishkenekol-case.md">Методика</a></p>
         </div>
       </div>
