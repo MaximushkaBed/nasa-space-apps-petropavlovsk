@@ -8,9 +8,9 @@
   <title>Атлас пожаров · NASA FIRMS</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=world-layers">
+  <link rel="stylesheet" href="styles.css?v=weather-motion">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=world-layers" type="module"></script>
+  <script src="app.js?v=weather-motion" type="module"></script>
   <script src="correlations.js?v=ndvi" type="module"></script>
   <script src="burn-case.js?v=atlas-workspace" type="module"></script>
 </head>
@@ -150,6 +150,11 @@
           </label>
           <p id="terrain-status" class="layer-caption" role="status" hidden>Слой рельефа загрузился не полностью.</p>
         </fieldset>
+        <fieldset>
+          <legend>Движение ветра · мир</legend>
+          <label style="--layer-color:#9ae3ef"><input type="checkbox" id="world-wind-flow" disabled> Потоки ветра · NOAA GFS</label>
+          <p class="layer-caption" id="world-wind-status" role="status" hidden></p>
+        </fieldset>
         <div id="extra-layer-controls"></div>
         <p id="map-layer-status" class="layer-caption" role="status" hidden></p>
         <ul id="visible-layer-summary" class="layer-summary" aria-live="polite" hidden></ul>
@@ -179,6 +184,7 @@
           </div>
           <div class="fire-key" id="world-point-legend"><i aria-hidden="true"></i> Пиксели MODIS / VIIRS</div>
           <div class="fire-key" id="heat-legend" hidden><i aria-hidden="true"></i> Плотность детекций</div>
+          <button id="play-weather" class="quiet-button" type="button" aria-label="Воспроизвести или остановить погоду" aria-pressed="false" disabled>▶ Погода</button>
         </div>
         <div class="timeline-controls">
           <button id="play-frames" type="button" class="play-button" disabled><span aria-hidden="true">▶</span> Воспроизвести</button>

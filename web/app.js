@@ -1,6 +1,7 @@
 'use strict';
 
-import { createExtraLayers } from './map-layers.js?v=world-layers';
+import { createExtraLayers } from './map-layers.js?v=weather-motion';
+import { createWorldWind } from './world-wind.js?v=weather-motion';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
 import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=fire-detail';
 import { createFireViewport } from './fire-viewport.js?v=fire-detail';
@@ -25,6 +26,7 @@ const deviationKey = [['below-2', '−50% и ниже'], ['below-1', 'ниже �
 let calendar;
 let map;
 let weatherOverlay;
+let worldWind;
 let fireOverlay;
 let fireViewport;
 let viewportFrame;
@@ -219,6 +221,7 @@ function createMap(basemap, boundary, closePanel) {
   });
   areaAnalysis = createAreaAnalysis(map, () => { map.closePopup(); closePanel(); }, getJSON, boundary.geometry);
   weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)));
+  worldWind = createWorldWind(map, $('world-wind-status'));
 
   const labelPane = map.createPane('city-labels');
   labelPane.style.zIndex = 425;
@@ -286,6 +289,8 @@ function stopPlayback() {
   playbackTimer = undefined;
   $('play-frames').replaceChildren(element('span', '▶'), document.createTextNode(' Воспроизвести'));
   $('play-frames').firstChild.setAttribute('aria-hidden', 'true');
+  $('play-weather').setAttribute('aria-pressed', 'false');
+  $('play-weather').textContent = '▶ Погода';
 }
 
 async function renderWeather(date, request) {
@@ -306,15 +311,16 @@ async function renderWeather(date, request) {
   }
 }
 
-async function renderLayers() {
+async function renderLayers(day = $('world-date').value) {
   const request = ++layerRequest;
-  const date = $('world-date').value;
+  const date = typeof day === 'string' ? day : $('world-date').value;
   if (!date) return;
   const month = date.slice(0, 7);
   const status = $('map-layer-status');
   status.hidden = true;
   status.textContent = '';
-  const [, events] = await Promise.all([renderWeather(date, request), renderExtraLayers?.(month, date)]);
+  const [, events] = await Promise.all([renderWeather(date, request), renderExtraLayers?.(month, date),
+    worldWind.show($('world-wind-flow').checked ? date : undefined)]);
   if (request !== layerRequest) return;
   const items = (events ?? []).filter(Boolean);
   if (activePeriod?.start !== activePeriod?.end && items.length) items.unshift(`Дата спутниковых слоёв и погоды · ${date} UTC`);
@@ -492,8 +498,7 @@ function setWorldPeriod(span) {
     : day === worldArchive.last && through?.startsWith(day)
     ? `Данные до ${through.slice(11, 16)} UTC`
     : 'Архив FIRMS · время UTC';
-  renderLayers();
-  return loadWorldFrame();
+  return Promise.all([renderLayers(), loadWorldFrame()]);
 }
 
 function setWorldDate(day, keepInspection = false) {
@@ -514,7 +519,8 @@ async function loadArchive() {
       inspectionPeriod = undefined;
       setWorldPeriod(span);
     });
-    for (const id of ['world-satellite', 'world-date', 'day-slider', 'play-frames', 'open-period']) $(id).disabled = false;
+    for (const id of ['world-satellite', 'world-date', 'day-slider', 'play-frames', 'open-period', 'world-wind-flow']) $(id).disabled = false;
+    $('play-weather').disabled = !renderExtraLayers;
     await setWorldDate(worldArchive.last);
   } catch (error) {
     $('frame-date').textContent = 'Архив недоступен';
@@ -533,12 +539,36 @@ function togglePlayback() {
   $('play-frames').textContent = 'Ⅱ Пауза';
   const advance = async (day) => {
     const playing = playbackTimer;
+    if ($('world-wind-flow').checked && day < last) worldWind.prefetch(addDays(day, 1));
     await setWorldDate(day, true);
     if (playbackTimer !== playing) return;
     if (day === last) return stopPlayback();
     playbackTimer = setTimeout(() => advance(addDays(day, 1)), 850);
   };
   playbackTimer = setTimeout(() => advance(current === last ? first : current), 0);
+}
+
+function toggleWeatherPlayback() {
+  if ($('play-weather').getAttribute('aria-pressed') === 'true') {
+    stopPlayback();
+    return;
+  }
+  const fields = ['world-wind-flow', 'overlay-world-clouds', 'overlay-world-precip'].map($);
+  if (!fields.some((field) => field.checked)) {
+    for (const field of fields) {
+      field.checked = true;
+      field.dispatchEvent(new Event('change'));
+    }
+  }
+  if (activePeriod.start !== activePeriod.end) {
+    inspectionPeriod = activePeriod;
+    setWorldDate(activePeriod.start, true);
+  }
+  if (playbackTimer === undefined && !$('play-frames').disabled) togglePlayback();
+  if (playbackTimer !== undefined) {
+    $('play-weather').setAttribute('aria-pressed', 'true');
+    $('play-weather').textContent = 'Ⅱ Пауза';
+  }
 }
 
 function valueFor(row) {
@@ -776,7 +806,7 @@ async function start() {
       $('map-layer-status').hidden = false;
     });
     createExtraLayers(map, extraControls, getJSON, renderLayers)
-      .then((render) => { renderExtraLayers = render; renderLayers(); })
+      .then((render) => { renderExtraLayers = render; $('play-weather').disabled = !worldArchive; renderLayers(); })
       .catch((error) => {
         $('map-layer-status').textContent = 'Не удалось загрузить каталог дополнительных слоёв.';
         $('map-layer-status').hidden = false;
@@ -834,6 +864,8 @@ async function start() {
       setWorldDate(kishkenekolDay);
     });
     $('local-layers').addEventListener('change', renderLayers);
+    $('world-wind-flow').addEventListener('change', renderLayers);
+    $('play-weather').addEventListener('click', toggleWeatherPlayback);
     $('fire-layer').addEventListener('change', loadWorldFrame);
     $('fire-detail-retry').addEventListener('click', fireViewport.retry);
     for (const [id, view] of [['fire-points', 'points'], ['fire-heat', 'heat']]) {

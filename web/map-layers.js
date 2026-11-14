@@ -29,6 +29,50 @@ function eventPopup(feature, spec) {
   return root;
 }
 
+let cloudPalette;
+function cloudTileLayer(url, options) {
+  const layer = L.tileLayer(url, options);
+  layer.createTile = function (coords, done) {
+    const tile = document.createElement('canvas');
+    tile.width = tile.height = 256;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onerror = () => done(new Error('NASA cloud tile unavailable'), tile);
+    img.onload = async () => {
+      try {
+        cloudPalette ??= fetch('https://gibs.earthdata.nasa.gov/colormaps/v1.3/MODIS_Cloud_Fraction.xml', {
+          signal: AbortSignal.timeout(5000),
+        }).then(async (response) => {
+          if (!response.ok) throw new Error('NASA cloud palette unavailable');
+          const xml = new DOMParser().parseFromString(await response.text(), 'application/xml');
+          const entries = [...xml.querySelectorAll('ColorMapEntry[transparent="false"]')];
+          if (!entries.length) throw new Error('NASA cloud palette empty');
+          return new Map(entries.map((entry) => [entry.getAttribute('rgb').split(',').reduce((key, value) => key * 256 + Number(value), 0),
+            Number(entry.getAttribute('value'))]));
+        }).catch((error) => { cloudPalette = undefined; throw error; });
+        const palette = await cloudPalette;
+        const context = tile.getContext('2d', { willReadFrequently: true });
+        context.drawImage(img, 0, 0);
+        const image = context.getImageData(0, 0, 256, 256);
+        const pixels = image.data;
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (!pixels[i + 3]) continue;
+          const cloud = palette.get((pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2]) ?? 0;
+          pixels[i] = 226;
+          pixels[i + 1] = 239;
+          pixels[i + 2] = 255;
+          pixels[i + 3] = 255 * (cloud / 100) ** 1.55;
+        }
+        context.putImageData(image, 0, 0);
+        done(null, tile);
+      } catch (error) { done(error, tile); }
+    };
+    tile.dataset.source = img.src = this.getTileUrl(coords);
+    return tile;
+  };
+  return layer;
+}
+
 async function fetchEventMonth(feed, month) {
   const [year, monthNumber] = month.split('-').map(Number);
   const first = `${month}-01`;
@@ -51,7 +95,7 @@ async function fetchEventMonth(feed, month) {
 }
 
 export async function createExtraLayers(map, controls, getJSON, onChange) {
-  const manifest = await getJSON('data/layers.json?v=world-layers');
+  const manifest = await getJSON('data/layers.json?v=weather-motion');
   const cached = new Map();
   const groups = new Map();
   const layers = [];
@@ -95,11 +139,66 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
       group.append(strength);
       entry.opacity = slider;
       input.addEventListener('change', () => { strength.hidden = !input.checked; });
-      slider.addEventListener('input', () => entry.shown.eachLayer((tile) => tile.setOpacity(slider.valueAsNumber / 100)));
+      slider.addEventListener('input', () => {
+        const active = entry.current ?? entry.shown.getLayers()[0];
+        active?.setOpacity(slider.valueAsNumber / 100);
+      });
     }
     layers.push(entry);
   }
   let revision = 0;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+  function clearRaster(entry) {
+    entry.stopTransition?.();
+    entry.shown.clearLayers();
+    entry.current = entry.key = undefined;
+  }
+
+  function showRaster(entry, path, next) {
+    if (entry.key === path) return Promise.resolve();
+    entry.stopTransition?.();
+    const { spec, shown, input } = entry;
+    const previous = entry.current;
+    const opacity = entry.opacity.valueAsNumber / 100;
+    const tileLayer = spec.id === 'world-clouds' ? cloudTileLayer : L.tileLayer;
+    const tiles = tileLayer(/^https:\/\//.test(path) ? path : `data/${path}`, {
+      maxNativeZoom: spec.maxNativeZoom ?? 8, maxZoom: map.getMaxZoom(), opacity: previous ? 0 : opacity,
+      pane: spec.underlay ? 'observation-rasters' : 'event-layers', zIndex: entry.order * 2 + 1,
+      attribution: `<a href="${spec.sourceUrl}">${spec.source}</a>`,
+    });
+    return new Promise((resolve) => {
+      let loaded = 0, timeout;
+      function finish(swap) {
+        clearTimeout(timeout);
+        tiles.off('load', ready);
+        entry.stopTransition = undefined;
+        if (swap && next === revision && input.checked) {
+          entry.current = tiles;
+          entry.key = path;
+          if (previous && !reducedMotion.matches && tiles.getContainer()) {
+            previous.getContainer()?.classList.add('weather-frame-fade');
+            tiles.getContainer().classList.add('weather-frame-fade');
+            previous.setOpacity(0);
+            setTimeout(() => shown.removeLayer(previous), 210);
+          } else if (previous) shown.removeLayer(previous);
+          tiles.setOpacity(entry.opacity.valueAsNumber / 100);
+          tiles.setZIndex(entry.order * 2);
+        } else shown.removeLayer(tiles);
+        resolve();
+      }
+      const ready = () => finish(loaded > 0);
+      entry.stopTransition = () => finish(false);
+      tiles.on('tileload', () => { loaded++; });
+      tiles.on('tileerror', () => {
+        if (next === revision && input.checked) controls.dispatchEvent(new CustomEvent('layer-tile-error', { detail: spec.label }));
+      });
+      tiles.once('load', ready);
+      timeout = setTimeout(ready, 4500);
+      tiles.addTo(shown);
+      if (!tiles.isLoading()) ready();
+    });
+  }
 
   function load(path, spec, month) {
     if (!cached.has(path)) {
@@ -120,14 +219,12 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
     return Promise.all(layers.map(async (entry) => {
       const { spec, input, shown } = entry;
       if (!input.checked) {
-        shown.clearLayers();
-        entry.key = undefined;
+        clearRaster(entry);
         return null;
       }
       const prefix = `${spec.label} · ${spec.source}`;
       if (spec.range && (month < spec.range[0] || (spec.range[1] && month > spec.range[1]))) {
-        shown.clearLayers();
-        entry.key = undefined;
+        clearRaster(entry);
         return `${prefix} · архив для этой даты недоступен.`;
       }
       let path = spec.url.replaceAll('{month}', month).replaceAll('{date}', date);
@@ -139,8 +236,7 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
           const available = await gibsDate(layer, target, spec.maxLagDays);
           if (next !== revision) return null;
           if (!available.day) {
-            shown.clearLayers();
-            entry.key = undefined;
+            clearRaster(entry);
             return `${prefix} · в архиве нет кадров для этой даты.`;
           }
           path = path.replace(`/default/${target}/`, `/default/${available.day}/`);
@@ -149,18 +245,11 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
           dateLabel = ` · ${caption} ${shownDate}${available.day < target && !spec.composite ? ' · ближайший предыдущий' : ''}`;
           if (!available.verified) dateLabel += ' · доступность даты не проверена';
         }
-        if (path !== entry.key) {
-          shown.clearLayers();
-          const tiles = L.tileLayer(/^https:\/\//.test(path) ? path : `data/${path}`, {
-            maxNativeZoom: spec.maxNativeZoom ?? 8, maxZoom: map.getMaxZoom(), opacity: entry.opacity.valueAsNumber / 100,
-            pane: spec.underlay ? 'observation-rasters' : 'event-layers', zIndex: entry.order,
-            attribution: `<a href="${spec.sourceUrl}">${spec.source}</a>`,
-          });
-          tiles.on('tileerror', () => {
-            if (entry.key === path && input.checked) controls.dispatchEvent(new CustomEvent('layer-tile-error', { detail: spec.label }));
-          });
-          tiles.addTo(shown);
-          entry.key = path;
+        await showRaster(entry, path, next);
+        if (next !== revision) return null;
+        if (entry.key !== path) {
+          clearRaster(entry);
+          return `${prefix} · кадр не загрузился.`;
         }
         return prefix + dateLabel;
       }

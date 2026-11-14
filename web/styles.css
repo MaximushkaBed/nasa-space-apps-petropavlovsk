@@ -166,6 +166,11 @@ body { overflow: hidden; }
 .terrain-strength input[type='range'] { width: 100%; accent-color: var(--sky); }
 .map-layer-controls .raster-opacity { display: grid; grid-template-columns: auto minmax(0, 1fr); padding-left: 29px; color: var(--muted); font-size: 11px; }
 .raster-opacity input[type='range'] { width: 100%; accent-color: var(--sky); }
+.weather-frame-fade { transition: opacity 180ms linear; }
+.world-wind-canvas { position: absolute; inset: 0; pointer-events: none; filter: drop-shadow(0 0 1px #102c46); }
+#play-weather { margin-left: auto; padding: 5px 8px; color: var(--sky); }
+#play-weather[aria-pressed='true'] { background: #1c385c; border-color: var(--sky); }
+#world-wind-status { margin: 2px 6px 0; }
 #terrain-status { grid-column: 1 / -1; margin: 0 6px; }
 .map-layer-controls .weather-choice { display: grid; gap: 4px; color: var(--muted); font-size: 11px; }
 .weather-choice select { width: 100%; border: 1px solid #355787; border-radius: 4px; padding: 5px 4px; background: #102447; color: var(--text); font-size: 12px; }

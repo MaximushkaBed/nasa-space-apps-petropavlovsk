@@ -39,6 +39,7 @@
       "source": "NASA GIBS · MODIS / Terra",
       "sourceUrl": "https://worldview.earthdata.nasa.gov/?l=MODIS_Terra_Cloud_Fraction_Day",
       "maxNativeZoom": 6,
+      "opacity": 0.51,
       "maxLagDays": 2,
       "underlay": true
     },
@@ -52,6 +53,7 @@
       "source": "NASA GIBS · GPM IMERG",
       "sourceUrl": "https://worldview.earthdata.nasa.gov/?l=IMERG_Precipitation_Rate",
       "maxNativeZoom": 6,
+      "opacity": 0.42,
       "maxLagDays": 2,
       "underlay": true
     },
