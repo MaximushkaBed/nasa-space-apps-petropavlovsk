@@ -1,6 +1,7 @@
-const byId = (id) => document.getElementById(id);
+export async function mountCorrelations(root = document) {
+const byId = (id) => root.querySelector('#' + id);
 const sensor = byId('factor-sensor');
-const buttons = [...document.querySelectorAll('.factor-view button')];
+const buttons = [...root.querySelectorAll('.factor-view button')];
 const table = byId('factor-matrix');
 const count = new Intl.NumberFormat('ru');
 const coefficient = new Intl.NumberFormat('ru', {
@@ -159,4 +160,6 @@ try {
 } catch (error) {
   byId('factor-scope').textContent = 'Не удалось загрузить матрицу. Обновите страницу.';
   console.error(error);
+}
+
 }

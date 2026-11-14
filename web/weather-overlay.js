@@ -39,7 +39,7 @@ function shade(field, value) {
   return colors[next - 1].map((channel, i) => channel * (1 - t) + colors[next][i] * t);
 }
 
-export function createWeatherOverlay(map, boundary, formatDate) {
+export function createWeatherOverlay(map, boundary, formatDate, scope = document) {
   const { type, coordinates } = boundary.geometry;
   const polygons = type === 'Polygon' ? [coordinates] : coordinates;
   const colorCanvas = document.createElement('canvas');
@@ -57,9 +57,9 @@ export function createWeatherOverlay(map, boundary, formatDate) {
   layer.append(colorCanvas);
   windPane.append(windCanvas);
 
-  const key = document.getElementById('weather-key');
-  const info = document.getElementById('weather-inspector');
-  const status = document.getElementById('weather-state');
+  const key = scope.querySelector('#weather-key');
+  const info = scope.querySelector('#weather-inspector');
+  const status = scope.querySelector('#weather-state');
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   let current;
   let field = '';
@@ -69,6 +69,7 @@ export function createWeatherOverlay(map, boundary, formatDate) {
   let selected;
   let pin;
   let frame;
+  let paused = false;
   let time;
   let particles = [];
   let lastKey = '';
@@ -200,7 +201,7 @@ export function createWeatherOverlay(map, boundary, formatDate) {
   }
 
   function animate(now) {
-    if (!grid || !flow || reducedMotion.matches) return;
+    if (paused || !grid || !flow || reducedMotion.matches) return;
     if (time === undefined || now - time >= 32) {
       drawWind(time === undefined ? 0 : Math.min(.08, (now - time) / 1000), true);
       time = now;
@@ -225,7 +226,7 @@ export function createWeatherOverlay(map, boundary, formatDate) {
     projectWind();
     if (flow && grid && !particles.length) resetParticles();
     drawWind(0, !reducedMotion.matches);
-    if (flow && grid && !reducedMotion.matches) frame = requestAnimationFrame(animate);
+    if (!paused && flow && grid && !reducedMotion.matches) frame = requestAnimationFrame(animate);
   }
 
   function updateInspector() {
@@ -258,6 +259,8 @@ export function createWeatherOverlay(map, boundary, formatDate) {
   reducedMotion.addEventListener('change', () => refresh());
 
   return {
+    pause() { paused = true; cancelAnimationFrame(frame); },
+    resume() { paused = false; refresh(); },
     clear(message = '') {
       current = undefined;
       key.hidden = true;

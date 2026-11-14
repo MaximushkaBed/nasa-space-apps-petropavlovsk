@@ -1,8 +1,9 @@
 FROM python@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends libexpat1 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY requirements-global.txt .
-RUN pip install --no-cache-dir --disable-pip-version-check -r requirements-global.txt \
+COPY requirements-global.txt requirements-analysis.txt ./
+RUN pip install --no-cache-dir --disable-pip-version-check -r requirements-analysis.txt \
+    && python -c "import rasterio, numpy" \
     && python -c "import duckdb; c=duckdb.connect(); c.execute(\"SET extension_directory='/opt/duckdb/extensions'\"); c.execute('INSTALL spatial'); c.execute('LOAD spatial')" \
     && chmod -R a+rX /opt/duckdb \
     && pip uninstall -y pip \
@@ -11,7 +12,7 @@ COPY api/ api/
 COPY web/data/region.geojson web/data/region.geojson
 COPY data/boundaries/north-kazakhstan.geojson data/boundaries/north-kazakhstan.geojson
 COPY docs/sko-validation/outages.csv docs/sko-validation/outages.csv
-ENV PYTHONUNBUFFERED=1 DUCKDB_EXTENSION_DIRECTORY=/opt/duckdb/extensions SPACEAPPS_DATA_DIR=/data SPACEAPPS_ANALYSIS_CACHE=/cache
+ENV PYTHONUNBUFFERED=1 DUCKDB_EXTENSION_DIRECTORY=/opt/duckdb/extensions SPACEAPPS_DATA_DIR=/data SPACEAPPS_ANALYSIS_CACHE=/cache OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 GDAL_NUM_THREADS=1
 USER 10001:10001
 EXPOSE 8081
 CMD ["python", "-m", "api.server"]

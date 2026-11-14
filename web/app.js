@@ -8,7 +8,12 @@ import { createFireViewport } from './fire-viewport.js?v=fire-detail';
 import { createAreaAnalysis, inRing } from './area-analysis.js?v=fire-detail';
 import { addDays, createPeriodPicker, daysBetween } from './period-picker.js?v=atlas-periods';
 
-const $ = (id) => document.getElementById(id);
+export function mountAtlas(root, bridge = {}) {
+const $ = (id) => root.querySelector('#' + id);
+let active = bridge.isActive?.('atlas') !== false;
+let activation = 0;
+let showPanel;
+let savedCamera;
 const sources = ['Aqua / MODIS', 'Suomi NPP / VIIRS', 'NOAA-20 / VIIRS'];
 const sourceTags = ['MODIS', 'Suomi', 'NOAA‑20'];
 const detailedImageryMinZoom = 6;
@@ -220,8 +225,8 @@ function createMap(basemap, boundary, closePanel) {
     map.closePopup();
     if (!presentFireFrame()) renderFireLayer();
   });
-  areaAnalysis = createAreaAnalysis(map, () => { map.closePopup(); closePanel(); }, getJSON, boundary.geometry);
-  weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)));
+  areaAnalysis = createAreaAnalysis(map, () => { map.closePopup(); closePanel(); }, getJSON, boundary.geometry, { scope: root, onChange: roi => bridge.setContext?.({ roi }), onMode: mode => bridge.selectionMode?.(Boolean(mode && mode !== 'report')) });
+  weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)), root);
   worldWind = createWorldWind(map, $('world-wind-status'));
 
   const labelPane = map.createPane('city-labels');
@@ -337,7 +342,7 @@ async function renderLayers(day = $('world-date').value) {
   status.hidden = true;
   status.textContent = '';
   const [, events] = await Promise.all([renderWeather(date, request), renderExtraLayers?.(month, date),
-    worldWind.show($('world-wind-flow').checked ? date : undefined)]);
+    worldWind.show($('world-wind-flow').checked && active ? date : undefined)]);
   if (request !== layerRequest) return;
   const items = (events ?? []).filter(Boolean);
   if (activePeriod?.start !== activePeriod?.end && items.length) items.unshift(`Дата спутниковых слоёв и погоды · ${date} UTC`);
@@ -387,6 +392,7 @@ function renderFireLayer(points = firePoints()) {
 }
 
 function updateFireViewport() {
+  if (!active) { fireViewport.select(undefined); return; }
   const satellite = $('world-satellite').value;
   const visible = $('fire-layer').checked;
   const span = activePeriod;
@@ -407,6 +413,7 @@ function renderAreaFrame(points = firePoints(), failed = false) {
 }
 
 function showWorldFrame() {
+  publishContext();
   const visible = $('fire-layer').checked;
   const selectedPoints = firePoints();
   const approximate = Boolean(worldFrame?.approximate);
@@ -543,7 +550,7 @@ function setWorldPeriod(span) {
   slider.value = daysBetween(first, day);
   slider.setAttribute('aria-valuetext', $('frame-date').textContent);
   $('play-frames').disabled = first === last;
-  document.querySelector('.timeline-controls').hidden = range;
+  root.querySelector('.timeline-controls').hidden = range;
   $('show-period-days').hidden = !range && !inspectionPeriod;
   $('show-period-days').textContent = range ? 'Смотреть по дням' : 'Сводка за период';
   const through = worldArchive.through;
@@ -571,7 +578,7 @@ async function loadArchive() {
       stopPlayback();
       inspectionPeriod = undefined;
       setWorldPeriod(span);
-    });
+    }, root);
     for (const id of ['world-satellite', 'world-date', 'day-slider', 'play-frames', 'open-period', 'world-wind-flow']) $(id).disabled = false;
     $('play-weather').disabled = !renderExtraLayers;
     await setWorldDate(worldArchive.last);
@@ -781,11 +788,11 @@ function setupPanels() {
   const analysis = $('analysis-panel');
   const layers = $('map-layer-controls');
   const layersToggle = $('open-layers');
-  const tabs = [...document.querySelectorAll('.tool-nav a')];
+  const tabs = [...root.querySelectorAll('.tool-nav a')];
   const toggles = [...tabs, layersToggle];
-  const toolbar = document.querySelector('.topbar');
+  const toolbar = root.querySelector('.topbar');
   new ResizeObserver(() => {
-    $('top').style.setProperty('--panel-top', `${Math.ceil(toolbar.getBoundingClientRect().bottom + 7)}px`);
+    $('top').style.setProperty('--panel-top', `${Math.ceil(toolbar.getBoundingClientRect().bottom - root.getBoundingClientRect().top + 7)}px`);
   }).observe(toolbar);
   const sections = {
     '#season-calendar': ['calendar-analysis', 'Календарь и норма · СКО'],
@@ -797,7 +804,7 @@ function setupPanels() {
     for (const tab of toggles) tab.setAttribute('aria-expanded', 'false');
     analysis.hidden = layers.hidden = true;
     areaAnalysis?.resetDraft();
-    if (Object.hasOwn(sections, location.hash)) history.replaceState(null, '', '#observations');
+    if (Object.hasOwn(sections, location.hash)) bridge.setLocalHash?.('#observations');
     active?.focus({ preventScroll: true });
   }
   function openAnalysis(hash) {
@@ -816,7 +823,8 @@ function setupPanels() {
     tab.addEventListener('click', (event) => {
       event.preventDefault();
       if (tab.getAttribute('aria-expanded') === 'true') return closePanel();
-      history.replaceState(null, '', tab.hash);
+      if (tab.hash === '#kishkenekol-case' && bridge.navigate) return bridge.navigate('cases', { caseId: 'kishkenekol-2025-04-12' });
+      bridge.setLocalHash?.(tab.hash);
       openAnalysis(tab.hash);
     });
   }
@@ -826,12 +834,14 @@ function setupPanels() {
     layers.hidden = false;
     layersToggle.setAttribute('aria-expanded', 'true');
   });
-  for (const button of document.querySelectorAll('[data-close-panel]')) button.addEventListener('click', closePanel);
+  for (const button of root.querySelectorAll('[data-close-panel]')) button.addEventListener('click', closePanel);
   document.addEventListener('keydown', (event) => {
+    if (!active) return;
     if (event.key === 'Escape' && !$('method').open && !$('period-picker').open
       && (!analysis.hidden || !layers.hidden || areaAnalysis?.active())) closePanel();
   });
-  window.addEventListener('hashchange', () => openAnalysis(location.hash));
+  window.addEventListener('hashchange', () => { if (active) openAnalysis(location.hash); });
+  showPanel = openAnalysis;
   if (Object.hasOwn(sections, location.hash)) openAnalysis(location.hash);
   return closePanel;
 }
@@ -916,6 +926,7 @@ async function start() {
       $('fire-layer').checked = true;
       map.fitBounds([[53.035, 71.68], [53.346, 72.013]], { padding: [22, 70], animate: false });
       setWorldDate(kishkenekolDay);
+      bridge.navigate?.('atlas', { from: 'case', preserve: true });
     });
     $('local-layers').addEventListener('change', renderLayers);
     $('world-wind-flow').addEventListener('change', renderLayers);
@@ -956,7 +967,7 @@ async function start() {
     $('play-frames').addEventListener('click', togglePlayback);
     const initial = calendar.months.findIndex((row) => row.month === kishkenekolDay.slice(0, 7));
     chooseMonth(Math.max(0, initial));
-    loadArchive();
+    await loadArchive();
   } catch (error) {
     fireLoading('');
     mapStatus('Не удалось загрузить атлас.');
@@ -964,4 +975,81 @@ async function start() {
   }
 }
 
-start();
+
+function normalizePlatform(value) {
+  return value === 'Suomi NPP' ? 'Suomi-NPP' : value;
+}
+function getState() {
+  const selected = $('world-satellite')?.value;
+  const platform = selected === '' ? 'all' : normalizePlatform(worldArchive?.platforms?.[Number(selected)] || 'all');
+  return {
+    context: { roi: areaAnalysis?.getSelection?.() || null,
+      focus: activePeriod ? { start: activePeriod.start, end: activePeriod.end, grain: activePeriod.mode || 'day', basis: 'UTC' } : null,
+      platform, atlasQuality: worldFrame?.method === 'publisher' || viewportFrame?.method === 'archive' ? 'publisher_all' : 'atlas_filtered',
+    },
+    camera: map ? { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() } : null,
+    fireDisplay, localPanel: !root.querySelector('#analysis-panel')?.hidden ? location.hash : null,
+  };
+}
+function publishContext() {
+  if (active && bridge.isActive?.('atlas') !== false) bridge.setContext?.(getState().context);
+}
+const ready = start();
+return {
+  ready, getState,
+  async activate(options = {}) {
+    const token=++activation;
+    active = true;
+    await ready;
+    if(!active||token!==activation)return;
+    map?.invalidateSize({ pan: false });
+    const state = options.state;
+    const context = options.context || state?.context;
+    if (context?.roi) areaAnalysis?.setSelection?.(context.roi);
+    if (context?.platform && worldArchive) {
+      const id = context.platform === 'all' ? -1 : worldArchive.platforms.findIndex(p => normalizePlatform(p) === context.platform);
+      if (context.platform !== 'all' && id < 0) bridge.notice?.('Эта платформа недоступна в текущем архиве атласа. Фильтр не изменён.');
+      else $('world-satellite').value = id < 0 ? '' : String(id);
+    }
+    if (context?.focus && worldArchive) {
+      const { start, end } = context.focus;
+      if (start < worldArchive.first || end > worldArchive.last) bridge.notice?.('Выбранный период выходит за доступные даты атласа. Период не изменён.');
+      else {
+        await setWorldPeriod({ start, end, mode: context.focus.grain || 'custom' });
+        if(!active||token!==activation)return;
+        if(context.platform&&context.platform!=='all'&&$('world-satellite').disabled)bridge.notice?.('Длинная сводка атласа объединяет платформы. Для выбранного спутника перейдите к дням; источник анализа сохранён отдельно.');
+      }
+    }
+    const camera = state?.camera || (!context && savedCamera);
+    if (camera) map?.setView(camera.center, camera.zoom, { animate: false });
+    else if (context?.roi?.bbox) {
+      const [w,s,e,n] = context.roi.bbox;
+      map?.fitBounds([[s,w],[n,e]], { padding: [45,60], maxZoom: 11, animate: false });
+    }
+    if (state?.fireDisplay && ['points','heat'].includes(state.fireDisplay)) {
+      fireDisplay = state.fireDisplay;
+      $('fire-points').setAttribute('aria-pressed', String(fireDisplay === 'points'));
+      $('fire-heat').setAttribute('aria-pressed', String(fireDisplay === 'heat'));
+    }
+    if (options.caseId || options.view === 'cases') showPanel?.('#kishkenekol-case');
+    else if (state?.localPanel) showPanel?.(state.localPanel);
+    else if(options.view==='atlas'&&root.querySelector('#kishkenekol-case')&&!root.querySelector('#kishkenekol-case').hidden)showPanel?.('#observations');
+    weatherOverlay?.resume?.();
+    if(worldArchive)renderLayers();
+    if (worldArchive) { updateFireViewport(); renderFireLayer(); publishContext(); }
+  },
+  deactivate() {
+    active = false;++activation;
+    worldRequest?.controller.abort();
+    worldRequest = undefined;
+    if (map) savedCamera = { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() };
+    stopPlayback();
+    fireViewport?.select(undefined);
+    weatherOverlay?.pause?.();
+    worldWind?.show(undefined);
+    for (const dialog of root.querySelectorAll('dialog[open]')) dialog.close();
+  },
+  beginSelection(mode = 'search') { root.querySelector(mode === 'polygon' ? '#area-polygon' : mode === 'circle' ? '#area-circle' : '#area-search-mode')?.click(); },
+  openPanel(hash) { showPanel?.(hash); },
+};
+}
