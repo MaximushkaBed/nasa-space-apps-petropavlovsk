@@ -2,21 +2,22 @@
 
 const $ = (id) => document.getElementById(id);
 const sources = ['Aqua / MODIS', 'Suomi NPP / VIIRS', 'NOAA-20 / VIIRS'];
+const sourceTags = ['MODIS', 'Suomi', 'NOAA‑20'];
 const monthNames = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 const fullMonths = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
 const number = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
 const percent = new Intl.NumberFormat('ru', { style: 'percent', maximumFractionDigits: 0, signDisplay: 'exceptZero' });
 const unsignedPercent = new Intl.NumberFormat('ru', { style: 'percent', maximumFractionDigits: 0 });
 const activityKey = [['activity-0', '0'], ['activity-1', 'до 10'], ['activity-2', '10–49'], ['activity-3', '50–149'], ['activity-4', '150–399'], ['activity-5', '400+']];
-const deviationKey = [['below-2', '≤ −50%'], ['below-1', '−50…−10%'], ['near-norm', 'около нормы'], ['above-1', '+10…+50%'], ['above-2', '≥ +50%']];
+const deviationKey = [['below-2', '−50% и ниже'], ['below-1', 'ниже нормы'], ['near-norm', 'в пределах ±10%'], ['above-1', 'выше нормы'], ['above-2', '+50% и выше']];
 
 let calendar;
 let map;
 let region;
 let cellLayer;
 let monthIndex;
-let source = 0;
-let mode = 'activity';
+let source = 'unified';
+let mode = 'deviation';
 let mapRequest = 0;
 let mapAvailable;
 const cachedCells = new Map();
@@ -24,6 +25,10 @@ const cachedCells = new Map();
 function periodLabel(key) {
   const [year, month] = key.split('-');
   return `${fullMonths[Number(month) - 1]} ${year}`;
+}
+
+function monthSource(row) {
+  return source === 'unified' ? row.source : Number(source);
 }
 
 function element(tag, label, className) {
@@ -134,7 +139,7 @@ function mapStatus(message) {
 function cellPopup(cell, count, row, sourceLabel) {
   const [west, south, east, north] = cell;
   const body = element('div');
-  body.append(element('strong', `${number.format(count)} дн. с детекциями`), document.createElement('br'),
+  body.append(element('strong', `${number.format(count)} дн. с тепловым сигналом`), document.createElement('br'),
     element('span', `${periodLabel(row.month)} · ${sourceLabel}`), document.createElement('br'),
     element('span', `${((south + north) / 2).toFixed(3)}° с. ш., ${((west + east) / 2).toFixed(3)}° в. д.`));
   return body;
@@ -143,7 +148,7 @@ function cellPopup(cell, count, row, sourceLabel) {
 async function renderMap(row) {
   if (!mapAvailable) return;
   const request = ++mapRequest;
-  const platform = source;
+  const platform = monthSource(row);
   const sourceLabel = sources[platform];
   cellLayer.clearLayers();
   map.closePopup();
@@ -169,8 +174,8 @@ async function renderMap(row) {
       shape.bindPopup(() => cellPopup(cell, count, row, sourceLabel));
       cellLayer.addLayer(shape);
     }
-    $('map-summary').textContent = `${number.format(visible)} ячеек · ${number.format(row.points[platform])} исходных детекций`;
-    if (!visible) mapStatus('Детекций нет. Покрытие неизвестно.');
+    $('map-summary').textContent = `Ячеек с сигналом — ${number.format(visible)}`;
+    if (!visible) mapStatus('Нет зарегистрированных сигналов. Покрытие неизвестно.');
   } catch (error) {
     if (request !== mapRequest) return;
     $('map-summary').textContent = 'Данные карты недоступны';
@@ -180,7 +185,8 @@ async function renderMap(row) {
 }
 
 function valueFor(row) {
-  return row.raw[source] * calendar.factors[source];
+  const platform = monthSource(row);
+  return row.raw[platform] * calendar.factors[platform];
 }
 
 function difference(row, value) {
@@ -188,27 +194,39 @@ function difference(row, value) {
 }
 
 function renderComparison(row) {
+  const platform = monthSource(row);
   const value = valueFor(row);
   const delta = difference(row, value);
   const gap = value - row.norm;
   const direction = gap > 0 ? 'выше' : 'ниже';
   const scale = Math.max(value, row.norm, 1);
-  $('activity-value').textContent = number.format(value);
-  $('metric-scale').textContent = source ? 'в шкале Aqua' : 'Aqua';
   const deviation = $('deviation');
-  deviation.className = `deviation ${gap < 0 ? 'below' : gap === 0 ? 'neutral' : ''}`;
-  deviation.textContent = gap === 0 ? 'На уровне нормы'
-    : delta === null ? `${number.format(gap)} ячейко-дней выше нулевой нормы`
-      : `${unsignedPercent.format(Math.abs(delta))} ${direction} нормы`;
+  deviation.className = `deviation ${value === 0 || gap === 0 ? 'neutral' : gap < 0 ? 'below' : ''}`;
+  deviation.textContent = value === 0 ? 'Спутник не зарегистрировал сигналов'
+    : Math.abs(delta ?? 1) < .005 ? 'Активность на уровне нормы'
+      : delta === null ? 'Активность выше нулевой нормы'
+        : `Активность на ${unsignedPercent.format(Math.abs(delta))} ${direction} нормы`;
   $('actual-bar-value').textContent = number.format(value);
   $('norm-bar-value').textContent = number.format(row.norm);
   $('actual-bar').style.width = `${100 * value / scale}%`;
   $('norm-bar').style.width = `${100 * row.norm / scale}%`;
   $('bar-chart').setAttribute('aria-label', `Активность: ${number.format(value)}. Историческая норма: ${number.format(row.norm)}.`);
+  $('period-source').textContent = `${sources[platform]} · NASA FIRMS`;
+  $('source-explanation').textContent = platform === 0
+    ? 'Месячное значение по наблюдениям Aqua.'
+    : 'Месячное значение пересчитано в шкалу Aqua. На карте — наблюдения VIIRS.';
+  const aquaDelta = difference(row, row.raw[0]);
+  const referenceCheck = $('reference-check');
+  referenceCheck.hidden = !platform || delta === null
+    || delta * aquaDelta >= 0 || Math.min(Math.abs(delta), Math.abs(aquaDelta)) < .005;
+  if (!referenceCheck.hidden) {
+    const aquaDirection = aquaDelta > 0 ? 'выше' : 'ниже';
+    referenceCheck.textContent = `Aqua за тот же месяц показывает ${unsignedPercent.format(Math.abs(aquaDelta))} ${aquaDirection} нормы. Вывод зависит от спутника.`;
+  }
   $('coverage-title').textContent = `Учтено ${row.days} из ${row.days + row.excluded} дней`;
   $('coverage-description').textContent = row.excluded
-    ? `Исключено дней со сбоями: ${row.excluded}. Локальное покрытие неизвестно.`
-    : 'Локальное покрытие неизвестно.';
+    ? `Пропущены дни с известными сбоями (${row.excluded}). Облачность и покрытие не проверены.`
+    : 'Облачность и покрытие спутника не проверены.';
   $('comparison-period').textContent = periodLabel(row.month);
 }
 
@@ -222,10 +240,29 @@ function cellAppearance(row) {
     else if (delta < -.1) level = 'below-1';
     else if (delta >= .5) level = 'above-2';
     else if (delta > .1) level = 'above-1';
-    return [level, delta === null ? '—' : percent.format(delta)];
+    return [level, delta === null ? '—' : percent.format(delta).replace(/\s(?=%)/, '')];
   }
   const level = value === 0 ? 0 : [10, 50, 150, 400].filter((threshold) => value >= threshold).length + 1;
   return [`activity-${level}`, number.format(value)];
+}
+
+function renderCalendarInsight() {
+  const peaks = new Map();
+  for (const row of calendar.months) {
+    const year = row.month.slice(0, 4);
+    const value = valueFor(row);
+    const month = row.month.slice(5);
+    const peak = peaks.get(year);
+    if (!peak || value > peak.value) peaks.set(year, { value, months: [month] });
+    else if (value === peak.value) peak.months.push(month);
+  }
+  const topMonths = new Set([...peaks.values()].flatMap((peak) => peak.months));
+  const insight = $('calendar-insight');
+  insight.hidden = topMonths.size !== 1 || peaks.size < 2;
+  if (!insight.hidden) {
+    const month = fullMonths[Number([...topMonths][0]) - 1];
+    insight.textContent = `${month[0].toUpperCase() + month.slice(1)} — месяц с самой высокой активностью во всех ${peaks.size} сезонах.`;
+  }
 }
 
 function makeCalendar() {
@@ -269,9 +306,10 @@ function renderCalendar() {
     const index = Number(button.dataset.index);
     const row = calendar.months[index];
     const [className, label] = cellAppearance(row);
-    const summary = `${periodLabel(row.month)}, ${number.format(valueFor(row))} ячейко-дней, норма ${number.format(row.norm)}`;
+    const platform = monthSource(row);
+    const summary = `${periodLabel(row.month)}, ${sources[platform]}, ${number.format(valueFor(row))} ячейко-дней, норма ${number.format(row.norm)}`;
     button.className = className;
-    button.textContent = label;
+    button.replaceChildren(element('span', label), element('span', sourceTags[platform], 'calendar-source'));
     button.title = summary;
     button.setAttribute('aria-label', summary);
     if (index === monthIndex) button.setAttribute('aria-current', 'date');
@@ -279,6 +317,7 @@ function renderCalendar() {
   }
   $('activity-view').setAttribute('aria-pressed', String(mode === 'activity'));
   $('deviation-view').setAttribute('aria-pressed', String(mode === 'deviation'));
+  renderCalendarInsight();
   $('calendar-key').replaceChildren(...(mode === 'activity' ? activityKey : deviationKey).map(([level, label]) => {
     const item = element('span');
     const swatch = element('i', undefined, level);
@@ -295,6 +334,7 @@ function chooseMonth(index) {
   $('period').value = String(index);
   $('previous').disabled = index === 0;
   $('next').disabled = index === calendar.months.length - 1;
+  $('calendar-selection').textContent = `${periodLabel(row.month)} на карте ↑`;
   renderCalendar();
   renderComparison(row);
   return renderMap(row);
@@ -303,7 +343,7 @@ function chooseMonth(index) {
 async function start() {
   $('open-method').addEventListener('click', () => $('method').showModal());
   try {
-    calendar = await getJSON('data/calendar.json');
+    calendar = await getJSON('data/calendar.json?v=sko-series');
   } catch (error) {
     $('app-status').textContent = 'Не удалось загрузить календарь. Откройте приложение через локальный веб-сервер.';
     $('overview').hidden = true;
@@ -328,7 +368,7 @@ async function start() {
   makeCalendar();
   for (const id of ['source', 'period', 'activity-view', 'deviation-view']) $(id).disabled = false;
   $('source').addEventListener('change', (event) => {
-    source = Number(event.target.value);
+    source = event.target.value;
     chooseMonth(monthIndex);
   });
   $('period').addEventListener('change', (event) => chooseMonth(Number(event.target.value)));

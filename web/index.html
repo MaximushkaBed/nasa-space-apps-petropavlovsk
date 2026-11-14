@@ -8,9 +8,9 @@
   <title>Пожары СКО · Спутниковый календарь</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=sko-series">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=sko-series" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -34,7 +34,7 @@
       <div class="hero-copy">
         <a class="event" href="https://www.spaceappschallenge.org/2026/challenges/modis-and-viirs-hot-spots/" target="_blank" rel="noreferrer"><span aria-hidden="true"></span> NASA Space Apps Challenge 2026 ↗</a>
         <h1 id="title">Пожарная активность <em>с орбиты</em></h1>
-        <p class="subtitle">Северо-Казахстанская область · MODIS и VIIRS</p>
+        <p class="subtitle">Когда и где спутники замечали горение в Северо-Казахстанской области</p>
       </div>
       <figure class="hero-photo">
         <div class="hero-frame"><img src="assets/balkhash-iss.webp" alt="Луна и озеро Балхаш на снимке с Международной космической станции" width="716" height="1100" fetchpriority="high"></div>
@@ -48,16 +48,19 @@
       <section class="panel map-panel" id="observations" aria-labelledby="map-title">
         <div class="panel-heading map-heading">
           <div>
-            <h2 id="map-title">Карта наблюдений</h2>
+            <h2 id="map-title">Где спутник заметил горение</h2>
             <p id="map-subtitle">Сетка 2 × 2 км</p>
           </div>
           <div class="map-filters">
             <label class="source-field">
-              <span class="sr-only">Спутник</span>
+              <span class="sr-only">Ряд данных карты и календаря</span>
               <select id="source" disabled>
-                <option value="0">Aqua / MODIS</option>
-                <option value="1">Suomi NPP / VIIRS</option>
-                <option value="2">NOAA-20 / VIIRS</option>
+                <option value="unified" selected>Единый ряд</option>
+                <optgroup label="Отдельные спутники">
+                  <option value="0">Aqua / MODIS</option>
+                  <option value="1">Suomi NPP / VIIRS</option>
+                  <option value="2">NOAA-20 / VIIRS</option>
+                </optgroup>
               </select>
             </label>
             <div class="period-control" role="group" aria-label="Месяц на карте">
@@ -79,7 +82,7 @@
             <button type="button" id="reset-map" aria-label="Вернуться к границе СКО" title="К границе СКО"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></svg></button>
           </div>
           <div class="map-legend" aria-label="Число дней с детекциями в ячейке">
-            <strong>Дни с детекциями</strong>
+            <strong>Дни с сигналом в ячейке</strong>
             <span><i class="map-level-1"></i> 1–2</span>
             <span><i class="map-level-2"></i> 3–6</span>
             <span><i class="map-level-3"></i> 7+</span>
@@ -88,35 +91,32 @@
         </div>
         <div class="map-caption">
           <span><i aria-hidden="true"></i> Граница СКО</span>
-          <span id="map-summary" aria-live="polite">Нажмите на ячейку, чтобы посмотреть детали</span>
+          <span id="map-summary" aria-live="polite"></span>
         </div>
       </section>
 
-      <section class="panel comparison" aria-labelledby="comparison-title">
-        <div class="panel-heading comparison-heading">
-          <div>
-            <h2 id="comparison-title">Сравнение с нормой</h2>
-            <p>Медиана Aqua · 2020–2023</p>
-          </div>
-        </div>
+      <section class="panel comparison" id="month-insight" aria-labelledby="deviation">
         <div class="comparison-content" id="comparison-content" aria-live="polite">
-          <p id="comparison-period" class="comparison-period">—</p>
-          <p class="metric-value" id="activity-value">—</p>
-          <p class="metric-label">ячейко-дней <span id="metric-scale"></span></p>
-          <p class="deviation" id="deviation">—</p>
-          <div class="bars" role="img" id="bar-chart" aria-label="Сравнение активности с нормой">
+          <p id="comparison-period" class="comparison-period"></p>
+          <h2 class="deviation" id="deviation">Что видно за месяц</h2>
+          <p class="norm-context">Сравнение с тем же месяцем в 2020–2023 годах с учётом числа дней.</p>
+          <div class="bars" role="img" id="bar-chart" aria-label="Сравнение активности с нормой в ячейко-днях на шкале Aqua">
             <div class="bar-row">
-              <span>Выбранный месяц</span><strong id="actual-bar-value">—</strong>
+              <span>Выбранный месяц</span><strong id="actual-bar-value"></strong>
               <div class="bar-track"><div class="bar bar-actual" id="actual-bar"></div></div>
             </div>
             <div class="bar-row">
-              <span>Историческая норма</span><strong id="norm-bar-value">—</strong>
+              <span>Историческая норма</span><strong id="norm-bar-value"></strong>
               <div class="bar-track"><div class="bar bar-norm" id="norm-bar"></div></div>
             </div>
+            <p class="bar-unit">Ячейко-дни в шкале Aqua</p>
           </div>
+          <p id="period-source" class="period-source"></p>
+          <p id="source-explanation" class="source-explanation"></p>
+          <p id="reference-check" class="reference-check" hidden></p>
           <div class="coverage">
             <span class="coverage-icon" aria-hidden="true">◷</span>
-            <div><strong id="coverage-title">—</strong><p id="coverage-description">Локальное покрытие неизвестно</p></div>
+            <div><strong id="coverage-title"></strong><p id="coverage-description"></p></div>
           </div>
         </div>
       </section>
@@ -126,19 +126,20 @@
       <div class="panel-heading calendar-heading">
         <div>
           <h2 id="calendar-title">Календарь активности</h2>
-          <p>Апрель — октябрь · 2020–2025 · UTC</p>
+          <p>Выберите месяц, чтобы обновить карту и вывод. Апрель — октябрь · 2020–2025 · UTC</p>
         </div>
         <div class="view-switch" role="group" aria-label="Цветовая шкала календаря">
-          <button type="button" id="activity-view" aria-pressed="true" disabled>Активность</button>
-          <button type="button" id="deviation-view" aria-pressed="false" disabled>К норме</button>
+          <button type="button" id="deviation-view" aria-pressed="true" disabled>К норме</button>
+          <button type="button" id="activity-view" aria-pressed="false" disabled>Ячейко-дни</button>
         </div>
       </div>
+      <p class="calendar-insight" id="calendar-insight" hidden></p>
       <div class="calendar-scroll">
         <table id="calendar" class="calendar" aria-label="Месячная активность по годам"></table>
       </div>
       <div class="calendar-footer">
         <div class="calendar-key" id="calendar-key" aria-label="Легенда календаря"></div>
-        <span class="unavailable-key"><i aria-hidden="true"></i> Вне сезона</span>
+        <a href="#observations" id="calendar-selection">Выбранный месяц на карте ↑</a>
       </div>
     </section>
 
@@ -153,10 +154,11 @@
       <h2 id="method-title">Как читать календарь</h2>
       <form method="dialog"><button type="submit" class="quiet-button" aria-label="Закрыть методику">✕</button></form>
     </div>
-    <p><strong>Ячейко-день</strong> — ячейка 2 × 2 км с хотя бы одной подходящей детекцией за сутки UTC. Календарь суммирует ячейко-дни за месяц. На карте цвет ячейки показывает исходное число дней с детекциями выбранного спутника.</p>
+    <p><strong>Единый ряд.</strong> С 2020 по 2023 год используются наблюдения Aqua/MODIS. Для сезонов 2024 и 2025 годов используется NOAA‑20/VIIRS с поправкой 0,2897 к месячной сумме. Источник фиксирован для каждого периода, включая месяцы без детекций. В меню доступны отдельные спутники для проверки наблюдений.</p>
+    <p><strong>Ячейко-день</strong> — участок 2 × 2 км, где спутник зарегистрировал хотя бы один подходящий тепловой сигнал за сутки UTC. Календарь суммирует такие наблюдения за месяц. Цвет ячейки на карте показывает число дней с сигналом по спутнику этого месяца.</p>
     <p><strong>Снимок карты</strong> — статическая подложка Blue Marble от NASA GIBS. Месяц и спутник определяют отображаемые детекции.</p>
     <p><strong>Шкала Aqua.</strong> Месячные суммы Suomi NPP и NOAA‑20 умножаются на коэффициенты 0,2932 и 0,2897, рассчитанные по 2020–2023 годам. Коэффициенты применяются к суммам, а карта сохраняет исходные наблюдения.</p>
-    <p><strong>Историческая норма</strong> — медиана средних суточных значений Aqua за тот же месяц в 2020–2023 годах, умноженная на число включённых дней выбранного месяца. Для месяцев 2020–2023 сравнение включает выбранный год в базовый период.</p>
+    <p><strong>Историческая норма</strong> — медиана средних суточных значений Aqua за тот же месяц в 2020–2023 годах, умноженная на число включённых дней выбранного месяца. Для месяцев 2020–2023 сравнение включает выбранный год в базовый период. Отклонения до 10% включительно отмечены одним цветом. Этот цвет показывает размер отклонения.</p>
     <p><strong>Наблюдения.</strong> Стандартные данные FIRMS (SP) отфильтрованы по полигону СКО, по типу предполагаемого горения растительности и по уверенности. Даты известных сбоев исключены. Облака, геометрия пролётов и локальное покрытие не проверялись. Показатель отражает спутниковые детекции. Число пожаров и площадь выгорания требуют отдельных данных.</p>
     <p class="dialog-links"><a href="https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/tree/main/docs/sko-validation" target="_blank" rel="noreferrer">Отчёт и даты исключений ↗</a> <a href="https://www.earthdata.nasa.gov/data/projects/lance/disclaimer" target="_blank" rel="noreferrer">Дисклеймер NASA ↗</a></p>
   </dialog>

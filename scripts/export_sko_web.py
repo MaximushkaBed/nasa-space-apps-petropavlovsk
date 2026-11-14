@@ -65,7 +65,10 @@ def export_calendar(cache_dir, output_dir):
             raise ValueError(f"{key}: map sums {totals} differ from validation totals {published}")
 
         included = int(row["included_days"])
-        calendar.append({"month": key, "split": row["split"], "days": included,
+        # Use the reference during the baseline and the validated VIIRS
+        # continuation on the held-out seasons, even when a count is zero.
+        series_source = SENSORS.index("Aqua" if row["split"] == "fit" else "NOAA-20")
+        calendar.append({"month": key, "split": row["split"], "source": series_source, "days": included,
                          "excluded": int(row["excluded_days"]), "raw": published,
                          "points": [int(row[f"{prefix}_points"]) for prefix in prefixes],
                          "norm": round(rates[int(key[5:7])] * included, 8)})
