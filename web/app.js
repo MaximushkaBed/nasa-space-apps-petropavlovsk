@@ -284,6 +284,22 @@ function mapStatus(message) {
   node.hidden = !message;
 }
 
+function fireLoading(message) {
+  const label = $('fire-loading-label');
+  if (message && label.textContent !== message) label.textContent = message;
+  $('fire-loading').hidden = !message;
+}
+
+function updateFireLoading() {
+  const visible = $('fire-layer').checked;
+  const grouped = activePeriod && activePeriod.start !== activePeriod.end;
+  const viewport = grouped && map.getZoom() >= fireDetailZoom;
+  const message = viewport && viewportFrame?.status === 'loading' ? 'Загружаем детекции на этом участке…'
+    : pendingFrame && !worldFrame && (!viewport || !viewportFrame)
+      ? grouped ? 'Загружаем сводку за период…' : 'Загружаем детекции за день…' : '';
+  fireLoading(visible ? message : '');
+}
+
 function stopPlayback() {
   clearTimeout(playbackTimer);
   playbackTimer = undefined;
@@ -350,7 +366,6 @@ function renderFireLayer(points = firePoints()) {
   const coverage = viewportFrame?.missing?.length ? ' В архиве есть пропуски дат.' : '';
   const message = status === 'ok' ? `${detail.length ? (viewportFrame.method === 'archive' ? 'Исходный архив · без фильтра качества.' : '')
     : 'В архиве для этого участка нет детекций.'}${coverage}`.trim() : {
-    loading: 'Загружаем отдельные детекции…',
     too_wide: 'Приблизьте карту, чтобы увидеть отдельные детекции.',
     too_dense: 'Слишком много детекций. Приблизьте карту или сократите период.',
     too_slow: viewportFrame?.reason === 'busy' ? 'Сервер ещё загружает предыдущий участок. Повторите запрос.'
@@ -361,7 +376,9 @@ function renderFireLayer(points = firePoints()) {
   $('fire-detail-status').textContent = visible && grouped ? message ?? '' : '';
   $('fire-detail-status').hidden = !visible || !grouped || !message;
   $('fire-detail-retry').hidden = !visible || !grouped || !['error', 'too_slow'].includes(status);
-  return fireOverlay(points, fireDisplay, visible, grouped, detail);
+  const regionalCount = fireOverlay(points, fireDisplay, visible, grouped, detail);
+  updateFireLoading();
+  return regionalCount;
 }
 
 function updateFireViewport() {
@@ -422,7 +439,7 @@ async function loadWorldFrame() {
   }
   if (pendingFrame === path) {
     updateFireViewport();
-    renderFireLayer();
+    showWorldFrame();
     return;
   }
   worldRequest?.abort();
@@ -448,7 +465,10 @@ async function loadWorldFrame() {
     mapStatus(range ? 'Не удалось загрузить сводку. Повторите попытку или выберите меньший период.'
       : 'Мировые детекции за этот день не загрузились. Выберите другую дату или повторите попытку.');
   } finally {
-    if (worldRequest === request) pendingFrame = undefined;
+    if (worldRequest === request) {
+      pendingFrame = undefined;
+      updateFireLoading();
+    }
   }
 }
 
@@ -522,6 +542,7 @@ async function loadArchive() {
     $('play-weather').disabled = !renderExtraLayers;
     await setWorldDate(worldArchive.last);
   } catch (error) {
+    fireLoading('');
     $('frame-date').textContent = 'Архив недоступен';
     mapStatus('Не удалось подключиться к мировому архиву FIRMS.');
     console.error(error);
@@ -903,6 +924,7 @@ async function start() {
     chooseMonth(Math.max(0, initial));
     loadArchive();
   } catch (error) {
+    fireLoading('');
     mapStatus('Не удалось загрузить атлас.');
     console.error(error);
   }

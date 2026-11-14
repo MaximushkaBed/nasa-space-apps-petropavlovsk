@@ -8,9 +8,9 @@
   <title>Атлас пожаров · NASA FIRMS</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=fire-contrast">
+  <link rel="stylesheet" href="styles.css?v=fire-loading">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=fire-contrast" type="module"></script>
+  <script src="app.js?v=fire-loading" type="module"></script>
   <script src="correlations.js?v=ndvi" type="module"></script>
   <script src="burn-case.js?v=atlas-workspace" type="module"></script>
 </head>
@@ -65,6 +65,10 @@
       </div>
       <p id="area-instruction" class="area-instruction" role="status" hidden></p>
       <div class="map-message" id="map-message" role="status" hidden></div>
+      <div class="fire-loading" id="fire-loading" role="status" aria-atomic="true">
+        <span class="fire-loading-spinner" aria-hidden="true"></span>
+        <span id="fire-loading-label">Подключаемся к архиву FIRMS…</span>
+      </div>
       <dialog class="period-picker" id="period-picker" aria-labelledby="period-heading">
         <form id="period-form">
           <div class="drawer-heading">
