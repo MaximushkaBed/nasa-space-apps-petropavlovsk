@@ -14,7 +14,6 @@ export function createWorldWind(map, status) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const gridCache = new Map();
   let wind;
-  let request;
   let frame;
   let particles = [];
   let vectors = [];
@@ -115,34 +114,22 @@ export function createWorldWind(map, status) {
   map.on('moveend resize', reset);
   reduced.addEventListener('change', reset);
   return {
-    async show(day) {
-      if (request && request.day === day) return request.promise;
-      if (!day || day < windArchiveStart) {
-        request = wind = undefined;
-        reset();
-        setStatus(day ? `Архив потоков NOAA GFS доступен с ${windArchiveStart}.` : '');
-        return;
+    async prepare(day, previousDayAllowed) {
+      if (day < windArchiveStart) return { message: `Архив потоков NOAA GFS доступен с ${windArchiveStart}.` };
+      try {
+        const prior = dayBefore(day);
+        const grid = await cached(day) ?? (previousDayAllowed && prior >= windArchiveStart ? await cached(prior) : null);
+        return grid ? {
+          grid,
+          message: `NOAA GFS · 10 м · 1° · ${grid.day}, 00:00 UTC${grid.day !== day ? ' · предыдущий кадр' : ''}`,
+        } : { message: `В архиве NOAA GFS нет ветра за ${day} UTC.` };
+      } catch {
+        return { message: `Не удалось загрузить ветер NOAA GFS за ${day} UTC.` };
       }
-      const current = { day };
-      request = current;
-      const loading = wind ? `Загрузка · на карте ветер за ${wind.day}, 00:00 UTC` : 'Загружаем потоки ветра…';
-      setStatus(loading);
-      current.promise = (async () => {
-        try {
-          const prior = dayBefore(day);
-          const next = await cached(day) ?? (prior >= windArchiveStart ? await cached(prior) : null);
-          if (request !== current) return;
-          if (wind !== next) { wind = next; reset(); }
-          setStatus(next ? `NOAA GFS · 10 м · 1° · ${next.day}, 00:00 UTC${next.day !== day ? ' · предыдущий кадр' : ''}`
-            : 'В архиве NOAA GFS нет кадра на эту дату.');
-        } catch {
-          if (request !== current) return;
-          request = wind = undefined;
-          reset();
-          setStatus('Не удалось загрузить ветер NOAA GFS.');
-        }
-      })();
-      return current.promise;
+    },
+    display({ grid, message = '' } = {}) {
+      if (wind !== grid) { wind = grid; reset(); }
+      setStatus(message);
     },
     prefetch(day) { if (day >= windArchiveStart) cached(day).catch(() => {}); },
   };

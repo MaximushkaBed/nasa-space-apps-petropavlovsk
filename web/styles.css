@@ -191,7 +191,7 @@ body { overflow: hidden; }
 .weather-inspector { display: grid; gap: 4px; padding: 7px; border: 1px solid #365783; border-radius: 4px; background: #102447; font: 10px/1.45 var(--mono); }
 .weather-inspector strong { font-weight: 400; color: var(--atlas-accent); }
 .weather-inspector span { color: #c9dff7; }
-#map .leaflet-control-scale { margin-bottom: 126px; }
+#map .leaflet-control-scale { margin-bottom: 126px; pointer-events: none; }
 #map .leaflet-control-scale-line { background: #0b1c3de8; border-color: #8ba5cb; color: var(--text); text-shadow: none; }
 .leaflet-container .leaflet-control-attribution { background: #07173fee; color: #e4edff; font-size: 9px; }
 .leaflet-control-attribution a { color: #d3e5ff; }

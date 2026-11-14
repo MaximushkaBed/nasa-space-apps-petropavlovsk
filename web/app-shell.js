@@ -70,7 +70,7 @@ async function ensureView(name) {
     if(key==='atlas'){
       root=await fragment('atlas.html');root.id='atlas-view';root.className='app-view atlas-view';
       $('app-outlet').append(root);views.set('atlas',root);visibility();
-      const [{mountAtlas},{mountCorrelations},{mountBurnCase}]=await Promise.all([import('./app.js?v=viewport-playback'),import('./correlations.js?v=shell'),import('./burn-case.js?v=shell')]);
+      const [{mountAtlas},{mountCorrelations},{mountBurnCase}]=await Promise.all([import('./app.js?v=paired-days'),import('./correlations.js?v=shell'),import('./burn-case.js?v=shell')]);
       controller=mountAtlas(root,bridgeFor('atlas'));
       controllers.set('atlas',controller);
       mountCorrelations(root);mountBurnCase(root);

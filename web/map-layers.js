@@ -34,10 +34,13 @@ function cloudTileLayer(url, options) {
   const layer = L.tileLayer(url, options);
   layer.createTile = function (coords, done) {
     const tile = document.createElement('canvas');
+    const finish = (error) => {
+      if (tile.isConnected) done(error, tile);
+    };
     tile.width = tile.height = 256;
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onerror = () => done(new Error('NASA cloud tile unavailable'), tile);
+    img.onerror = () => finish(new Error('NASA cloud tile unavailable'));
     img.onload = async () => {
       try {
         cloudPalette ??= fetch('https://gibs.earthdata.nasa.gov/colormaps/v1.3/MODIS_Cloud_Fraction.xml', {
@@ -64,8 +67,8 @@ function cloudTileLayer(url, options) {
           pixels[i + 3] = 255 * (cloud / 100) ** 1.55;
         }
         context.putImageData(image, 0, 0);
-        done(null, tile);
-      } catch (error) { done(error, tile); }
+        finish();
+      } catch (error) { finish(error); }
     };
     tile.dataset.source = img.src = this.getTileUrl(coords);
     return tile;
@@ -184,7 +187,7 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
           } else if (previous) shown.removeLayer(previous);
           tiles.setOpacity(entry.opacity.valueAsNumber / 100);
           tiles.setZIndex(entry.order * 2);
-        } else shown.removeLayer(tiles);
+        } else queueMicrotask(() => shown.removeLayer(tiles));
         resolve();
       }
       const ready = () => finish(loaded > 0);

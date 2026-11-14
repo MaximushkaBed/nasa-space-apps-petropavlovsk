@@ -1,10 +1,10 @@
 'use strict';
 
-import { createExtraLayers } from './map-layers.js?v=weather-motion';
-import { createWorldWind } from './world-wind.js?v=weather-motion';
+import { createExtraLayers } from './map-layers.js?v=paired-days';
+import { createWorldWind } from './world-wind.js?v=paired-days';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
 import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=fire-contrast';
-import { createFireViewport } from './fire-viewport.js?v=viewport-playback';
+import { createFireViewport } from './fire-viewport.js?v=paired-days';
 import { createAreaAnalysis, inRing } from './area-analysis.js?v=viewport-playback';
 import { addDays, createPeriodPicker, daysBetween } from './period-picker.js?v=atlas-periods';
 
@@ -46,7 +46,8 @@ let worldRequest;
 let activePeriod;
 let inspectionPeriod;
 let dailySatellite = '';
-let playbackTimer;
+let playback;
+let dayWeather;
 let layerRequest = 0;
 let renderExtraLayers;
 let weatherData;
@@ -308,46 +309,77 @@ function updateFireLoading() {
   const message = viewport && viewportFrame?.status === 'loading' ? 'Загружаем детекции на этом участке…'
     : worldRequest && (!viewport || !viewportFrame || viewportFrame.status === 'ok')
       ? grouped ? 'Загружаем сводку за период…' : 'Загружаем детекции за день…' : '';
-  fireLoading(visible && message ? `${message} ${firePeriodLabel(activePeriod)} UTC` : '');
+  const waitingForWeather = !grouped && dayWeather && dayWeather.day === activePeriod?.start && !dayWeather.ready;
+  const label = visible && message ? message : waitingForWeather ? 'Загружаем погоду за день…' : '';
+  fireLoading(label ? `${label} ${firePeriodLabel(activePeriod)} UTC` : '');
 }
 
 function stopPlayback() {
-  clearTimeout(playbackTimer);
-  playbackTimer = undefined;
+  clearTimeout(playback?.timer);
+  playback = undefined;
+  fireViewport?.cancelPrefetch();
   $('play-frames').replaceChildren(element('span', '▶'), document.createTextNode(' Воспроизвести'));
   $('play-frames').firstChild.setAttribute('aria-hidden', 'true');
   $('play-weather').setAttribute('aria-pressed', 'false');
   $('play-weather').textContent = '▶ Погода';
 }
 
-async function renderWeather(date, request) {
-  const field = $('weather-field').value;
-  const showWind = $('wind-layer').checked;
-  if (!field && !showWind) return weatherOverlay.clear();
-  if (!date) return weatherOverlay.clear('Выберите день на шкале, чтобы увидеть погоду.');
+async function prepareLocalWeather(date) {
   try {
     weatherData ??= getJSON('data/weather.json?v=sko-layers');
     const data = await weatherData;
-    if (request !== layerRequest) return;
-    if (!data.days[date]) return weatherOverlay.clear('Архивная погода за этот день недоступна.');
-    weatherOverlay.show(data, date, field, showWind);
+    return data.days[date] ? { data } : { message: `Архивная погода СКО за ${date} UTC недоступна.` };
   } catch (error) {
     weatherData = undefined;
     console.error(error);
-    if (request === layerRequest) weatherOverlay.clear('Не удалось загрузить архивную погоду.');
+    return { message: `Не удалось загрузить архивную погоду за ${date} UTC.` };
   }
+}
+
+function displayWeather({ day, world, local }) {
+  worldWind.display(world);
+  if (local?.data) weatherOverlay.show(local.data, day, $('weather-field').value, $('wind-layer').checked);
+  else weatherOverlay.clear(local?.message);
+}
+
+function prepareDayWeather(day, previousDayAllowed) {
+  const worldEnabled = $('world-wind-flow').checked;
+  const localEnabled = Boolean($('weather-field').value || $('wind-layer').checked);
+  const key = `${day}/${worldEnabled}/${localEnabled}/${previousDayAllowed}`;
+  if (dayWeather?.key === key) return dayWeather;
+  const current = { day, key, ready: !worldEnabled && !localEnabled };
+  dayWeather = current;
+  if (!worldEnabled) worldWind.display();
+  if (!localEnabled) weatherOverlay.clear();
+  if (current.ready) return current;
+  current.promise = Promise.all([
+    worldEnabled ? worldWind.prepare(day, previousDayAllowed) : undefined,
+    localEnabled ? prepareLocalWeather(day) : undefined,
+  ]).then(([world, local]) => {
+    Object.assign(current, { world, local, ready: true });
+  });
+  return current;
 }
 
 async function renderLayers(day = $('world-date').value) {
   const request = ++layerRequest;
   const date = typeof day === 'string' ? day : $('world-date').value;
-  if (!date) return;
+  if (!date || !active) return;
+  const daily = activePeriod?.start === activePeriod?.end;
+  const weather = prepareDayWeather(date, !daily);
   const month = date.slice(0, 7);
   const status = $('map-layer-status');
   status.hidden = true;
   status.textContent = '';
-  const [, events] = await Promise.all([renderWeather(date, request), renderExtraLayers?.(month, date),
-    worldWind.show($('world-wind-flow').checked && active ? date : undefined)]);
+  const layers = renderExtraLayers?.(month, date);
+  if (weather.promise) await weather.promise;
+  if (request !== layerRequest || !active) return;
+  if (!daily) displayWeather(weather);
+  else if (!presentFireFrame()) {
+    if (worldFrame?.start === date && worldFrame?.end === date) displayWeather(weather);
+    updateFireLoading();
+  }
+  const events = await layers;
   if (request !== layerRequest) return;
   const items = (events ?? []).filter(Boolean);
   if (activePeriod?.start !== activePeriod?.end && items.length) items.unshift(`Дата спутниковых слоёв и погоды · ${date} UTC`);
@@ -407,13 +439,15 @@ function useLocalDay() {
   return fireViewport.fits(viewportLimits());
 }
 
+function viewportQuery(start, end, satellite) {
+  return { start, end, satellite, ...viewportLimits(), key: `${start}/${end}/${satellite}` };
+}
+
 function updateFireViewport() {
   if (!active || !requestedFire) return fireViewport.select(undefined);
   const { start, end, satellite, local } = requestedFire;
-  return fireViewport.select(local || (start !== end && $('fire-layer').checked) ? {
-    start, end, satellite, ...viewportLimits(),
-    key: `${start}/${end}/${satellite}`,
-  } : undefined, local);
+  return fireViewport.select(local || (start !== end && $('fire-layer').checked)
+    ? viewportQuery(start, end, satellite) : undefined, local);
 }
 
 function renderAreaFrame(points = firePoints(), failed = false) {
@@ -459,31 +493,36 @@ function showWorldFrame() {
 }
 
 function presentFireFrame() {
-  if (!requestedFire) return false;
+  if (!active || !requestedFire) return false;
   const { start, end, satellite, path, local } = requestedFire;
+  const daily = start === end;
+  if (daily && (activePeriod.start !== start || activePeriod.end !== end)) return false;
   if (local) {
+    if (!useLocalDay()) return false;
     if (viewportFrame?.status !== 'ok') {
       if (!worldFrame && viewportFrame && viewportFrame.status !== 'loading') {
         $('map-summary').textContent = 'Данные участка недоступны';
         renderAreaFrame(undefined, true);
       }
+      if (playback?.day === start && playback.timer === undefined && viewportFrame && viewportFrame.status !== 'loading') stopPlayback();
       return false;
     }
+    if (!viewportFrame.coversView() || !dayWeather?.ready || dayWeather.day !== start) return false;
     worldFrame = { start, end, satellite, path, local, points: viewportFrame.points };
     displayedViewport = viewportFrame;
-    mapStatus('');
-    showWorldFrame();
-    return true;
+  } else {
+    if (loadedFrame?.path !== path || (daily && (!dayWeather?.ready || dayWeather.day !== start))) return false;
+    const needsDetail = !daily && map.getZoom() >= fireDetailZoom && $('fire-layer').checked;
+    const sameFrame = worldFrame?.path === path && worldFrame.satellite === satellite;
+    const detailReady = viewportFrame?.status === 'ok';
+    if (needsDetail && !detailReady && (!viewportFrame || viewportFrame.status === 'loading' || (worldFrame && !sameFrame))) return false;
+    worldFrame = { ...loadedFrame, start, end, satellite };
+    displayedViewport = needsDetail && detailReady ? viewportFrame : undefined;
   }
-  if (loadedFrame?.path !== path) return false;
-  const needsDetail = start !== end && map.getZoom() >= fireDetailZoom && $('fire-layer').checked;
-  const sameFrame = worldFrame?.path === requestedFire.path && worldFrame.satellite === satellite;
-  const detailReady = viewportFrame?.status === 'ok';
-  if (needsDetail && !detailReady && (!viewportFrame || viewportFrame.status === 'loading' || (worldFrame && !sameFrame))) return false;
-  worldFrame = { ...loadedFrame, start, end, satellite };
-  displayedViewport = needsDetail && detailReady ? viewportFrame : undefined;
+  if (daily) displayWeather(dayWeather);
   mapStatus('');
   showWorldFrame();
+  if (daily) scheduleNextDay(start);
   return true;
 }
 
@@ -539,6 +578,7 @@ async function loadWorldFrame() {
       renderAreaFrame(undefined, true);
       if (!worldFrame) $('map-summary').textContent = 'Данные мира недоступны';
       mapStatus(`Не удалось загрузить детекции за ${firePeriodLabel(activePeriod)} UTC.${worldFrame ? ' На карте остаются предыдущие данные.' : ''}`);
+      if (playback?.day === start && playback.timer === undefined) stopPlayback();
     } finally {
       if (worldRequest === request) worldRequest = undefined;
       if (!controller.signal.aborted) updateFireLoading();
@@ -628,23 +668,34 @@ async function loadArchive() {
   }
 }
 
+function scheduleNextDay(day) {
+  const playing = playback;
+  if (!playing || playing.day !== day) return;
+  if (day === playing.last) return stopPlayback();
+  const next = addDays(day, 1);
+  if (useLocalDay()) fireViewport.prefetch(viewportQuery(next, next, $('world-satellite').value));
+  if ($('world-wind-flow').checked) worldWind.prefetch(next);
+  playing.timer ??= setTimeout(() => advancePlayback(playing, next), 850);
+}
+
+function advancePlayback(playing, day) {
+  if (playback !== playing) return;
+  playing.timer = undefined;
+  playing.day = day;
+  setWorldDate(day, true);
+}
+
 function togglePlayback() {
-  if (playbackTimer !== undefined) {
+  if (playback) {
     stopPlayback();
     return;
   }
   const current = $('world-date').value;
   const [first, last] = sliderRange(current);
+  const playing = { last };
+  playback = playing;
   $('play-frames').textContent = 'Ⅱ Пауза';
-  const advance = async (day) => {
-    const playing = playbackTimer;
-    if ($('world-wind-flow').checked && day < last) worldWind.prefetch(addDays(day, 1));
-    await setWorldDate(day, true);
-    if (playbackTimer !== playing) return;
-    if (day === last) return stopPlayback();
-    playbackTimer = setTimeout(() => advance(addDays(day, 1)), 850);
-  };
-  playbackTimer = setTimeout(() => advance(current === last ? first : current), 0);
+  playing.timer = setTimeout(() => advancePlayback(playing, current === last ? first : current), 0);
 }
 
 function toggleWeatherPlayback() {
@@ -663,8 +714,8 @@ function toggleWeatherPlayback() {
     inspectionPeriod = activePeriod;
     setWorldDate(activePeriod.start, true);
   }
-  if (playbackTimer === undefined && !$('play-frames').disabled) togglePlayback();
-  if (playbackTimer !== undefined) {
+  if (!playback && !$('play-frames').disabled) togglePlayback();
+  if (playback) {
     $('play-weather').setAttribute('aria-pressed', 'true');
     $('play-weather').textContent = 'Ⅱ Пауза';
   }
@@ -1085,7 +1136,9 @@ return {
     stopPlayback();
     fireViewport?.select(undefined);
     weatherOverlay?.pause?.();
-    worldWind?.show(undefined);
+    ++layerRequest;
+    dayWeather = undefined;
+    worldWind?.display();
     for (const dialog of root.querySelectorAll('dialog[open]')) dialog.close();
   },
   beginSelection(mode = 'search') { root.querySelector(mode === 'polygon' ? '#area-polygon' : mode === 'circle' ? '#area-circle' : '#area-search-mode')?.click(); },
