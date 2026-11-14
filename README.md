@@ -6,9 +6,13 @@ Selected challenge: **Harmonization of MODIS and VIIRS Hot Spots**.
 
 Local challenge label supplied by the team: `15 - Harmonization of MODIS and VIIRS Hot Spots_4.3`.
 
-The repository includes a Python downloader for NASA FIRMS hotspot observations. The application scope, team roster, and web stack are still to be defined.
+The repository includes a NASA FIRMS downloader, a historical database, and a static web prototype.
 
 The initial study area is **North Kazakhstan Region (Северо-Казахстанская область, СКО)**.
+
+## Web MVP
+
+From the repository root, run `python -m http.server 8000 --bind 127.0.0.1 --directory web` and open [localhost:8000](http://127.0.0.1:8000/). The app uses bundled assets and the validated April–October 2020–2025 data snapshot. See the [MVP documentation](web/README.md) for methodology and data export.
 
 ## Research
 
