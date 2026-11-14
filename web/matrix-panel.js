@@ -14,9 +14,10 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
  <p class="matrix-scope"></p><button class="primary matrix-run" type="button" ${automatic?'hidden':''}>Рассчитать матрицу</button>
  <p class="matrix-status" role="status">Сначала постройте временной анализ. Матрица рассчитывается отдельным запросом.</p><progress class="matrix-progress" max="100" value="0" hidden aria-label="Прогресс расчёта матрицы"></progress>
  <div class="matrix-controls" hidden><label>Метод<select class="matrix-mode"><option value="within">По дням · внутри месяцев</option><option value="pooled">По дням · весь период</option><option value="space">По участкам</option></select></label><label>Спутник<select class="matrix-platform"></select></label></div>
- <div class="matrix-warnings" hidden></div><div class="matrix-grid"></div><p class="matrix-definition" hidden></p>
+ <div class="matrix-grid"></div><p class="matrix-definition" hidden></p>
  <section class="matrix-pair" hidden><h4 class="matrix-pair-title"></h4><p class="matrix-pair-summary"></p><div class="matrix-scatter"></div><p class="matrix-pair-note"></p><button class="outline matrix-on-map" type="button" hidden>Показать участки в атласе</button></section>
  <div class="matrix-exports" hidden><button class="outline matrix-export-csv" type="button">Матрица CSV ↓</button><button class="outline matrix-export-json" type="button">Данные JSON ↓</button><button class="outline matrix-export-image" type="button">График SVG ↓</button></div>
+ <details class="matrix-warnings" hidden><summary>Ограничения данных и метода</summary><div></div></details>
  <details class="matrix-provenance" hidden><summary>Источники и параметры матрицы</summary><pre></pre></details>`;
  const $=selector=>root.querySelector(selector);
  let id=null,result=null,busy=false,paused=false,visible=false,epoch=0,pollEpoch=0,mode='within',platform=null,pair=[0,1],analysisId=null,lastSource=null,hasError=false,restorePlatform=null;
@@ -71,8 +72,8 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
  function hideResults(){for(const selector of ['.matrix-controls','.matrix-warnings','.matrix-definition','.matrix-pair','.matrix-exports','.matrix-provenance'])$(selector).hidden=true;$('.matrix-grid').replaceChildren();}
  function showResults(){
   for(const selector of ['.matrix-controls','.matrix-definition','.matrix-exports','.matrix-provenance'])$(selector).hidden=false;
-  const warnings=result.warnings||[];$('.matrix-warnings').replaceChildren();$('.matrix-warnings').hidden=!warnings.length;
-  for(const warning of warnings){const p=element('p',{},typeof warning==='string'?warning:JSON.stringify(warning));$('.matrix-warnings').append(p);}
+  const warnings=result.warnings||[];const list=$('.matrix-warnings div');list.replaceChildren();$('.matrix-warnings').hidden=!warnings.length;
+  for(const warning of warnings){const p=element('p',{},typeof warning==='string'?warning:JSON.stringify(warning));list.append(p);}
   $('.matrix-provenance pre').textContent=JSON.stringify({analysis_id:analysisId,matrix_id:id,config:result.config,snapshot_at:result.snapshot_at,through:result.through,version:result.version,provenance:result.provenance,warnings:result.warnings},null,2);
  }
  function reasonLabel(detail,cell){

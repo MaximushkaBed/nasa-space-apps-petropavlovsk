@@ -1,4 +1,4 @@
-import { mountMatrixPanel } from './matrix-panel.js?v=auto-study';
+import { mountMatrixPanel } from './matrix-panel.js?v=archive';
 
 const sources = ['Aqua', 'Terra', 'Suomi-NPP', 'NOAA-20', 'NOAA-21'];
 const preferred = ['NOAA-20', 'NOAA-21', 'Suomi-NPP', 'Aqua', 'Terra'];
@@ -22,7 +22,9 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   const platform = $('study-platform'), retry = $('study-retry');
   platform.add(new Option('Авто · доступный спутник', 'auto'));
   for (const source of sources) platform.add(new Option(source, source));
-  let roi, scopeKey, archive, job, timer, controller, worldSnapshot, worldDownload;
+  let roi, scopeKey, archive, job, timer, controller, worldSnapshot, worldDownload, worldCalendar, calendarTimer;
+  let allWorld = true;
+  let openTab;
   const analyses = new Map();
   const matrices = new Map();
   const dates = { start, end, baseline_start: baselineStart, baseline_end: baselineEnd };
@@ -35,7 +37,10 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     return (available(selected) ? selected : preferred.find(available)) || 'NOAA-20';
   }
   const matrix = mountMatrixPanel($('external-factors'), {
-    request, automatic: true, getAnalysis: () => job && { ...job, platform: matrixSource() },
+    request, automatic: true, getAnalysis: () => {
+      const analysis = allWorld && !roi ? worldSnapshot?.analysis : job;
+      return analysis && { ...analysis, platform: matrixSource() };
+    },
   });
 
   function setScope(next) {
@@ -43,20 +48,24 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     if (key === scopeKey) return;
     roi = next;
     scopeKey = key;
+    allWorld = !roi;
     $('study-area').textContent = roi?.name || 'Весь мир';
-    if (!roi && worldSnapshot) setDates(worldSnapshot.analysis.result.config);
-    else if (roi && archive && (!start.value || start.value < archive.first || end.value > archive.last)) setArchiveDates();
+    if (!roi && worldCalendar) setWorldDates();
+    else if (roi && archive) setArchiveDates();
+    $('study-default-period').hidden = Boolean(roi);
     schedule();
   }
 
   function schedule(delay = roi ? 650 : 0) {
     clearTimeout(timer);
+    clearTimeout(calendarTimer);
     controller?.abort();
     job = undefined;
     retry.hidden = true;
     $('study-calendar').replaceChildren();
     $('study-calendar-detail').textContent = '';
     matrix.reset();
+    $('study-spinner').hidden = false;
     status.textContent = roi ? 'Готовим календарь и связи для выбранной области…' : 'Загружаем готовый мировой обзор…';
     timer = setTimeout(load, delay);
   }
@@ -80,7 +89,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     addHeader(header, 'UTC', 'col');
     for (let m = 1; m <= 12; m++) addHeader(header, monthName.format(new Date(Date.UTC(2024, m - 1, 1))), 'col');
     const body = table.createTBody();
-    const years = new Set([...byMonth.keys()].map(month => month.slice(0, 4)));
+    const years = [...new Set([...byMonth.keys()].map(month => month.slice(0, 4)))].sort().reverse();
     for (const year of years) {
       const line = body.insertRow();
       addHeader(line, year, 'row');
@@ -88,22 +97,32 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
         const cell = line.insertCell();
         const key = `${year}-${String(m).padStart(2, '0')}`;
         const rows = byMonth.get(key);
-        const row = platform.value === 'auto' ? preferred.map(name => rows?.get(name)).find(item => item?.cells != null) : rows?.get(platform.value);
-        if (row?.cells == null) { cell.textContent = '—'; continue; }
+        const metric = job.live ? 'points' : 'cells';
+        const row = platform.value === 'auto' ? preferred.map(name => rows?.get(name)).find(item => item?.[metric] != null) : rows?.get(platform.value);
+        if (row?.[metric] == null) { cell.textContent = '—'; continue; }
         const button = document.createElement('button');
         button.type = 'button';
         const value = document.createElement('span'), source = document.createElement('span');
-        value.textContent = number.format(row.cells);
+        value.textContent = number.format(row[metric]);
         source.className = 'calendar-source';
         source.textContent = row.platform;
+        if (row.preliminary) {
+          const badge = document.createElement('span');
+          badge.className = 'calendar-nrt';
+          badge.textContent = 'NRT';
+          source.append(' ', badge);
+        }
         const deviation = row.anomaly_pct == null ? 'Историческая норма недоступна'
           : `${row.anomaly_pct > 0 ? '+' : ''}${number.format(row.anomaly_pct)}% к норме`;
-        button.title = `${key} · ${row.platform} · ${number.format(row.cells)} ячейко-дней · ${deviation}`;
+        const unit = job.live ? 'детекций' : 'ячейко-дней';
+        const quality = row.preliminary ? ' · предварительные данные (NRT)' : '';
+        const partial = row.partial ? ' · неполный месяц' : '';
+        button.title = `${key} · ${row.platform} · ${number.format(row[metric])} ${unit} · ${deviation}${quality}${partial}`;
         button.style.background = row.anomaly_pct == null ? '#223453' : row.anomaly_pct > 10 ? '#833719' : row.anomaly_pct < -10 ? '#1f507e' : '#263c60';
         button.setAttribute('aria-label', button.title);
         button.append(value, source);
         button.addEventListener('click', () => {
-          $('study-calendar-detail').textContent = button.title + ` · ${number.format(row.points)} детекций`;
+          $('study-calendar-detail').textContent = button.title + (job.live ? '' : ` · ${number.format(row.points)} детекций`);
           table.querySelector('[aria-current]')?.removeAttribute('aria-current');
           button.setAttribute('aria-current', 'date');
           const first = `${key}-01`;
@@ -115,7 +134,9 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
       }
     }
     $('study-calendar').replaceChildren(table);
-    $('study-calendar-detail').textContent = 'Ячейко-дни: число ячеек с сигналом за сутки, суммированное за месяц. Отклонение считается по тому же спутнику. При смене спутника в режиме «Авто» меняется источник исходных значений. Нажмите месяц, чтобы открыть его на карте.';
+    $('study-calendar-detail').textContent = job.live
+      ? 'Детекции FIRMS по спутнику. Цвет показывает отклонение от нормы 2022–2024 при наличии сопоставимых данных. Нажмите месяц, чтобы открыть его на карте.'
+      : 'Ячейко-дни · отклонение от нормы по тому же спутнику. Нажмите месяц, чтобы открыть его на карте.';
   }
 
   function config() {
@@ -137,6 +158,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
 
   function showJob(analysis, snapshot = false) {
     job = analysis;
+    $('study-spinner').hidden = true;
     const { start, end, grid_km: grid } = job.result.config;
     const snapshotDate = job.result.snapshot_at?.slice(0, 10);
     status.textContent = `${start} — ${end} UTC · SP · сетка ${grid} км · локальная видимость неизвестна.${snapshot ? ` Готовый мировой обзор · 85° ю. ш. — 85° с. ш.${snapshotDate ? ` · снимок архива ${snapshotDate}` : ''}` : ''}`;
@@ -167,6 +189,40 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     setDates({ ...range, baseline_start: year, baseline_end: Math.min(year + 2, Number(range.end.slice(0, 4))) });
   }
 
+  function setWorldDates() {
+    setDates({ start: worldCalendar.start, end: worldCalendar.end, baseline_start: 2022, baseline_end: 2024 });
+  }
+
+  async function refreshWorld(signal) {
+    try {
+      const data = await request('/api/v1/world-calendar', { signal });
+      if (signal.aborted) return;
+      if (data.monthly?.length && (data.revision !== worldCalendar?.revision || !job?.live)) presentWorld(data);
+      calendarTimer = setTimeout(() => refreshWorld(signal), data.monthly ? 60_000 : 6000);
+    } catch {
+      if (!signal.aborted) calendarTimer = setTimeout(() => refreshWorld(signal), 15_000);
+    }
+  }
+
+  function presentWorld(data) {
+    worldCalendar = data;
+    if (archive && data.end > archive.last) archive.last = data.end;
+    setWorldDates();
+    job = { live: true, result: { config: { start: data.start, end: data.end }, monthly: data.monthly } };
+    $('study-spinner').hidden = true;
+    worldStatus();
+    renderCalendar();
+  }
+
+  function worldStatus() {
+    if (openTab === '#external-factors' && worldSnapshot) {
+      const { start, end } = worldSnapshot.analysis.result.config;
+      status.textContent = `${start} — ${end} UTC · связи факторов по исторической выборке`;
+    } else if (job?.live) {
+      status.textContent = `${worldCalendar.start} — ${worldCalendar.end} UTC · детекции SP и NRT`;
+    }
+  }
+
   function loadDefault() {
     const download = async () => {
       if ('DecompressionStream' in window) {
@@ -195,6 +251,28 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   async function load() {
     const signal = (controller = new AbortController()).signal;
     let key;
+    if (!roi && allWorld) {
+      if (worldCalendar) presentWorld(worldCalendar);
+      else request('data/world-calendar.json', { signal }).then(data => {
+        if (!signal.aborted && !job?.live && data.monthly?.length) presentWorld(data);
+      }).catch(() => {});
+      refreshWorld(signal);
+      try {
+        const snapshot = await loadDefault();
+        if (signal.aborted) return;
+        if (!job) {
+          setDates(snapshot.analysis.result.config);
+          showJob(snapshot.analysis, true);
+          status.textContent = '2022–2025 · загружается полный архив…';
+          $('study-spinner').hidden = false;
+        }
+        matrix.loadSnapshot(snapshot.matrix.id, snapshot.matrix.result);
+        worldStatus();
+      } catch (error) {
+        if (!signal.aborted && !job) status.textContent = error.message;
+      }
+      return;
+    }
     try {
       const snapshot = await loadDefault().catch(error => {
         if (!roi) throw error;
@@ -203,12 +281,6 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
       if (signal.aborted) return;
       const defaults = snapshot?.analysis.result.config ?? defaultStudyDates;
       if (!start.value) setDates(defaults);
-      const useDefault = !roi && Object.entries(dates).every(([name, input]) => String(defaults[name]) === input.value);
-      if (useDefault) {
-        showJob(snapshot.analysis, true);
-        matrix.loadSnapshot(snapshot.matrix.id, snapshot.matrix.result);
-        return;
-      }
       if (!archive) return;
       const body = config();
       key = JSON.stringify(body);
@@ -246,12 +318,18 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
       if (signal.aborted) return;
       if (key && !job) analyses.delete(key);
       status.textContent = error.message;
+      $('study-spinner').hidden = true;
       retry.hidden = false;
     }
   }
 
   retry.addEventListener('click', () => schedule(0));
+  $('study-default-period').addEventListener('click', () => {
+    allWorld = true;
+    schedule(0);
+  });
   for (const input of [start, end]) input.addEventListener('change', () => {
+    allWorld = false;
     if (start.value && end.value && start.value <= end.value) {
       const first = Number(start.value.slice(0, 4));
       const last = Number(end.value.slice(0, 4));
@@ -263,7 +341,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     }
     schedule(750);
   });
-  for (const input of [baselineStart, baselineEnd]) input.addEventListener('change', () => schedule(750));
+  for (const input of [baselineStart, baselineEnd]) input.addEventListener('change', () => { allWorld = false; schedule(750); });
   platform.addEventListener('change', () => { renderCalendar(); matrix.refresh(); });
 
   return {
@@ -280,10 +358,12 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
       if (roi) schedule();
     },
     show(tab) {
+      openTab = tab;
       panel.hidden = !tab;
       $('activity-calendar').hidden = tab !== '#activity-calendar';
       $('external-factors').hidden = tab !== '#external-factors';
       matrix.setVisible(tab === '#external-factors');
+      if (!roi && allWorld) worldStatus();
     },
   };
 }

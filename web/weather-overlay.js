@@ -259,6 +259,21 @@ export function createWeatherOverlay(map, boundary, formatDate, scope = document
   reducedMotion.addEventListener('change', () => refresh());
 
   return {
+    inspect(latlng) {
+      if (!current || !grid) return [];
+      const p = map.latLngToContainerPoint(latlng);
+      if (!color.isPointInPath(grid.clip, p.x, p.y, 'evenodd')) return [];
+      const entries = weights(latlng.lat, latlng.lng, stations);
+      if (!entries) return [];
+      const items = [];
+      const make = (label, value) => ({ label, value, source: 'ERA5 · интерполяция по СКО', date: current.date });
+      if (field) {
+        const spec = fields[field];
+        items.push(make(spec.title, `${measure.format(weighted(entries, current.samples, spec.index))} ${spec.unit}`));
+      }
+      if (flow) items.push(make('Ветер', `${measure.format(weighted(entries, current.samples, 1))} м/с`));
+      return items;
+    },
     pause() { paused = true; cancelAnimationFrame(frame); },
     resume() { paused = false; refresh(); },
     clear(message = '') {

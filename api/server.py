@@ -586,6 +586,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlsplit(self.path)
         try:
+            if parsed.path == '/api/v1/world-calendar':
+                saved = CACHE / 'world-calendar' / 'published.json'
+                try:
+                    with saved.open('rb') as stream:
+                        return self.respond(200, stream.read())
+                except FileNotFoundError:
+                    seed = ROOT / 'web/data/world-calendar.json'
+                    return self.respond(200, seed.read_bytes()) if seed.is_file() else self.respond(202, {'status': 'preparing'})
             if parsed.path == '/api/v1/health':
                 return self.respond(200, {'status':'ok','data_available':(DATA/'manifest.json').exists()})
             if parsed.path == '/api/v1/config':
@@ -661,4 +669,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    from api.world_calendar import run as refresh_world_calendar
+    threading.Thread(target=refresh_world_calendar, args=(DATA, CACHE, pinned_sources, atomic_json), daemon=True).start()
     ThreadingHTTPServer(('0.0.0.0',8081),Handler).serve_forever()

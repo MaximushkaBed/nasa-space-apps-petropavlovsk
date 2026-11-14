@@ -1,4 +1,5 @@
 import { createGibsDates } from './gibs-dates.js?v=world-layers';
+import { colorKey, formatPixel, loadPalette, paletteLayers } from './layer-values.js?v=archive';
 
 function externalLink(url, label) {
   try {
@@ -29,10 +30,13 @@ function eventPopup(feature, spec) {
   return root;
 }
 
-let cloudPalette;
-function cloudTileLayer(url, options) {
+function inspectableTiles(url, options, clouds = false) {
   const layer = L.tileLayer(url, options);
-  layer.createTile = function (coords, done) {
+  const read = document.createElement('canvas');
+  read.width = read.height = 1;
+  const probe = read.getContext('2d', { willReadFrequently: true });
+  const original = new WeakMap();
+  if (clouds) layer.createTile = function (coords, done) {
     const tile = document.createElement('canvas');
     const finish = (error) => {
       if (tile.isConnected) done(error, tile);
@@ -43,35 +47,42 @@ function cloudTileLayer(url, options) {
     img.onerror = () => finish(new Error('NASA cloud tile unavailable'));
     img.onload = async () => {
       try {
-        cloudPalette ??= fetch('https://gibs.earthdata.nasa.gov/colormaps/v1.3/MODIS_Cloud_Fraction.xml', {
-          signal: AbortSignal.timeout(5000),
-        }).then(async (response) => {
-          if (!response.ok) throw new Error('NASA cloud palette unavailable');
-          const xml = new DOMParser().parseFromString(await response.text(), 'application/xml');
-          const entries = [...xml.querySelectorAll('ColorMapEntry[transparent="false"]')];
-          if (!entries.length) throw new Error('NASA cloud palette empty');
-          return new Map(entries.map((entry) => [entry.getAttribute('rgb').split(',').reduce((key, value) => key * 256 + Number(value), 0),
-            Number(entry.getAttribute('value'))]));
-        }).catch((error) => { cloudPalette = undefined; throw error; });
-        const palette = await cloudPalette;
+        const palette = await loadPalette('MODIS_Cloud_Fraction');
         const context = tile.getContext('2d', { willReadFrequently: true });
         context.drawImage(img, 0, 0);
         const image = context.getImageData(0, 0, 256, 256);
         const pixels = image.data;
         for (let i = 0; i < pixels.length; i += 4) {
           if (!pixels[i + 3]) continue;
-          const cloud = palette.get((pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2]) ?? 0;
+          const cloud = Number(palette.get(colorKey(pixels[i], pixels[i + 1], pixels[i + 2]))?.values().next().value) || 0;
           pixels[i] = 226;
           pixels[i + 1] = 239;
           pixels[i + 2] = 255;
           pixels[i + 3] = 255 * (cloud / 100) ** 1.55;
         }
         context.putImageData(image, 0, 0);
+        original.set(tile, img);
         finish();
       } catch (error) { finish(error); }
     };
     tile.dataset.source = img.src = this.getTileUrl(coords);
     return tile;
+  };
+  layer.pixelAt = (point) => {
+    const container = layer.getContainer();
+    if (!container) return;
+    for (const tile of container.querySelectorAll('.leaflet-tile-loaded')) {
+      const box = tile.getBoundingClientRect();
+      if (!box.width || point.x < box.left || point.x >= box.right || point.y < box.top || point.y >= box.bottom) continue;
+      const image = original.get(tile) ?? tile;
+      if (!image.naturalWidth) continue;
+      const x = Math.floor((point.x - box.left) * image.naturalWidth / box.width);
+      const y = Math.floor((point.y - box.top) * image.naturalHeight / box.height);
+      probe.clearRect(0, 0, 1, 1);
+      probe.drawImage(image, x, y, 1, 1, 0, 0, 1, 1);
+      const [r, g, b, a] = probe.getImageData(0, 0, 1, 1).data;
+      return a ? colorKey(r, g, b) : null;
+    }
   };
   return layer;
 }
@@ -165,12 +176,14 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
     const { spec, shown, input } = entry;
     const previous = entry.current;
     const opacity = entry.opacity.valueAsNumber / 100;
-    const tileLayer = spec.id === 'world-clouds' ? cloudTileLayer : L.tileLayer;
-    const tiles = tileLayer(/^https:\/\//.test(path) ? path : `data/${path}`, {
+    const url = /^https:\/\//.test(path) ? path : `data/${path}`;
+    const options = {
       maxNativeZoom: spec.maxNativeZoom ?? 8, maxZoom: map.getMaxZoom(), opacity: previous ? 0 : opacity,
       pane: spec.underlay ? 'observation-rasters' : 'event-layers', zIndex: entry.order * 2 + 1,
       attribution: `<a href="${spec.sourceUrl}">${spec.source}</a>`,
-    });
+    };
+    const tiles = paletteLayers[spec.id] ? inspectableTiles(url, { ...options, crossOrigin: 'anonymous' }, spec.id === 'world-clouds')
+      : L.tileLayer(url, options);
     return new Promise((resolve) => {
       let loaded = 0, timeout;
       function finish(swap) {
@@ -218,7 +231,7 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
     return cached.get(path);
   }
 
-  return async function render(month, date) {
+  async function render(month, date) {
     const next = ++revision;
     return Promise.all(layers.map(async (entry) => {
       const { spec, input, shown } = entry;
@@ -273,7 +286,14 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
               coordsToLatLng: ([lon, lat]) => L.latLng(lat, lon + offset),
               pointToLayer: (feature, latlng) => L.circleMarker(latlng,
                 { ...style, radius: 5, weight: 1.5, fillOpacity: .82 }),
-              onEachFeature: (feature, layer) => layer.bindPopup(() => eventPopup(feature, spec)),
+            onEachFeature: (feature, layer) => {
+              layer.bindPopup(() => eventPopup(feature, spec));
+              layer.bindTooltip(() => {
+                const caption = document.createElement('span');
+                caption.textContent = `${feature.properties.title || spec.label} · ${feature.properties.date ?? date}`;
+                return caption;
+              });
+            },
             }).addTo(shown);
           }
         }
@@ -292,5 +312,27 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
         return `${prefix} · слой не загрузился.`;
       }
     }));
+  }
+
+  render.inspect = async ({ originalEvent }) => {
+    if (!originalEvent) return [];
+    const point = { x: originalEvent.clientX, y: originalEvent.clientY };
+    return Promise.all(layers.map(async ({ spec, input, current, key }) => {
+      const palette = paletteLayers[spec.id];
+      if (!palette || !input.checked || input.closest('fieldset').hidden || !current?.pixelAt) return;
+      const date = key.match(/\/default\/(\d{4}-\d{2}-\d{2})\//)?.[1];
+      const shownDate = spec.composite ? `Композит с ${date}` : spec.id === 'world-wind' ? date?.slice(0, 7) : date;
+      const result = { label: spec.label, source: spec.source, date: shownDate };
+      try {
+        const pixel = current.pixelAt(point);
+        if (pixel === undefined) return;
+        if (pixel === null) return { ...result, value: 'Нет данных в пикселе' };
+        const colors = await loadPalette(palette.palette);
+        return { ...result, value: formatPixel(colors.get(pixel), palette) };
+      } catch {
+        return { ...result, value: 'Не удалось прочитать значение' };
+      }
+    }));
   };
+  return render;
 }

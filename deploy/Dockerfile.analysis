@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir --disable-pip-version-check -r requirements-analy
     && python -c "import ensurepip, shutil; shutil.rmtree(ensurepip.__path__[0])"
 COPY api/ api/
 COPY web/data/region.geojson web/data/region.geojson
+COPY web/data/world-calendar.json web/data/world-calendar.json
 COPY data/boundaries/north-kazakhstan.geojson data/boundaries/north-kazakhstan.geojson
 COPY docs/sko-validation/outages.csv docs/sko-validation/outages.csv
 ENV PYTHONUNBUFFERED=1 DUCKDB_EXTENSION_DIRECTORY=/opt/duckdb/extensions SPACEAPPS_DATA_DIR=/data SPACEAPPS_ANALYSIS_CACHE=/cache OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 GDAL_NUM_THREADS=1

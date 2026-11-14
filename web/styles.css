@@ -81,7 +81,19 @@ body { overflow: hidden; }
 .atlas-study .study-controls input[type=number] { width: 78px; }
 .atlas-study .calendar { min-width: 650px; }
 .atlas-study .calendar button { min-height: 43px; }
+.atlas-study .calendar thead { position: sticky; top: 0; z-index: 1; background: #091a35; }
+.atlas-study .calendar-nrt { color: #ffd39b; }
 .atlas-study #activity-calendar, .atlas-study #external-factors { margin-top: 12px; }
+.atlas-study .study-status { display: flex; align-items: center; gap: 8px; min-height: 24px; color: var(--muted); }
+.atlas-study #study-settings { padding: 10px 0 0; border-top: 1px solid var(--line); }
+.atlas-study #study-default-period { margin-top: 8px; }
+.atlas-study .matrix-intro { display: none; }
+.atlas-study .matrix-grid { margin-block: 12px; }
+.atlas-study .calendar-scroll { max-height: min(50vh, 430px); }
+.atlas-study .calendar button:hover { border-color: var(--sky); }
+#layer-readout { position: absolute; left: 50%; top: var(--panel-top, 62px); z-index: 540; transform: translateX(-50%); max-width: min(400px, 72%); padding: 8px 10px; border: 1px solid #45638d; border-radius: 5px; background: #091a35f5; pointer-events: none; }
+#layer-readout div + div { margin-top: 4px; }
+#layer-readout small { display: block; color: var(--muted); font-size: 10px; }
 #layer-scope { color: var(--sky); margin: 8px 0; }
 .area-tools { display: grid; gap: 4px; margin-top: 5px; padding-top: 8px; border-top: 1px solid #7e98b6; }
 .area-instruction { position: absolute; z-index: 500; top: calc(var(--panel-top, 62px) + 94px); left: 55px; max-width: min(255px, calc(100% - 68px)); margin: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: #07132df2; font-size: 12px; pointer-events: none; }
@@ -147,6 +159,7 @@ body { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .fire-loading-spinner { animation: none; } }
 .map-caption { display: flex; flex-wrap: wrap; gap: 3px 14px; padding-top: 6px; font: 11px var(--mono); color: var(--muted); }
 #fire-frame-date { color: var(--sky); font-weight: 700; }
+#fire-frame-date.same-frame { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 #regional-count { color: #b9efff; }
 .timeline { position: absolute; left: 12px; bottom: 25px; z-index: 520; width: min(620px, calc(100% - 24px)); border: 1px solid #45638d; border-radius: 6px; padding: 8px 10px; background: #07152eef; }
 .timeline summary { cursor: pointer; color: var(--sky); list-style: none; display: flex; align-items: center; gap: 5px; min-height: 22px; }

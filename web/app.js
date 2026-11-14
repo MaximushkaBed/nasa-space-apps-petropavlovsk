@@ -1,13 +1,14 @@
 'use strict';
 
-import { createExtraLayers } from './map-layers.js?v=territory';
-import { createWorldWind } from './world-wind.js?v=paired-days';
-import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
+import { createExtraLayers } from './map-layers.js?v=layer-values';
+import { createWorldWind } from './world-wind.js?v=layer-values';
+import { createWeatherOverlay } from './weather-overlay.js?v=layer-values';
 import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=fire-contrast';
 import { createFireViewport } from './fire-viewport.js?v=paired-days';
-import { createAreaAnalysis, inRing } from './area-analysis.js?v=territory';
+import { createAreaAnalysis, inRing } from './area-analysis.js?v=layer-values';
 import { createAreaLayerClip } from './area-layer-clip.js';
-import { createAtlasStudy } from './atlas-study.js?v=world-snapshot';
+import { createAtlasStudy } from './atlas-study.js?v=full-archive';
+import { createLayerReadout } from './layer-values.js?v=archive';
 import { addDays, createPeriodPicker, daysBetween } from './period-picker.js?v=atlas-periods';
 
 export function mountAtlas(root, bridge = {}) {
@@ -42,6 +43,7 @@ let displayedViewport;
 let areaAnalysis;
 let areaClip;
 let study;
+let clearLayerReadout;
 let fireDisplay = 'points';
 let worldArchive;
 let worldFrame;
@@ -264,6 +266,10 @@ function createMap(basemap, boundary, closePanel) {
   }));
   weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)), root);
   worldWind = createWorldWind(map, $('world-wind-status'));
+  clearLayerReadout = createLayerReadout(map, $('layer-readout'), async event => {
+    const wind = $('world-wind-flow').checked ? worldWind.inspect(event.latlng) : undefined;
+    return [wind, ...weatherOverlay.inspect(event.latlng), ...(await renderExtraLayers?.inspect(event) ?? [])];
+  }, latlng => active && !areaAnalysis.drawing() && areaAnalysis.contains(latlng));
 
   const labelPane = map.createPane('city-labels');
   labelPane.style.zIndex = 425;
@@ -395,6 +401,7 @@ async function renderLayers(day = $('world-date').value) {
   const request = ++layerRequest;
   const date = typeof day === 'string' ? day : $('world-date').value;
   if (!date || !active) return;
+  clearLayerReadout?.();
   const daily = activePeriod?.start === activePeriod?.end;
   const weather = prepareDayWeather(date, !daily);
   const month = date.slice(0, 7);
@@ -504,6 +511,8 @@ function showWorldFrame() {
     ? worldArchive.platforms[worldFrame.satellite || -1] ?? 'Все спутники' : '';
   const dateLabel = worldFrame ? `Детекции за ${firePeriodLabel(worldFrame)} UTC${displayedSatellite ? ` · ${displayedSatellite}` : ''}` : '';
   if (displayedDate.textContent !== dateLabel) displayedDate.textContent = dateLabel;
+  displayedDate.classList.toggle('same-frame', Boolean(worldFrame && worldFrame.start === activePeriod.start
+    && worldFrame.end === activePeriod.end && !displayedSatellite));
   displayedDate.hidden = !visible || !worldFrame;
   $('map-summary').textContent = !visible ? 'Слой выключен'
     : local ? (displayedViewport.coversView()
@@ -667,7 +676,7 @@ function setWorldPeriod(span) {
   $('archive-caption').textContent = range ? `Слои на ${shortDate.format(new Date(end))}`
     : day === worldArchive.last && through?.startsWith(day)
     ? `Данные до ${through.slice(11, 16)} UTC`
-    : 'Архив FIRMS · время UTC';
+    : '';
   return Promise.all([renderLayers(), loadWorldFrame()]);
 }
 

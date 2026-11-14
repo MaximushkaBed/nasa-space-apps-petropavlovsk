@@ -405,5 +405,6 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     }));
   }
   return { render(frame) { archiveFrame = frame; renderSummary(); }, resetDraft, drawing, getSelection, setSelection, clearSelection,
+    contains: ({ lat, lng }) => !selection || selection.contains(lng, lat),
     intersectsRegion, active: () => Boolean(method) };
 }

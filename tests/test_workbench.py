@@ -129,6 +129,22 @@ class TemporalAnalysisTests(unittest.TestCase):
 
 
 class SpatialQueryTests(unittest.TestCase):
+    def test_world_calendar_keeps_platforms_and_nrt_separate(self):
+        from api.world_calendar import monthly_rows
+        records = [
+            ['2000-11-01', 'Terra', 12, 0, True],
+            ['2026-11-13', 'NOAA-20', 5, 0, True],
+        ]
+        live = [['2026-11-13', 'NOAA-20', 3, 3, False]]
+        result = {(row['month'], row['platform']): row for row in monthly_rows(
+            [records, live], '2000-11-01', '2026-11-14T12:46:00Z')}
+        self.assertEqual(result['2000-11', 'Terra']['points'], 12)
+        self.assertIsNone(result['2000-11', 'NOAA-20']['points'])
+        row = result['2026-11', 'NOAA-20']
+        self.assertEqual((row['points'], row['nrt_points'], row['eligible_days']), (8, 3, 1))
+        self.assertTrue(row['partial'] and row['preliminary'])
+        self.assertIsNone(row['anomaly_pct'])
+
     def test_query_filters_region_quality_outages_and_preserves_cell_day_units(self):
         import duckdb
         from api import server

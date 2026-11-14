@@ -59,6 +59,7 @@
       </div>
       <p id="area-instruction" class="area-instruction" role="status" hidden></p>
       <div class="map-message" id="map-message" role="status" hidden></div>
+      <div id="layer-readout" role="status" aria-label="Значения слоёв" hidden></div>
       <div class="fire-loading" id="fire-loading" role="status" aria-atomic="true">
         <span class="fire-loading-spinner" aria-hidden="true"></span>
         <span id="fire-loading-label">Подключаемся к архиву FIRMS…</span>
@@ -136,6 +137,7 @@
           <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть слои">×</button>
         </div>
         <p id="layer-scope" class="layer-caption">Слои на всей карте</p>
+        <p class="layer-caption">Наведите курсор или коснитесь карты, чтобы прочитать значение слоя.</p>
         <fieldset>
           <legend>Подложка карты</legend>
           <div class="view-switch" role="group" aria-label="Подложка карты">
@@ -224,24 +226,28 @@
       <div id="atlas-study" class="atlas-study analysis-workbench" hidden>
         <div class="study-controls">
           <strong id="study-area">Весь мир</strong>
-          <label>С <input id="study-start" type="date"></label>
-          <label>По <input id="study-end" type="date"></label>
         </div>
-        <p id="study-status" class="layer-caption" role="status"></p>
+        <div class="study-status" role="status">
+          <span id="study-spinner" class="fire-loading-spinner" aria-hidden="true" hidden></span>
+          <p id="study-status" class="layer-caption"></p>
+        </div>
         <button type="button" class="quiet-button" id="study-retry" hidden>Повторить загрузку</button>
-        <details id="study-settings">
-          <summary>Историческая норма и спутники</summary>
-          <div class="study-controls">
-            <label>Базовый год с <input id="study-baseline-start" type="number"></label>
-            <label>по <input id="study-baseline-end" type="number"></label>
-            <label>Ряд <select id="study-platform"></select></label>
-          </div>
-        </details>
         <section id="activity-calendar" aria-label="Календарь активности">
-          <p id="study-calendar-detail" class="layer-caption"></p>
           <div id="study-calendar" class="calendar-scroll"></div>
+          <p id="study-calendar-detail" class="layer-caption"></p>
         </section>
         <section id="external-factors" aria-label="Внешние связи" hidden></section>
+        <details id="study-settings">
+          <summary>Период, историческая норма и спутник</summary>
+          <div class="study-controls">
+            <label>Начало периода<input id="study-start" type="date"></label>
+            <label>Конец периода<input id="study-end" type="date"></label>
+            <label>Базовый год с<input id="study-baseline-start" type="number"></label>
+            <label>Базовый год по<input id="study-baseline-end" type="number"></label>
+            <label>Спутник<select id="study-platform"></select></label>
+          </div>
+          <button id="study-default-period" class="quiet-button" type="button" hidden>Весь мировой архив</button>
+        </details>
       </div>
 
     <div class="analysis-row" id="calendar-analysis" hidden>

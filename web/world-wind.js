@@ -114,6 +114,15 @@ export function createWorldWind(map, status) {
   map.on('moveend resize', reset);
   reduced.addEventListener('change', reset);
   return {
+    inspect({ lat, lng }) {
+      if (!wind) return;
+      const [east, north] = sampleWind(wind, lat, lng);
+      const speed = Math.hypot(east, north);
+      const direction = ((Math.atan2(-east, -north) * 180 / Math.PI) + 360) % 360;
+      const format = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
+      return { label: 'Ветер на высоте 10 м', value: `${format.format(speed)} м/с${speed >= .5 ? ` · от ${Math.round(direction) % 360}°` : ''}`,
+        source: 'NOAA GFS · 1°', date: `${wind.day} 00:00 UTC` };
+    },
     async prepare(day, previousDayAllowed) {
       if (day < windArchiveStart) return { message: `Архив потоков NOAA GFS доступен с ${windArchiveStart}.` };
       try {
