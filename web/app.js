@@ -3,7 +3,7 @@
 import { createExtraLayers } from './map-layers.js?v=weather-motion';
 import { createWorldWind } from './world-wind.js?v=weather-motion';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
-import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=fire-detail';
+import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=fire-contrast';
 import { createFireViewport } from './fire-viewport.js?v=fire-detail';
 import { createAreaAnalysis, inRing } from './area-analysis.js?v=fire-detail';
 import { addDays, createPeriodPicker, daysBetween } from './period-picker.js?v=atlas-periods';
@@ -342,11 +342,10 @@ function renderFireLayer(points = firePoints()) {
   const detail = viewportFrame?.status === 'ok' ? viewportFrame.points : undefined;
   const waitingForDetail = grouped && !detail && map.getZoom() >= fireDetailZoom;
   $('heat-legend').hidden = !visible || fireDisplay !== 'heat' || waitingForDetail;
-  $('heat-legend').classList.toggle('grouped', grouped && !detail);
   $('heat-legend').lastChild.textContent = grouped && !detail ? ' Плотность по сводке' : ' Плотность детекций';
   $('world-point-legend').hidden = !visible || fireDisplay !== 'points' || waitingForDetail;
   $('world-point-legend').classList.toggle('grouped', grouped && !detail);
-  $('world-point-legend').lastChild.textContent = grouped && !detail ? ' Плотность по сводке' : ' Пиксели MODIS / VIIRS';
+  $('world-point-legend').lastChild.textContent = grouped && !detail ? ' Группы детекций' : ' Пиксели MODIS / VIIRS';
   const status = viewportFrame?.status;
   const coverage = viewportFrame?.missing?.length ? ' В архиве есть пропуски дат.' : '';
   const message = status === 'ok' ? `${detail.length ? (viewportFrame.method === 'archive' ? 'Исходный архив · без фильтра качества.' : '')

@@ -30,8 +30,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
   stamp.fillStyle = glow;
   stamp.fillRect(0, 0, 48, 48);
 
-  const heatPalette = createPalette([[0, '#ff962d'], [.45, '#f44918'], [.78, '#ffbc36'], [1, '#fff288']]);
-  const overviewPalette = createPalette([[0, '#de8d32'], [.45, '#e7a242'], [1, '#ffe7a1']]);
+  const heatPalette = createPalette([[0, '#ff202a'], [.46, '#ff381c'], [.74, '#ff8614'], [.93, '#ffcb38'], [1, '#fff7a0']]);
   const mercatorPoints = (data) => data.map(([lon, lat, platform, weight = 1, acquiredAt]) => {
     const point = map.project([lat, lon], 0);
     const latitude = Math.max(-mercatorLimit, Math.min(mercatorLimit, lat));
@@ -48,34 +47,26 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
   let input;
   let detailInput;
 
-  function overviewRadius(worldWidth, lat) {
-    return Math.min(230, Math.max(18, worldWidth / 360 / Math.max(.32, Math.cos(lat * Math.PI / 180))));
-  }
-
-  function drawHeat(ctx, width, height, ratio, bins, worldWidth, overview) {
+  function drawHeat(ctx, width, height, ratio, bins, radius) {
     const scale = Math.min(ratio, 1, 1400 / Math.max(width, height));
     heat.width = Math.ceil(width * scale);
     heat.height = Math.ceil(height * scale);
     const surface = heat.getContext('2d', { willReadFrequently: true });
     surface.setTransform(scale, 0, 0, scale, 0, 0);
-    const heatRadius = map.getZoom() < 6 ? 17 : 23;
-    for (const { x, y, count, lat } of bins.values()) {
-      const radius = overview ? overviewRadius(worldWidth, lat) : heatRadius;
-      surface.globalAlpha = overview ? Math.min(.4, .025 + .032 * Math.log2(count + 1))
-        : Math.min(.65, .025 + .045 * Math.log2(count + 1));
+    for (const { x, y, count } of bins.values()) {
+      surface.globalAlpha = Math.min(.64, .15 + .052 * Math.log2(count + 1));
       surface.drawImage(dot, x - radius, y - radius, 2 * radius, 2 * radius);
     }
     const image = surface.getImageData(0, 0, heat.width, heat.height);
     const data = image.data;
-    const palette = overview ? overviewPalette : heatPalette;
     for (let i = 0; i < data.length; i += 4) {
       const alpha = data[i + 3];
       if (!alpha) continue;
       const color = alpha * 4;
-      data[i] = palette[color];
-      data[i + 1] = palette[color + 1];
-      data[i + 2] = palette[color + 2];
-      data[i + 3] = overview ? Math.min(182, alpha) : Math.min(189, alpha * 1.25);
+      data[i] = heatPalette[color];
+      data[i + 1] = heatPalette[color + 1];
+      data[i + 2] = heatPalette[color + 2];
+      data[i + 3] = Math.min(241, 300 * (alpha / 255) ** .66);
     }
     surface.putImageData(image, 0, 0);
     ctx.drawImage(heat, 0, 0, width, height);
@@ -105,7 +96,8 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     const worldWidth = 256 * scale;
     const overview = aggregated && !detailZoom;
     const detailed = mode === 'points' && detailZoom;
-    const margin = detailed ? Math.max(4, maxPixelWidth * scale / 2) : overview ? overviewRadius(worldWidth, mercatorLimit) : 24;
+    const heatRadius = overview ? Math.min(34, Math.max(13, worldWidth / 460)) : zoom < 6 ? 17 : 23;
+    const margin = detailed ? Math.max(4, maxPixelWidth * scale / 2) : mode === 'heat' ? heatRadius : 8;
     const firstCopy = Math.floor((origin.x - margin) / worldWidth);
     const lastCopy = Math.floor((origin.x + width + margin) / worldWidth);
     const stride = Math.ceil((width + 2 * margin) / step) + 1;
@@ -134,8 +126,8 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
         } else bins.set(key, { ...point, x, y, count: point.weight });
       }
     }
-    if (mode === 'heat' || overview) {
-      drawHeat(ctx, width, height, ratio, bins, worldWidth, overview);
+    if (mode === 'heat') {
+      drawHeat(ctx, width, height, ratio, bins, heatRadius);
       return;
     }
     if (detailed) return;
@@ -143,8 +135,13 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
       for (const bin of bins.values()) {
         if (bin.regional !== regional) continue;
         const { x, y, count } = bin;
-        const half = Math.min(3.8, (regional ? 2.1 : 1.4) + Math.log2(count) * .37);
-        ctx.fillRect(x - half, y - half, half * 2, half * 2);
+        const half = overview ? Math.min(2.5, (regional ? 1.8 : 1.1) + Math.log2(count) * .14)
+          : Math.min(3.8, (regional ? 2.1 : 1.4) + Math.log2(count) * .37);
+        if (overview) {
+          ctx.beginPath();
+          ctx.arc(x, y, half, 0, 2 * Math.PI);
+          ctx.fill();
+        } else ctx.fillRect(x - half, y - half, half * 2, half * 2);
         hitTargets.push({ ...bin, half });
       }
     }
@@ -181,9 +178,11 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     if (!selected) return;
     const content = document.createElement('div');
     const title = document.createElement('strong');
-    const isPixel = selected.count === 1;
+    const isGroup = aggregated && map.getZoom() < fireDetailZoom;
+    const isPixel = !isGroup && selected.count === 1;
     const samePosition = isPixel ? hitTargets.filter(({ x, y }) => x === selected.x && y === selected.y) : [];
-    title.textContent = !isPixel ? `Детекций рядом — ${number.format(selected.count)}`
+    title.textContent = isGroup ? `Детекций в группе — ${number.format(selected.count)}`
+      : !isPixel ? `Детекций рядом — ${number.format(selected.count)}`
       : samePosition.length > 1 ? `Детекций в этой точке — ${number.format(samePosition.length)}` : 'Тепловая детекция';
     content.append(title);
     if (isPixel) {
