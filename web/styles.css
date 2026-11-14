@@ -164,6 +164,8 @@ body { overflow: hidden; }
 .map-layer-controls label:has(input:checked) { color: var(--layer-color); }
 .map-layer-controls .terrain-strength { grid-column: 1 / -1; display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
 .terrain-strength input[type='range'] { width: 100%; accent-color: var(--sky); }
+.map-layer-controls .raster-opacity { display: grid; grid-template-columns: auto minmax(0, 1fr); padding-left: 29px; color: var(--muted); font-size: 11px; }
+.raster-opacity input[type='range'] { width: 100%; accent-color: var(--sky); }
 #terrain-status { grid-column: 1 / -1; margin: 0 6px; }
 .map-layer-controls .weather-choice { display: grid; gap: 4px; color: var(--muted); font-size: 11px; }
 .weather-choice select { width: 100%; border: 1px solid #355787; border-radius: 4px; padding: 5px 4px; background: #102447; color: var(--text); font-size: 12px; }

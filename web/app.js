@@ -1,6 +1,6 @@
 'use strict';
 
-import { createExtraLayers } from './map-layers.js?v=area-tools';
+import { createExtraLayers } from './map-layers.js?v=world-layers';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
 import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=fire-detail';
 import { createFireViewport } from './fire-viewport.js?v=fire-detail';
@@ -311,6 +311,9 @@ async function renderLayers() {
   const date = $('world-date').value;
   if (!date) return;
   const month = date.slice(0, 7);
+  const status = $('map-layer-status');
+  status.hidden = true;
+  status.textContent = '';
   const [, events] = await Promise.all([renderWeather(date, request), renderExtraLayers?.(month, date)]);
   if (request !== layerRequest) return;
   const items = (events ?? []).filter(Boolean);

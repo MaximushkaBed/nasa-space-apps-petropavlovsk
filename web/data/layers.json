@@ -4,7 +4,7 @@
     {
       "id": "daily-imagery",
       "label": "Снимок Terra за день",
-      "group": "Спутниковые наблюдения",
+      "group": "Спутниковые наблюдения · мир",
       "color": "#a8d7a4",
       "format": "xyz",
       "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpeg",
@@ -12,6 +12,7 @@
       "sourceUrl": "https://nasa-gibs.github.io/gibs-api-docs/",
       "maxNativeZoom": 9,
       "opacity": 0.9,
+      "maxLagDays": 1,
       "underlay": true
     },
     {
@@ -25,6 +26,7 @@
       "sourceUrl": "https://worldview.earthdata.nasa.gov/?l=MODIS_Combined_Flood_3-Day",
       "maxNativeZoom": 9,
       "range": ["2021-01"],
+      "maxLagDays": 1,
       "underlay": true
     },
     {
@@ -37,6 +39,7 @@
       "source": "NASA GIBS · MODIS / Terra",
       "sourceUrl": "https://worldview.earthdata.nasa.gov/?l=MODIS_Terra_Cloud_Fraction_Day",
       "maxNativeZoom": 6,
+      "maxLagDays": 2,
       "underlay": true
     },
     {
@@ -49,6 +52,7 @@
       "source": "NASA GIBS · GPM IMERG",
       "sourceUrl": "https://worldview.earthdata.nasa.gov/?l=IMERG_Precipitation_Rate",
       "maxNativeZoom": 6,
+      "maxLagDays": 2,
       "underlay": true
     },
     {
@@ -62,6 +66,7 @@
       "sourceUrl": "https://worldview.earthdata.nasa.gov/?l=MODIS_Terra_Land_Surface_Temp_Day",
       "maxNativeZoom": 7,
       "opacity": 0.55,
+      "maxLagDays": 2,
       "underlay": true
     },
     {
@@ -75,6 +80,7 @@
       "sourceUrl": "https://worldview.earthdata.nasa.gov/?l=MERRA2_Surface_Wind_Speed_Monthly",
       "maxNativeZoom": 6,
       "opacity": 0.54,
+      "maxLagDays": 124,
       "underlay": true
     },
     {
@@ -83,18 +89,20 @@
       "group": "Погода и растительность · мир",
       "color": "#9cdc88",
       "format": "xyz",
-      "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_L3_NDVI_16Day/default/{ndvi}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png",
+      "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_L3_NDVI_16Day/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png",
       "source": "NASA GIBS · MODIS / Terra",
       "sourceUrl": "https://worldview.earthdata.nasa.gov/?l=MODIS_Terra_L3_NDVI_16Day",
       "maxNativeZoom": 9,
       "range": ["2000-03"],
       "opacity": 0.65,
+      "maxLagDays": 32,
+      "composite": true,
       "underlay": true
     },
     {
       "id": "gfm",
       "label": "Затопления · СКО",
-      "group": "Спутниковые наблюдения",
+      "group": "Дополнительные слои · СКО",
       "color": "#3adaff",
       "format": "geojson",
       "url": "hazards/gfm/{month}.geojson",
@@ -110,6 +118,7 @@
       "color": "#479dff",
       "format": "geojson",
       "url": "hazards/eonet/{month}.geojson",
+      "eventFeed": "eonet",
       "category": "floods",
       "source": "NASA EONET",
       "sourceUrl": "https://eonet.gsfc.nasa.gov/"
@@ -121,6 +130,7 @@
       "color": "#ee83ff",
       "format": "geojson",
       "url": "hazards/eonet/{month}.geojson",
+      "eventFeed": "eonet",
       "category": "volcanoes",
       "source": "NASA EONET",
       "sourceUrl": "https://eonet.gsfc.nasa.gov/"
@@ -132,6 +142,7 @@
       "color": "#d5a5ff",
       "format": "geojson",
       "url": "hazards/eonet/{month}.geojson",
+      "eventFeed": "eonet",
       "category": "severeStorms",
       "source": "NASA EONET",
       "sourceUrl": "https://eonet.gsfc.nasa.gov/"
@@ -143,6 +154,7 @@
       "color": "#fa8585",
       "format": "geojson",
       "url": "hazards/usgs/{month}.geojson",
+      "eventFeed": "usgs",
       "source": "USGS ComCat",
       "sourceUrl": "https://earthquake.usgs.gov/fdsnws/event/1/"
     },
@@ -153,6 +165,7 @@
       "color": "#a4e8ac",
       "format": "geojson",
       "url": "hazards/eonet/{month}.geojson",
+      "eventFeed": "eonet",
       "categories": ["drought", "snow", "seaLakeIce", "waterColor", "landslides", "dustHaze"],
       "source": "NASA EONET",
       "sourceUrl": "https://eonet.gsfc.nasa.gov/"

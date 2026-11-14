@@ -8,9 +8,9 @@
   <title>Атлас пожаров · NASA FIRMS</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=fire-detail">
+  <link rel="stylesheet" href="styles.css?v=world-layers">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=fire-detail" type="module"></script>
+  <script src="app.js?v=world-layers" type="module"></script>
   <script src="correlations.js?v=ndvi" type="module"></script>
   <script src="burn-case.js?v=atlas-workspace" type="module"></script>
 </head>
@@ -150,9 +150,12 @@
           </label>
           <p id="terrain-status" class="layer-caption" role="status" hidden>Слой рельефа загрузился не полностью.</p>
         </fieldset>
+        <div id="extra-layer-controls"></div>
+        <p id="map-layer-status" class="layer-caption" role="status" hidden></p>
+        <ul id="visible-layer-summary" class="layer-summary" aria-live="polite" hidden></ul>
         <fieldset id="local-layers" disabled>
-          <legend>Погода · СКО</legend>
-          <label style="--layer-color:#9ae3ef"><input type="checkbox" id="wind-layer"> Потоки ветра</label>
+          <legend>Подробная погода · только СКО</legend>
+          <label style="--layer-color:#9ae3ef"><input type="checkbox" id="wind-layer"> Потоки ветра · СКО</label>
           <label class="weather-choice"><span>Цветовое поле</span>
             <select id="weather-field">
               <option value="">Выключено</option>
@@ -165,9 +168,6 @@
           <p id="weather-state" class="layer-caption" hidden></p>
           <div id="weather-inspector" class="weather-inspector" aria-live="polite" hidden></div>
         </fieldset>
-        <div id="extra-layer-controls"></div>
-        <p id="map-layer-status" class="layer-caption" role="status" hidden></p>
-        <ul id="visible-layer-summary" class="layer-summary" hidden></ul>
       </aside>
 
       <details class="timeline" open>
