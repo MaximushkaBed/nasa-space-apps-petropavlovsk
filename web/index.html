@@ -8,9 +8,10 @@
   <title>Пожары СКО · Спутниковый календарь</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=sko-time">
+  <link rel="stylesheet" href="styles.css?v=sko-factors">
   <script src="vendor/leaflet.js" defer></script>
   <script src="app.js?v=sko-time" defer></script>
+  <script src="correlations.js?v=sko-factors" type="module"></script>
 </head>
 <body>
   <header class="topbar">
@@ -22,6 +23,7 @@
       <nav class="site-nav" aria-label="Разделы">
         <a href="#observations">Карта</a>
         <a href="#season-calendar">Календарь</a>
+        <a href="#correlations">Что связано с огнём</a>
       </nav>
       <button class="quiet-button" id="open-method" type="button">
         <span class="info-icon" aria-hidden="true">i</span> Методика
@@ -35,6 +37,7 @@
         <a class="event" href="https://www.spaceappschallenge.org/2026/challenges/modis-and-viirs-hot-spots/" target="_blank" rel="noreferrer"><span aria-hidden="true"></span> NASA Space Apps Challenge 2026 ↗</a>
         <h1 id="title">Пожарная активность <em>с орбиты</em></h1>
         <p class="subtitle">Когда и где спутники замечали горение в Северо-Казахстанской области</p>
+        <a class="hero-factors" href="#correlations">Что связано с тепловыми точками ↓</a>
       </div>
       <figure class="hero-photo">
         <div class="hero-frame"><img src="assets/balkhash-iss.webp" alt="Луна и озеро Балхаш на снимке с Международной космической станции" width="716" height="1100" fetchpriority="high"></div>
@@ -175,6 +178,55 @@
         <div class="calendar-key" id="calendar-key" aria-label="Легенда календаря"></div>
         <a href="#observations" id="calendar-selection">Выбранный месяц на карте ↑</a>
       </div>
+    </section>
+
+    <section class="panel correlation-panel" id="correlations" aria-labelledby="correlation-title">
+      <div class="panel-heading correlation-heading">
+        <div>
+          <h2 id="correlation-title">Что связано с тепловыми точками</h2>
+          <p>Апрель–октябрь · 2020–2025 · Северо-Казахстанская область</p>
+        </div>
+        <label class="factor-source"><span>Спутник</span>
+          <select id="factor-sensor" disabled>
+            <option value="aqua">Aqua / MODIS</option>
+            <option value="noaa20">NOAA‑20 / VIIRS</option>
+          </select>
+        </label>
+      </div>
+      <div class="view-switch factor-view" role="group" aria-label="Режим матрицы">
+        <button type="button" value="within" aria-pressed="true" disabled>Дни внутри месяца</button>
+        <button type="button" value="all" aria-pressed="false" disabled>Все дни</button>
+        <button type="button" value="space" aria-pressed="false" disabled>Участки 25 × 25 км</button>
+      </div>
+      <p id="factor-scope" class="factor-scope" role="status">Загрузка расчётов…</p>
+      <div class="factor-layout" id="factor-layout" hidden>
+        <div class="factor-grid">
+          <div class="factor-scroll" role="region" aria-label="Таблица корреляций, прокрутка по горизонтали" tabindex="0">
+            <table class="factor-matrix" id="factor-matrix" aria-label="Матрица ранговых корреляций"></table>
+          </div>
+          <div class="factor-key" aria-label="Цветовая шкала">
+            <span><i class="factor-negative"></i> −1 · обратная</span>
+            <span><i class="factor-neutral"></i> 0 · слабая</span>
+            <span><i class="factor-positive"></i> +1 · прямая</span>
+          </div>
+          <p class="factor-scroll-hint" aria-hidden="true">Прокрутите матрицу вправо, чтобы увидеть остальные показатели →</p>
+        </div>
+        <aside class="factor-result" aria-label="Вывод по выбранной паре" aria-live="polite">
+          <h3 id="factor-pair"></h3>
+          <p id="factor-value" class="factor-value"></p>
+          <p id="factor-reading"></p>
+          <p id="factor-check" class="factor-check"></p>
+        </aside>
+      </div>
+      <p class="factor-limits">Связи описывают наблюдения. Для вывода о причине нужно проверить облачность, пролёты спутников и землепользование.</p>
+      <p class="factor-limits">Расход Ишима показывает паводковые условия у Петропавловска. Для анализа затоплений и сухостоя нужны карты затопленных территорий и данные лесной инвентаризации.</p>
+      <details class="factor-method">
+        <summary>Как считали и откуда данные</summary>
+        <p><strong>По дням.</strong> Число ячеек 2 × 2 км с тепловым сигналом за дату UTC. «Все дни» сравнивает весь архив, «Дни внутри месяца» усредняет коэффициенты по отдельным месяцам каждого года с весом по числу дат. Даты известных сбоев исключены. Погода — среднее по 17 точкам ERA5. Осадки за 7 дней считаются до выбранной даты. <a href="https://open-meteo.com/en/docs/historical-weather-api">ERA5 / Open‑Meteo</a></p>
+        <p><strong>По участкам.</strong> Число ячейко-дней за шесть сезонов на км² внутри СКО. Расстояние считается от центра участка до ближайшего населённого пункта. Высота — медиана, перепад — разница 90-го и 10-го процентилей. Покров — доли леса, травы, пашни и заболоченной растительности по карте 2021 года. Доли связаны между собой, поскольку делят площадь одного участка. <a href="https://www.geonames.org/export/">GeoNames</a> · <a href="https://doi.org/10.5270/ESA-c5d3d65">Copernicus DEM GLO‑90</a> · <a href="https://esa-worldcover.org/en/data-access">ESA WorldCover, CC BY 4.0</a></p>
+        <p><strong>Расход воды.</strong> Среднесуточный модельный расход Ишима для ячейки у Петропавловска. <a href="https://open-meteo.com/en/docs/flood-api">GloFAS / Open‑Meteo, CC BY 4.0</a></p>
+        <p>Рельеф получен из Copernicus WorldDEM‑90 © DLR e.V. 2010–2014 и © Airbus Defence and Space GmbH 2014–2018, предоставленного в рамках Copernicus ЕС и ESA. Карта покрова содержит производные данные ESA WorldCover 2021 © ESA WorldCover consortium. Расстояния рассчитаны по данным GeoNames, CC BY.</p>
+      </details>
     </section>
 
     <footer class="workspace-footer">
