@@ -2,6 +2,7 @@
 
 import { createExtraLayers } from './map-layers.js?v=esri-imagery';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
+import { createFireOverlay } from './fire-overlay.js?v=global-atlas';
 
 const $ = (id) => document.getElementById(id);
 const sources = ['Aqua / MODIS', 'Suomi NPP / VIIRS', 'NOAA-20 / VIIRS'];
@@ -21,6 +22,13 @@ let map;
 let region;
 let cellLayer;
 let weatherOverlay;
+let fireOverlay;
+let fireDisplay = 'points';
+let worldScope = false;
+let worldArchive;
+let worldArchiveRequest;
+let worldFrame;
+let worldRequest;
 let displayedDay = null;
 let displayedMonth = null;
 let playbackTimer;
@@ -170,6 +178,7 @@ function createMap(basemap, boundary) {
   activityPane.style.zIndex = 415;
   const heatCanvas = L.canvas({ padding: .5, pane: 'activity-cells' });
   cellLayer = L.featureGroup().addTo(map);
+  fireOverlay = createFireOverlay(map, () => worldArchive?.platforms ?? [], number);
   weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)));
   map.heatCanvas = heatCanvas;
 
@@ -204,8 +213,9 @@ function createMap(basemap, boundary) {
     $('world-view').textContent = 'Весь мир ↗';
     $('map-layer-status').hidden = true;
     map.fitBounds(region.getBounds(), { padding: [25, 24], animate: false });
+    changeScope(false);
   };
-  $('world-view').addEventListener('click', () => {
+  const showWorld = () => {
     if (map.hasLayer(world)) {
       reset();
       return;
@@ -216,8 +226,10 @@ function createMap(basemap, boundary) {
     setBasemap(true);
     map.fitBounds([[-62, -177], [72, 177]], { padding: [12, 12], animate: false });
     $('world-view').setAttribute('aria-pressed', 'true');
-    $('world-view').textContent = 'Вернуться к СКО';
-  });
+    $('world-view').textContent = 'К СКО ↗';
+    changeScope(true);
+  };
+  $('world-view').addEventListener('click', showWorld);
   $('world-view').disabled = false;
   worldDetails.on('tileerror', () => {
     $('map-layer-status').textContent = 'Детальные плитки NASA GIBS недоступны. На карте показана обзорная подложка.';
@@ -251,6 +263,7 @@ function createMap(basemap, boundary) {
   new ResizeObserver(() => map.invalidateSize({ pan: true })).observe($('map'));
   reset();
   addTerrainControl(map);
+  return showWorld;
 }
 
 function mapStatus(message) {
@@ -326,8 +339,9 @@ async function renderWeather(date, request) {
 
 async function renderLayers() {
   const request = ++layerRequest;
-  const month = calendar.months[monthIndex].month;
-  const date = displayedDay === null ? null : frameDate(month, displayedDay);
+  const date = worldScope ? $('world-date').value : displayedDay === null ? null : frameDate(calendar.months[monthIndex].month, displayedDay);
+  if (worldScope && !date) return;
+  const month = worldScope ? date.slice(0, 7) : calendar.months[monthIndex].month;
   const [, events] = await Promise.all([renderWeather(date, request), renderExtraLayers?.(month, date)]);
   if (request !== layerRequest) return;
   const items = (events ?? []).filter(Boolean);
@@ -336,12 +350,132 @@ async function renderLayers() {
   summary.hidden = items.length === 0;
 }
 
+function fireLegends(scope, day, visible) {
+  const heat = visible && fireDisplay === 'heat';
+  $('heat-legend').hidden = !heat;
+  $('heat-legend-title').textContent = scope ? 'Плотность детекций'
+    : day === null ? 'Плотность ячейко-дней' : 'Плотность ячеек с сигналом';
+  $('world-point-legend').hidden = !scope || !visible || heat;
+  $('month-map-legend').hidden = scope || day !== null || !visible || heat;
+  $('day-map-legend').hidden = scope || day === null || !visible || heat;
+}
+
+function showWorldFrame() {
+  mapStatus('');
+  const visible = $('fire-layer').checked;
+  fireLegends(true, null, visible);
+  const selected = $('world-satellite').value;
+  const points = worldFrame?.points ?? [];
+  const selectedPoints = selected === '' ? points : points.filter((point) => point[2] === Number(selected));
+  fireOverlay(visible ? selectedPoints : [], fireDisplay, true);
+  $('map-summary').textContent = !visible ? 'Слой тепловых точек выключен'
+    : worldFrame ? `Детекций в мире — ${number.format(selectedPoints.length)}` : 'Загрузка детекций…';
+  if (visible && worldFrame && !selectedPoints.length) {
+    mapStatus('За эту дату не найдено детекций выбранных спутников. Покрытие неизвестно.');
+  }
+}
+
+async function loadWorldFrame() {
+  const day = $('world-date').value;
+  if (!worldScope || !worldArchive || !day) return;
+  if (worldFrame?.date === day) {
+    showWorldFrame();
+    return;
+  }
+  worldRequest?.abort();
+  const request = new AbortController();
+  worldRequest = request;
+  worldFrame = undefined;
+  showWorldFrame();
+  try {
+    const response = await fetch(`/api/fires/${day}`, { signal: request.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const frame = await response.json();
+    if (request.signal.aborted || !worldScope) return;
+    worldFrame = frame;
+    showWorldFrame();
+  } catch (error) {
+    if (request.signal.aborted || !worldScope) return;
+    $('map-summary').textContent = 'Данные мира недоступны';
+    mapStatus('Мировые детекции за этот день не загрузились. Выберите другую дату или откройте СКО.');
+  }
+}
+
+function setWorldDate(day) {
+  if (day < worldArchive.first || day > worldArchive.last) return;
+  $('world-date').value = day;
+  $('frame-date').textContent = dayFormatter.format(new Date(day));
+  const month = day.slice(0, 7);
+  const slider = $('day-slider');
+  slider.min = month === worldArchive.first.slice(0, 7) ? Number(worldArchive.first.slice(-2)) : 1;
+  slider.max = month === worldArchive.last.slice(0, 7) ? Number(worldArchive.last.slice(-2))
+    : new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).getUTCDate();
+  slider.value = Number(day.slice(-2));
+  slider.setAttribute('aria-valuetext', $('frame-date').textContent);
+  renderLayers();
+  return loadWorldFrame();
+}
+
+async function changeScope(global) {
+  const changed = worldScope !== global;
+  worldScope = global;
+  if (!changed) return;
+  stopPlayback();
+  worldRequest?.abort();
+  mapRequest++;
+  layerRequest++;
+  cellLayer.clearLayers();
+  fireOverlay([], fireDisplay);
+  map.closePopup();
+  mapStatus('');
+  for (const id of ['regional-source', 'regional-period', 'whole-month', 'regional-boundary-key']) $(id).hidden = global;
+  for (const id of ['global-source', 'global-period', 'archive-caption']) $(id).hidden = !global;
+  $('day-slider').min = global ? 1 : 0;
+  $('timeline-ticks').replaceChildren();
+  $('peak-day').hidden = $('timeline-outages').hidden = true;
+  if (!global) {
+    renderLayers();
+    await renderMap(calendar.months[monthIndex]);
+    return;
+  }
+  $('map-subtitle').textContent = 'Тепловые детекции · NASA FIRMS';
+  $('frame-date').textContent = 'Загрузка…';
+  $('map-summary').textContent = 'Загрузка мирового архива…';
+  $('day-slider').disabled = $('play-frames').disabled = true;
+  fireLegends(true, null, $('fire-layer').checked);
+  try {
+    worldArchiveRequest ??= getJSON('/api/fires/range');
+    const range = await worldArchiveRequest;
+    if (!worldArchive) {
+      worldArchive = range;
+      for (const [index, label] of worldArchive.platforms.entries()) {
+        $('world-satellite').add(new Option(label, index));
+      }
+      $('world-date').min = worldArchive.first;
+      $('world-date').max = worldArchive.last;
+    }
+    if (!worldScope) return;
+    for (const id of ['world-satellite', 'world-date', 'day-slider', 'play-frames']) $(id).disabled = false;
+    $('archive-caption').textContent = 'Архив FIRMS · время UTC';
+    $('archive-caption').title = `Последнее наблюдение в архиве: ${worldArchive.through ?? worldArchive.last} · возможны предварительные данные`;
+    const previous = $('world-date').value;
+    await setWorldDate(previous || worldArchive.last);
+  } catch (error) {
+    worldArchiveRequest = undefined;
+    if (!worldScope) return;
+    $('frame-date').textContent = 'Мировой архив недоступен';
+    mapStatus('Не удалось подключиться к мировому архиву FIRMS.');
+    console.error(error);
+  }
+}
+
 async function renderMap(row) {
-  if (!mapAvailable) return;
+  if (!mapAvailable || worldScope) return;
   const request = ++mapRequest;
   const platform = monthSource(row);
   const sourceLabel = sources[platform];
   cellLayer.clearLayers();
+  fireOverlay([], fireDisplay);
   map.closePopup();
   $('map-subtitle').textContent = `Сетка 2 × 2 км · ${sourceLabel}`;
   const day = displayedDay;
@@ -355,8 +489,7 @@ async function renderMap(row) {
     updateTimeline(data, date);
     renderTimelineOverview(data, row, platform);
     const fireVisible = $('fire-layer').checked;
-    $('month-map-legend').hidden = day !== null || !fireVisible;
-    $('day-map-legend').hidden = day === null || !fireVisible;
+    fireLegends(false, day, fireVisible);
     if (!fireVisible) {
       $('map-summary').textContent = 'Слой тепловых точек выключен';
       return;
@@ -369,19 +502,24 @@ async function renderMap(row) {
     }
     const cells = frame ? frame[platform].map((index) => data.cells[index]) : data.cells;
     let visible = 0;
+    const heatPoints = [];
     for (const cell of cells) {
       const count = day === null ? cell[4 + platform] : 1;
       if (!count) continue;
       visible++;
       const [west, south, east, north] = cell;
-      const color = count < 3 ? '#ff9c57' : count < 7 ? '#ffc064' : '#eafe07';
-      const shape = L.rectangle([[south, west], [north, east]], {
-        renderer: map.heatCanvas, pane: 'activity-cells', color, weight: .7,
-        opacity: 1, fillColor: color, fillOpacity: .85,
+      if (fireDisplay === 'heat') {
+        heatPoints.push([(west + east) / 2, (south + north) / 2, platform, count]);
+        continue;
+      }
+      const shape = L.circleMarker([(south + north) / 2, (west + east) / 2], {
+        renderer: map.heatCanvas, pane: 'activity-cells', radius: count < 3 ? 2.5 : count < 7 ? 3.5 : 4.5,
+        stroke: false, fillColor: '#ff382d', fillOpacity: .95,
       });
       shape.bindPopup(() => cellPopup(cell, count, period, sourceLabel, day !== null));
       cellLayer.addLayer(shape);
     }
+    if (heatPoints.length) fireOverlay(heatPoints, 'heat');
     $('map-summary').textContent = `Ячеек с сигналом — ${number.format(visible)}`;
     if (!visible) mapStatus('Нет зарегистрированных сигналов. Покрытие неизвестно.');
   } catch (error) {
@@ -403,6 +541,33 @@ function showDay(day) {
 function togglePlayback() {
   if (playbackTimer !== undefined) {
     stopPlayback();
+    return;
+  }
+  if (worldScope) {
+    $('play-frames').textContent = 'Ⅱ Пауза';
+    const playNext = async () => {
+      const date = new Date($('world-date').value);
+      date.setUTCDate(date.getUTCDate() + 1);
+      const next = date.toISOString().slice(0, 10);
+      const month = $('world-date').value.slice(0, 7);
+      if (next > worldArchive.last || !next.startsWith(month)) {
+        stopPlayback();
+        return;
+      }
+      const playing = playbackTimer;
+      await setWorldDate(next);
+      if (playbackTimer === playing) playbackTimer = setTimeout(playNext, 850);
+    };
+    const current = $('world-date').value;
+    const first = `${current.slice(0, 7)}-01`;
+    const isLast = current === worldArchive.last || Number(current.slice(-2)) === Number($('day-slider').max);
+    const kickoff = async () => {
+      if (!isLast) return playNext();
+      const playing = playbackTimer;
+      await setWorldDate(first < worldArchive.first ? worldArchive.first : first);
+      if (playbackTimer === playing) playbackTimer = setTimeout(playNext, 850);
+    };
+    playbackTimer = setTimeout(kickoff, 0);
     return;
   }
   const last = Number($('day-slider').max);
@@ -525,7 +690,10 @@ function makeCalendar() {
       const button = element('button');
       button.type = 'button';
       button.dataset.index = index;
-      button.addEventListener('click', () => chooseMonth(index));
+      button.addEventListener('click', () => {
+        if (worldScope) $('reset-map').click();
+        chooseMonth(index);
+      });
       td.append(button);
     }
   }
@@ -584,6 +752,7 @@ function chooseMonth(index) {
 
 async function start() {
   $('open-method').addEventListener('click', () => $('method').showModal());
+  let showWorld;
   try {
     calendar = await getJSON('data/calendar.json?v=sko-series');
   } catch (error) {
@@ -595,9 +764,9 @@ async function start() {
   }
   try {
     const [basemap, boundary] = await Promise.all([getJSON('data/basemap.geojson'), getJSON('data/region.geojson')]);
-    createMap(basemap, boundary);
+    showWorld = createMap(basemap, boundary);
     mapAvailable = true;
-    $('fire-layer').disabled = false;
+    for (const id of ['fire-layer', 'fire-points', 'fire-heat']) $(id).disabled = false;
     $('local-layers').disabled = false;
     const extraControls = $('extra-layer-controls');
     extraControls.addEventListener('layer-tile-error', ({ detail }) => {
@@ -605,7 +774,7 @@ async function start() {
       $('map-layer-status').hidden = false;
     });
     createExtraLayers(map, extraControls, getJSON, (startDay) => {
-      if (startDay && displayedDay === null) showDay(1);
+      if (!worldScope && startDay && displayedDay === null) showDay(1);
       else renderLayers();
     })
       .then((render) => { renderExtraLayers = render; if (monthIndex !== undefined) renderLayers(); })
@@ -637,6 +806,15 @@ async function start() {
   $('day-slider').addEventListener('input', (event) => {
     stopPlayback();
     const day = Number(event.target.value);
+    if (worldScope) {
+      const date = frameDate($('world-date').value.slice(0, 7), day);
+      if (date < worldArchive.first || date > worldArchive.last) {
+        event.target.value = Number($('world-date').value.slice(-2));
+        return;
+      }
+      setWorldDate(date);
+      return;
+    }
     showDay(day || null);
   });
   $('whole-month').addEventListener('click', () => {
@@ -647,9 +825,34 @@ async function start() {
     stopPlayback();
     showDay(Number(event.currentTarget.dataset.day));
   });
-  $('fire-layer').addEventListener('change', () => renderMap(calendar.months[monthIndex]));
+  $('calendar-selection').addEventListener('click', () => {
+    if (worldScope) $('reset-map').click();
+  });
+  const redrawFires = () => worldScope ? loadWorldFrame() : renderMap(calendar.months[monthIndex]);
+  $('fire-layer').addEventListener('change', redrawFires);
+  for (const [id, view] of [['fire-points', 'points'], ['fire-heat', 'heat']]) {
+    $(id).addEventListener('click', () => {
+      fireDisplay = view;
+      $('fire-points').setAttribute('aria-pressed', String(view === 'points'));
+      $('fire-heat').setAttribute('aria-pressed', String(view === 'heat'));
+      redrawFires();
+    });
+  }
+  $('world-satellite').addEventListener('change', redrawFires);
+  $('world-date').addEventListener('change', ({ target }) => {
+    if (!target.value || !target.validity.valid) return;
+    stopPlayback();
+    setWorldDate(target.value);
+  });
+  $('open-layers').addEventListener('click', () => {
+    const layers = $('map-layer-controls');
+    layers.open = true;
+    layers.scrollIntoView({ block: 'start' });
+    layers.querySelector('summary').focus({ preventScroll: true });
+  });
+  if (matchMedia('(max-width: 820px)').matches) $('map-layer-controls').open = false;
   $('local-layers').addEventListener('change', () => {
-    if (displayedDay === null && ($('weather-field').value || $('wind-layer').checked)) showDay(1);
+    if (!worldScope && displayedDay === null && ($('weather-field').value || $('wind-layer').checked)) showDay(1);
     else renderLayers();
   });
   $('activity-view').addEventListener('click', () => { mode = 'activity'; renderCalendar(); });
@@ -672,7 +875,8 @@ async function start() {
   }
   $('app-status').hidden = true;
   const initial = calendar.months.findIndex((row) => row.month === '2025-04');
-  await chooseMonth(initial < 0 ? 0 : initial);
+  chooseMonth(initial < 0 ? 0 : initial);
+  showWorld?.();
 }
 
 start();

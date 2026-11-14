@@ -31,6 +31,26 @@ services:
         max-size: 10m
         max-file: "3"
     networks: [platforms]
+  global-fires:
+    image: nasa-space-apps-fires-api:current
+    container_name: nasa-space-apps-global-fires
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.data
+    entrypoint: [python, scripts/serve_global_fires.py]
+    command: []
+    restart: unless-stopped
+    volumes:
+      - /root/platforms/projects/nasa-space-apps/shared/data/firms-global:/data:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 0.75
+    mem_limit: 384m
+    pids_limit: 32
+    networks: [platforms]
 networks:
   platforms:
     external: true

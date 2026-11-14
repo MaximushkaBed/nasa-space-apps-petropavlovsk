@@ -5,7 +5,7 @@ COPY requirements-global.txt .
 RUN pip install --no-cache-dir --disable-pip-version-check -r requirements-global.txt \
     && pip uninstall -y pip \
     && python -c "import ensurepip, shutil; shutil.rmtree(ensurepip.__path__[0])"
-COPY scripts/sync_global_firms.py scripts/sync_global_firms.py
+COPY scripts/sync_global_firms.py scripts/serve_global_fires.py scripts/
 USER 10001:10001
 ENV PYTHONUNBUFFERED=1
 ENTRYPOINT ["python", "scripts/sync_global_firms.py"]
