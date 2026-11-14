@@ -1,4 +1,4 @@
-export function createFireOverlay(map, platformNames, number) {
+export function createFireOverlay(map, platformNames, number, withinRegion) {
   const canvas = L.DomUtil.create('canvas', 'fire-canvas', map.getPane('activity-cells'));
   const heat = document.createElement('canvas');
   const dot = document.createElement('canvas');
@@ -23,12 +23,12 @@ export function createFireOverlay(map, platformNames, number) {
   const palette = colors.getImageData(0, 0, 256, 1).data;
   const mercatorPoints = (data) => data.map(([lon, lat, platform, weight = 1]) => {
     const point = map.project([lat, lon], 0);
-    return { lon, lat, platform, weight, x: point.x, y: point.y };
+    return { lon, lat, platform, weight, x: point.x, y: point.y, regional: withinRegion(lon, lat) };
   });
   let points = [];
+  let regionalCount = 0;
   let mode = 'points';
   let bins = new Map();
-  let interactive = false;
   let input;
 
   function drawHeat(ctx, width, height, ratio) {
@@ -78,8 +78,8 @@ export function createFireOverlay(map, platformNames, number) {
     const scale = map.getZoomScale(map.getZoom(), 0);
     const origin = map.getPixelBounds().min;
     const worldWidth = 256 * scale;
-    const firstCopy = interactive ? Math.floor((origin.x - 24) / worldWidth) : 0;
-    const lastCopy = interactive ? Math.floor((origin.x + width + 24) / worldWidth) : 0;
+    const firstCopy = Math.floor((origin.x - 24) / worldWidth);
+    const lastCopy = Math.floor((origin.x + width + 24) / worldWidth);
     const stride = Math.ceil(width / step) + 10;
     for (const point of points) {
       const y = point.y * scale - origin.y;
@@ -88,10 +88,11 @@ export function createFireOverlay(map, platformNames, number) {
       for (let copy = firstCopy; copy <= lastCopy; copy++) {
         const x = baseX + copy * worldWidth;
         if (x < -24 || x > width + 24) continue;
-        const key = Math.floor(y / step) * stride + Math.floor(x / step);
+        const index = Math.floor(y / step) * stride + Math.floor(x / step);
+        const key = index * 2 + Number(point.regional);
         const bin = bins.get(key);
         if (bin) bin.count += point.weight;
-        else bins.set(key, { x, y, lon: point.lon, lat: point.lat, platform: point.platform, count: point.weight });
+        else bins.set(key, { x, y, lon: point.lon, lat: point.lat, platform: point.platform, regional: point.regional, count: point.weight });
       }
     }
     if (mode === 'heat') {
@@ -99,17 +100,21 @@ export function createFireOverlay(map, platformNames, number) {
       return;
     }
     ctx.fillStyle = '#ff382d';
-    for (const { x, y, count } of bins.values()) {
-      const radius = Math.min(4.4, 1.65 + Math.log2(count) * .43);
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fill();
+    for (const regional of [false, true]) {
+      for (const bin of bins.values()) {
+        if (bin.regional !== regional) continue;
+        const { x, y, count } = bin;
+        const radius = Math.min(4.4, (regional ? 2.5 : 1.65) + Math.log2(count) * .43);
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
   map.on('moveend resize', draw);
   map.on('click', ({ containerPoint, latlng }) => {
-    if (!interactive || mode !== 'points') return;
+    if (mode !== 'points') return;
     let selected;
     let nearest = 9;
     for (const bin of bins.values()) {
@@ -131,11 +136,14 @@ export function createFireOverlay(map, platformNames, number) {
     L.popup().setLatLng(latlng).setContent(content).openOn(map);
   });
 
-  return (data, display, clickable = false) => {
-    if (input !== data) points = mercatorPoints(data);
+  return (data, display) => {
+    if (input !== data) {
+      points = mercatorPoints(data);
+      regionalCount = points.filter((point) => point.regional).length;
+    }
     input = data;
     mode = display;
-    interactive = clickable;
     draw();
+    return regionalCount;
   };
 }

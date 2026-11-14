@@ -2,13 +2,15 @@
 
 import { createExtraLayers } from './map-layers.js?v=esri-imagery';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
-import { createFireOverlay } from './fire-overlay.js?v=world-wrap';
+import { createFireOverlay } from './fire-overlay.js?v=atlas-workspace';
 
 const $ = (id) => document.getElementById(id);
 const sources = ['Aqua / MODIS', 'Suomi NPP / VIIRS', 'NOAA-20 / VIIRS'];
 const sourceTags = ['MODIS', 'Suomi', 'NOAA‑20'];
 const detailedImageryMinZoom = 6;
 const atlasMaxZoom = 17;
+const mercatorLimit = 85.0511287798;
+const kishkenekolDay = '2025-04-12';
 const monthNames = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 const fullMonths = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
 const number = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
@@ -19,18 +21,13 @@ const deviationKey = [['below-2', '−50% и ниже'], ['below-1', 'ниже �
 
 let calendar;
 let map;
-let region;
-let cellLayer;
 let weatherOverlay;
 let fireOverlay;
 let fireDisplay = 'points';
-let worldScope = false;
 let worldArchive;
-let worldArchiveRequest;
 let worldFrame;
 let worldRequest;
-let displayedDay = null;
-let displayedMonth = null;
+let pendingDay;
 let playbackTimer;
 let layerRequest = 0;
 let renderExtraLayers;
@@ -38,8 +35,6 @@ let weatherData;
 let monthIndex;
 let source = 'unified';
 let mode = 'deviation';
-let mapRequest = 0;
-let mapAvailable;
 const cachedCells = new Map();
 
 function periodLabel(key) {
@@ -115,6 +110,15 @@ function createWorldOverview() {
   });
 }
 
+function inRing(ring, lon, lat) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [aLon, aLat] = ring[i], [bLon, bLat] = ring[j];
+    if ((aLat > lat) !== (bLat > lat) && lon < (bLon - aLon) * (lat - aLat) / (bLat - aLat) + aLon) inside = !inside;
+  }
+  return inside;
+}
+
 function createMap(basemap, boundary) {
   const styles = {
     country: { color: '#7890a0', weight: 1.1, fillColor: '#162846', fillOpacity: 1 },
@@ -124,17 +128,13 @@ function createMap(basemap, boundary) {
     river: { color: '#6498af', weight: .85, opacity: .67 },
   };
   map = L.map('map', {
-    zoomControl: false, minZoom: 5, maxZoom: atlasMaxZoom, zoomSnap: .25, worldCopyJump: true,
-    maxBounds: [[47, 58], [60, 83]], maxBoundsViscosity: .8, zoomAnimation: false,
+    zoomControl: false, maxZoom: atlasMaxZoom, zoomSnap: .25, worldCopyJump: true,
+    maxBounds: [[-mercatorLimit, -1000000], [mercatorLimit, 1000000]], maxBoundsViscosity: 1,
+    inertia: false, zoomAnimation: false,
   });
   map.attributionControl.setPrefix(false);
   map.attributionControl.addAttribution('<a href="https://www.naturalearthdata.com/">Natural Earth</a> · <a href="https://www.geoboundaries.org/">geoBoundaries</a>');
-  const satellite = L.imageOverlay('assets/sko-blue-marble.webp', [[46, 57], [61, 84]], {
-    className: 'satellite-image',
-    pane: 'tilePane', zIndex: 2,
-    attribution: '<a href="https://nasa-gibs.github.io/gibs-api-docs/">Blue Marble · NASA GIBS</a>',
-  });
-  const world = createWorldOverview();
+  createWorldOverview().addTo(map);
   const worldDetails = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg', {
     minZoom: 3, maxNativeZoom: 8, maxZoom: atlasMaxZoom, zIndex: 2,
   });
@@ -144,10 +144,11 @@ function createMap(basemap, boundary) {
     attribution: '<a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9">Esri World Imagery</a> · Vantor, Earthstar Geographics, GIS User Community',
   });
   const imageryStatus = $('imagery-status');
+  let satelliteView = true;
   detailedImagery.on('loading', () => { imageryStatus.hidden = true; });
   detailedImagery.on('tileerror', () => { imageryStatus.hidden = false; });
   const updateDetailedImagery = () => {
-    if (map.hasLayer(satellite) && map.getZoom() >= detailedImageryMinZoom) detailedImagery.addTo(map);
+    if (satelliteView && map.getZoom() >= detailedImageryMinZoom) detailedImagery.addTo(map);
     else {
       detailedImagery.remove();
       imageryStatus.hidden = true;
@@ -164,16 +165,34 @@ function createMap(basemap, boundary) {
     interactive: false,
   }).addTo(map);
 
-  region = L.geoJSON(boundary, { interactive: false, style: {
-    color: '#c4e0fb', weight: 1.65, opacity: .94, fillColor: '#4776aa', fillOpacity: .13, dashArray: '5 4',
-  } }).addTo(map);
+  const regionPane = map.createPane('selected-region');
+  regionPane.style.zIndex = 404;
+  regionPane.style.pointerEvents = 'none';
+  const makeRegion = (offset) => L.geoJSON(boundary, {
+    pane: 'selected-region', interactive: false,
+    coordsToLatLng: ([lon, lat]) => L.latLng(lat, lon + offset),
+    style: { color: '#9ae8ff', weight: 2, fillOpacity: .04, dashArray: '5 4' },
+  }).addTo(map);
+  const region = makeRegion(0);
+  const regionalBounds = region.getBounds();
+  const center = regionalBounds.getCenter();
+  for (const offset of [-360, 0, 360]) {
+    if (offset) makeRegion(offset);
+    L.marker([center.lat, center.lng + offset], {
+      interactive: false, keyboard: false,
+      icon: L.divIcon({ className: 'region-badge', html: 'СКО', iconSize: [32, 19], iconAnchor: [-7, 22] }),
+    }).addTo(map);
+  }
+  const { type, coordinates } = boundary.geometry;
+  const polygons = type === 'Polygon' ? [coordinates] : coordinates;
+  const west = regionalBounds.getWest(), east = regionalBounds.getEast();
+  const south = regionalBounds.getSouth(), north = regionalBounds.getNorth();
+  const withinRegion = (lon, lat) => lon >= west && lon <= east && lat >= south && lat <= north
+    && polygons.some(([outer, ...holes]) => inRing(outer, lon, lat) && !holes.some((hole) => inRing(hole, lon, lat)));
   const setBasemap = (useSatellite) => {
-    if (useSatellite) satellite.addTo(map);
-    else satellite.remove();
-    if (map.hasLayer(world)) {
-      if (useSatellite) worldDetails.addTo(map);
-      else worldDetails.remove();
-    }
+    satelliteView = useSatellite;
+    if (useSatellite) worldDetails.addTo(map);
+    else worldDetails.remove();
     geography.eachLayer((layer) => {
       const style = layer.feature.properties.style;
       if (style === 'country' || style === 'lake') layer.setStyle({ fillOpacity: useSatellite ? 0 : 1 });
@@ -189,11 +208,8 @@ function createMap(basemap, boundary) {
   setBasemap(true);
   const activityPane = map.createPane('activity-cells');
   activityPane.style.zIndex = 415;
-  const heatCanvas = L.canvas({ padding: .5, pane: 'activity-cells' });
-  cellLayer = L.featureGroup().addTo(map);
-  fireOverlay = createFireOverlay(map, () => worldArchive?.platforms ?? [], number);
+  fireOverlay = createFireOverlay(map, () => worldArchive?.platforms ?? [], number, withinRegion);
   weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)));
-  map.heatCanvas = heatCanvas;
 
   const labelPane = map.createPane('city-labels');
   labelPane.style.zIndex = 425;
@@ -217,30 +233,16 @@ function createMap(basemap, boundary) {
     }).addTo(map);
   }
   L.control.scale({ metric: true, imperial: false, position: 'bottomright', maxWidth: 88 }).addTo(map);
-  const reset = (keepDate = true) => {
-    world.remove();
-    worldDetails.remove();
-    map.setMinZoom(5);
-    map.setMaxBounds([[47, 58], [60, 83]]);
-    $('world-view').setAttribute('aria-pressed', 'false');
-    $('world-view').textContent = 'Весь мир ↗';
-    $('map-layer-status').hidden = true;
-    map.fitBounds(region.getBounds(), { padding: [25, 24], animate: false });
-    changeScope(false, keepDate);
+  const reset = () => {
+    map.fitBounds(regionalBounds, { padding: [30, Math.min(180, map.getSize().y * .23)], animate: false });
   };
   const showWorld = () => {
-    if (map.hasLayer(world)) {
-      reset();
-      return;
-    }
-    map.setMaxBounds(null);
-    map.setMinZoom(0);
-    world.addTo(map);
-    setBasemap(true);
-    map.fitBounds([[-62, -177], [72, 177]], { padding: [12, 12], animate: false });
-    $('world-view').setAttribute('aria-pressed', 'true');
-    $('world-view').textContent = 'К СКО ↗';
-    changeScope(true);
+    map.setView([22, 0], map.getMinZoom(), { animate: false });
+  };
+  const fitViewport = () => {
+    map.invalidateSize({ pan: false });
+    // At the minimum zoom the Mercator world must be at least as tall as the map.
+    map.setMinZoom(Math.max(0, Math.ceil(Math.log2(Math.max(1, map.getSize().y) / 256) * 4) / 4));
   };
   $('world-view').addEventListener('click', showWorld);
   $('world-view').disabled = false;
@@ -255,28 +257,13 @@ function createMap(basemap, boundary) {
   });
   $('zoom-in').addEventListener('click', () => map.zoomIn());
   $('zoom-out').addEventListener('click', () => map.zoomOut());
-  $('reset-map').addEventListener('click', () => reset());
-  const section = $('observations');
-  const expand = $('expand-map');
-  const setExpanded = (active) => {
-    section.classList.toggle('expanded-map', active);
-    document.body.classList.toggle('atlas-expanded', active);
-    expand.setAttribute('aria-pressed', String(active));
-    expand.setAttribute('aria-label', active ? 'Свернуть карту' : 'Развернуть карту');
-    expand.title = expand.getAttribute('aria-label');
-    requestAnimationFrame(() => map.invalidateSize({ pan: true }));
-  };
-  expand.addEventListener('click', () => setExpanded(expand.getAttribute('aria-pressed') === 'false'));
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && section.classList.contains('expanded-map')) {
-      setExpanded(false);
-      expand.focus({ preventScroll: true });
-    }
-  });
-  new ResizeObserver(() => map.invalidateSize({ pan: true })).observe($('map'));
-  reset();
+  $('reset-map').addEventListener('click', reset);
+  $('reset-map').disabled = false;
+  fitViewport();
+  showWorld();
+  new ResizeObserver(fitViewport).observe($('map'));
   addTerrainControl(map);
-  return { showWorld, reset };
+  return reset;
 }
 
 function mapStatus(message) {
@@ -285,51 +272,11 @@ function mapStatus(message) {
   node.hidden = !message;
 }
 
-function cellPopup(cell, count, period, sourceLabel, daily) {
-  const [west, south, east, north] = cell;
-  const body = element('div');
-  body.append(element('strong', daily ? 'Тепловой сигнал за этот день' : `${number.format(count)} дн. с тепловым сигналом`), document.createElement('br'),
-    element('span', `${period} · ${sourceLabel}`), document.createElement('br'),
-    element('span', `${((south + north) / 2).toFixed(3)}° с. ш., ${((west + east) / 2).toFixed(3)}° в. д.`));
-  return body;
-}
-
 function stopPlayback() {
-  clearInterval(playbackTimer);
+  clearTimeout(playbackTimer);
   playbackTimer = undefined;
   $('play-frames').replaceChildren(element('span', '▶'), document.createTextNode(' Воспроизвести'));
   $('play-frames').firstChild.setAttribute('aria-hidden', 'true');
-}
-
-function updateTimeline(data, date) {
-  const slider = $('day-slider');
-  slider.max = data.frames.length;
-  slider.value = displayedDay ?? 0;
-  slider.setAttribute('aria-valuetext', date ? dayFormatter.format(new Date(date)) : 'Весь месяц на карте');
-  $('frame-date').textContent = date ? dayFormatter.format(new Date(date)) : 'Весь месяц';
-  $('whole-month').disabled = displayedDay === null;
-  for (const id of ['day-slider', 'play-frames']) $(id).disabled = false;
-}
-
-function renderTimelineOverview(data, row, platform) {
-  const ticks = $('timeline-ticks');
-  const counts = data.frames.map((frame) => frame && frame[platform].length);
-  const largest = Math.max(0, ...counts);
-  const peak = $('peak-day');
-  peak.hidden = largest === 0;
-  if (!peak.hidden) {
-    const day = counts.indexOf(largest) + 1;
-    const label = dayFormatter.format(new Date(frameDate(row.month, day)));
-    peak.textContent = `Пик месяца: ${label} · ячеек с сигналом — ${number.format(largest)} ↗`;
-    peak.dataset.day = day;
-  }
-  $('timeline-outages').hidden = !counts.includes(null);
-  ticks.replaceChildren(...counts.map((count, index) => {
-    const tick = element('i', undefined, count === null ? 'gap' : '');
-    if (count) tick.style.setProperty('--activity', .3 + .7 * count / largest);
-    if (index + 1 === displayedDay) tick.classList.add('current');
-    return tick;
-  }));
 }
 
 async function renderWeather(date, request) {
@@ -352,9 +299,9 @@ async function renderWeather(date, request) {
 
 async function renderLayers() {
   const request = ++layerRequest;
-  const date = worldScope ? $('world-date').value : displayedDay === null ? null : frameDate(calendar.months[monthIndex].month, displayedDay);
-  if (worldScope && !date) return;
-  const month = worldScope ? date.slice(0, 7) : calendar.months[monthIndex].month;
+  const date = $('world-date').value;
+  if (!date) return;
+  const month = date.slice(0, 7);
   const [, events] = await Promise.all([renderWeather(date, request), renderExtraLayers?.(month, date)]);
   if (request !== layerRequest) return;
   const items = (events ?? []).filter(Boolean);
@@ -363,59 +310,57 @@ async function renderLayers() {
   summary.hidden = items.length === 0;
 }
 
-function fireLegends(scope, day, visible) {
-  const heat = visible && fireDisplay === 'heat';
-  $('heat-legend').hidden = !heat;
-  $('heat-legend-title').textContent = scope ? 'Плотность детекций'
-    : day === null ? 'Плотность ячейко-дней' : 'Плотность ячеек с сигналом';
-  $('world-point-legend').hidden = !scope || !visible || heat;
-  $('month-map-legend').hidden = scope || day !== null || !visible || heat;
-  $('day-map-legend').hidden = scope || day === null || !visible || heat;
-}
-
 function showWorldFrame() {
   mapStatus('');
   const visible = $('fire-layer').checked;
-  fireLegends(true, null, visible);
+  $('heat-legend').hidden = !visible || fireDisplay !== 'heat';
+  $('world-point-legend').hidden = !visible || fireDisplay !== 'points';
   const selected = $('world-satellite').value;
   const points = worldFrame?.points ?? [];
   const selectedPoints = selected === '' ? points : points.filter((point) => point[2] === Number(selected));
-  fireOverlay(visible ? selectedPoints : [], fireDisplay, true);
-  $('map-summary').textContent = !visible ? 'Слой тепловых точек выключен'
-    : worldFrame ? `Детекций в мире — ${number.format(selectedPoints.length)}` : 'Загрузка детекций…';
+  const regionalCount = fireOverlay(visible ? selectedPoints : [], fireDisplay);
+  $('map-summary').textContent = !visible ? 'Слой выключен'
+    : worldFrame ? `Мир · ${number.format(selectedPoints.length)} детекций` : 'Загрузка детекций…';
+  $('regional-count').textContent = visible && worldFrame ? `СКО · ${number.format(regionalCount)}` : '';
   if (visible && worldFrame && !selectedPoints.length) {
-    mapStatus('За эту дату не найдено детекций выбранных спутников. Покрытие неизвестно.');
+    mapStatus('За эту дату нет записей выбранных спутников. Покрытие неизвестно.');
   }
 }
 
 async function loadWorldFrame() {
   const day = $('world-date').value;
-  if (!worldScope || !worldArchive || !day) return;
+  if (!worldArchive || !day) return;
   if (worldFrame?.date === day) {
     showWorldFrame();
     return;
   }
+  if (pendingDay === day) return;
   worldRequest?.abort();
   const request = new AbortController();
   worldRequest = request;
+  pendingDay = day;
   worldFrame = undefined;
   showWorldFrame();
   try {
     const response = await fetch(`/api/fires/${day}`, { signal: request.signal });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const frame = await response.json();
-    if (request.signal.aborted || !worldScope) return;
+    if (request.signal.aborted) return;
     worldFrame = frame;
     showWorldFrame();
   } catch (error) {
-    if (request.signal.aborted || !worldScope) return;
+    if (request.signal.aborted) return;
+    $('regional-count').textContent = '';
     $('map-summary').textContent = 'Данные мира недоступны';
-    mapStatus('Мировые детекции за этот день не загрузились. Выберите другую дату или откройте СКО.');
+    mapStatus('Мировые детекции за этот день не загрузились. Выберите другую дату или повторите попытку.');
+  } finally {
+    if (worldRequest === request) pendingDay = undefined;
   }
 }
 
 function setWorldDate(day) {
   if (day < worldArchive.first || day > worldArchive.last) return;
+  map.closePopup();
   $('world-date').value = day;
   $('frame-date').textContent = dayFormatter.format(new Date(day));
   const month = day.slice(0, 7);
@@ -427,143 +372,27 @@ function setWorldDate(day) {
   slider.setAttribute('aria-valuetext', $('frame-date').textContent);
   const through = worldArchive.through;
   $('archive-caption').textContent = day === worldArchive.last && through?.startsWith(day)
-    ? `Последняя детекция в архиве · ${through.slice(11, 16)} UTC`
+    ? `Данные до ${through.slice(11, 16)} UTC`
     : 'Архив FIRMS · время UTC';
   renderLayers();
   return loadWorldFrame();
 }
 
-async function changeScope(global, keepDate = true) {
-  const changed = worldScope !== global;
-  worldScope = global;
-  if (!changed) return;
-  stopPlayback();
-  worldRequest?.abort();
-  mapRequest++;
-  layerRequest++;
-  cellLayer.clearLayers();
-  fireOverlay([], fireDisplay);
-  map.closePopup();
-  mapStatus('');
-  for (const id of ['regional-source', 'regional-period', 'whole-month', 'regional-boundary-key']) $(id).hidden = global;
-  for (const id of ['global-source', 'global-period', 'archive-caption']) $(id).hidden = !global;
-  $('day-slider').min = global ? 1 : 0;
-  $('timeline-ticks').replaceChildren();
-  $('peak-day').hidden = $('timeline-outages').hidden = true;
-  $('scope-note').hidden = true;
-  if (!global) {
-    const day = $('world-date').value;
-    if (keepDate && day) {
-      const index = calendar.months.findIndex((row) => row.month === day.slice(0, 7));
-      if (index >= 0) {
-        await chooseMonth(index, Number(day.slice(-2)));
-        return;
-      }
-      $('scope-note').textContent = `В календаре СКО нет данных за ${periodLabel(day.slice(0, 7))}. Показан выбранный период СКО.`;
-      $('scope-note').hidden = false;
-    }
-    renderLayers();
-    await renderMap(calendar.months[monthIndex]);
-    return;
-  }
-  $('map-subtitle').textContent = 'Тепловые детекции · NASA FIRMS';
-  $('frame-date').textContent = 'Загрузка…';
-  $('map-summary').textContent = 'Загрузка мирового архива…';
-  $('day-slider').disabled = $('play-frames').disabled = true;
-  fireLegends(true, null, $('fire-layer').checked);
+async function loadArchive() {
   try {
-    worldArchiveRequest ??= getJSON('/api/fires/range');
-    const range = await worldArchiveRequest;
-    if (!worldArchive) {
-      worldArchive = range;
-      for (const [index, label] of worldArchive.platforms.entries()) {
-        $('world-satellite').add(new Option(label, index));
-      }
-      $('world-date').min = worldArchive.first;
-      $('world-date').max = worldArchive.last;
+    worldArchive = await getJSON('/api/fires/range');
+    for (const [index, label] of worldArchive.platforms.entries()) {
+      $('world-satellite').add(new Option(label, index));
     }
-    if (!worldScope) return;
+    $('world-date').min = worldArchive.first;
+    $('world-date').max = worldArchive.last;
     for (const id of ['world-satellite', 'world-date', 'day-slider', 'play-frames']) $(id).disabled = false;
-    $('archive-caption').title = `Последнее наблюдение в архиве: ${worldArchive.through ?? worldArchive.last} · возможны предварительные данные`;
-    const regionalDate = displayedDay !== null ? frameDate(calendar.months[monthIndex].month, displayedDay) : '';
-    const sharedDate = regionalDate >= worldArchive.first && regionalDate <= worldArchive.last ? regionalDate : '';
-    await setWorldDate(sharedDate || $('world-date').value || worldArchive.last);
+    await setWorldDate(worldArchive.last);
   } catch (error) {
-    worldArchiveRequest = undefined;
-    if (!worldScope) return;
-    $('frame-date').textContent = 'Мировой архив недоступен';
+    $('frame-date').textContent = 'Архив недоступен';
     mapStatus('Не удалось подключиться к мировому архиву FIRMS.');
     console.error(error);
   }
-}
-
-async function renderMap(row) {
-  if (!mapAvailable || worldScope) return;
-  const request = ++mapRequest;
-  const platform = monthSource(row);
-  const sourceLabel = sources[platform];
-  cellLayer.clearLayers();
-  fireOverlay([], fireDisplay);
-  map.closePopup();
-  $('map-subtitle').textContent = `Сетка 2 × 2 км · ${sourceLabel}`;
-  const day = displayedDay;
-  mapStatus('');
-  try {
-    if (!cachedCells.has(row.month)) cachedCells.set(row.month, getJSON(`data/${row.month}.json?v=sko-time`));
-    const data = await cachedCells.get(row.month);
-    if (request !== mapRequest) return;
-    const date = day === null ? null : frameDate(row.month, day);
-    const period = date ? dayFormatter.format(new Date(date)) : periodLabel(row.month);
-    updateTimeline(data, date);
-    renderTimelineOverview(data, row, platform);
-    const fireVisible = $('fire-layer').checked;
-    fireLegends(false, day, fireVisible);
-    if (!fireVisible) {
-      $('map-summary').textContent = 'Слой тепловых точек выключен';
-      return;
-    }
-    const frame = day === null ? undefined : data.frames[day - 1];
-    if (frame === null) {
-      $('map-summary').textContent = 'День исключён из анализа';
-      mapStatus('Данные о горении за этот день исключены из-за сбоя спутниковых наблюдений.');
-      return;
-    }
-    const cells = frame ? frame[platform].map((index) => data.cells[index]) : data.cells;
-    let visible = 0;
-    const heatPoints = [];
-    for (const cell of cells) {
-      const count = day === null ? cell[4 + platform] : 1;
-      if (!count) continue;
-      visible++;
-      const [west, south, east, north] = cell;
-      if (fireDisplay === 'heat') {
-        heatPoints.push([(west + east) / 2, (south + north) / 2, platform, count]);
-        continue;
-      }
-      const shape = L.circleMarker([(south + north) / 2, (west + east) / 2], {
-        renderer: map.heatCanvas, pane: 'activity-cells', radius: count < 3 ? 2.5 : count < 7 ? 3.5 : 4.5,
-        stroke: false, fillColor: '#ff382d', fillOpacity: .95,
-      });
-      shape.bindPopup(() => cellPopup(cell, count, period, sourceLabel, day !== null));
-      cellLayer.addLayer(shape);
-    }
-    if (heatPoints.length) fireOverlay(heatPoints, 'heat');
-    $('map-summary').textContent = `Ячеек с сигналом — ${number.format(visible)}`;
-    if (!visible) mapStatus('Нет зарегистрированных сигналов. Покрытие неизвестно.');
-  } catch (error) {
-    cachedCells.delete(row.month);
-    if (request !== mapRequest) return;
-    $('map-summary').textContent = 'Данные карты недоступны';
-    $('frame-date').textContent = 'Данные недоступны';
-    mapStatus('Не удалось загрузить ячейки этого месяца.');
-    console.error(error);
-  }
-}
-
-function showDay(day) {
-  displayedDay = day;
-  renderMap(calendar.months[monthIndex]);
-  renderLayers();
 }
 
 function togglePlayback() {
@@ -571,40 +400,19 @@ function togglePlayback() {
     stopPlayback();
     return;
   }
-  if (worldScope) {
-    $('play-frames').textContent = 'Ⅱ Пауза';
-    const playNext = async () => {
-      const date = new Date($('world-date').value);
-      date.setUTCDate(date.getUTCDate() + 1);
-      const next = date.toISOString().slice(0, 10);
-      const month = $('world-date').value.slice(0, 7);
-      if (next > worldArchive.last || !next.startsWith(month)) {
-        stopPlayback();
-        return;
-      }
-      const playing = playbackTimer;
-      await setWorldDate(next);
-      if (playbackTimer === playing) playbackTimer = setTimeout(playNext, 850);
-    };
-    const current = $('world-date').value;
-    const first = `${current.slice(0, 7)}-01`;
-    const isLast = current === worldArchive.last || Number(current.slice(-2)) === Number($('day-slider').max);
-    const kickoff = async () => {
-      if (!isLast) return playNext();
-      const playing = playbackTimer;
-      await setWorldDate(first < worldArchive.first ? worldArchive.first : first);
-      if (playbackTimer === playing) playbackTimer = setTimeout(playNext, 850);
-    };
-    playbackTimer = setTimeout(kickoff, 0);
-    return;
-  }
-  const last = Number($('day-slider').max);
-  showDay(displayedDay === null || displayedDay === last ? 1 : displayedDay);
+  const current = $('world-date').value;
+  const month = current.slice(0, 7);
+  const first = frameDate(month, Number($('day-slider').min));
+  const last = frameDate(month, Number($('day-slider').max));
   $('play-frames').textContent = 'Ⅱ Пауза';
-  playbackTimer = setInterval(() => {
-    if (displayedDay === last) stopPlayback();
-    else showDay(displayedDay + 1);
-  }, 650);
+  const advance = async (day) => {
+    const playing = playbackTimer;
+    await setWorldDate(day);
+    if (playbackTimer !== playing) return;
+    if (day === last) return stopPlayback();
+    playbackTimer = setTimeout(() => advance(frameDate(month, Number(day.slice(-2)) + 1)), 850);
+  };
+  playbackTimer = setTimeout(() => advance(current === last ? first : current), 0);
 }
 
 function valueFor(row) {
@@ -688,7 +496,7 @@ function renderCalendarInsight() {
   }
 }
 
-function makeCalendar(openRegional) {
+function makeCalendar() {
   const table = $('calendar');
   const header = table.createTHead().insertRow();
   for (const [month, name] of ['Год', ...monthNames].entries()) {
@@ -718,10 +526,7 @@ function makeCalendar(openRegional) {
       const button = element('button');
       button.type = 'button';
       button.dataset.index = index;
-      button.addEventListener('click', () => {
-        if (worldScope) openRegional();
-        chooseMonth(index, null);
-      });
+      button.addEventListener('click', () => chooseMonth(index));
       td.append(button);
     }
   }
@@ -753,49 +558,79 @@ function renderCalendar() {
   }));
 }
 
-function chooseMonth(index, day) {
+function chooseMonth(index) {
   const row = calendar.months[index];
   if (!row) return;
-  if (displayedMonth !== row.month) {
-    stopPlayback();
-    displayedMonth = row.month;
-    displayedDay = displayedDay === null ? null : 1;
-    for (const id of ['day-slider', 'play-frames', 'whole-month']) $(id).disabled = true;
-    $('frame-date').textContent = 'Загрузка…';
-    $('map-summary').textContent = 'Загрузка ячеек…';
-    $('timeline-ticks').replaceChildren();
-    $('peak-day').hidden = true;
-    $('timeline-outages').hidden = true;
-  }
-  if (day !== undefined) displayedDay = day;
-  if (day === null) $('scope-note').hidden = true;
   monthIndex = index;
-  $('period').value = String(index);
-  $('previous').disabled = index === 0;
-  $('next').disabled = index === calendar.months.length - 1;
-  $('calendar-selection').textContent = `${periodLabel(row.month)} на карте ↑`;
   renderCalendar();
   renderComparison(row);
-  if (mapAvailable) renderLayers();
-  return renderMap(row);
+  $('calendar-selection').textContent = `День пика · ${periodLabel(row.month)} ↗`;
+}
+
+function setupPanels() {
+  const analysis = $('analysis-panel');
+  const layers = $('map-layer-controls');
+  const layersToggle = $('open-layers');
+  const tabs = [...document.querySelectorAll('.tool-nav a')];
+  const toolbar = document.querySelector('.topbar');
+  new ResizeObserver(() => {
+    $('top').style.setProperty('--panel-top', `${Math.ceil(toolbar.getBoundingClientRect().bottom + 7)}px`);
+  }).observe(toolbar);
+  const sections = {
+    '#season-calendar': ['calendar-analysis', 'Календарь и норма · СКО'],
+    '#correlations': ['correlations', 'Связи · СКО'],
+    '#kishkenekol-case': ['kishkenekol-case', 'Кейс Кишкенеколя'],
+  };
+  function closePanel() {
+    const active = [...tabs, layersToggle].find((tab) => tab.getAttribute('aria-expanded') === 'true');
+    for (const tab of [...tabs, layersToggle]) tab.setAttribute('aria-expanded', 'false');
+    analysis.hidden = layers.hidden = true;
+    if (Object.hasOwn(sections, location.hash)) history.replaceState(null, '', '#observations');
+    active?.focus({ preventScroll: true });
+  }
+  function openAnalysis(hash) {
+    const selected = sections[hash];
+    if (!Object.hasOwn(sections, hash)) return closePanel();
+    layers.hidden = true;
+    layersToggle.setAttribute('aria-expanded', 'false');
+    for (const tab of tabs) tab.setAttribute('aria-expanded', String(tab.hash === hash));
+    for (const [id] of Object.values(sections)) $(id).hidden = id !== selected[0];
+    $('analysis-heading').textContent = selected[1];
+    analysis.hidden = false;
+    analysis.scrollTop = 0;
+  }
+  for (const tab of tabs) {
+    tab.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (tab.getAttribute('aria-expanded') === 'true') return closePanel();
+      history.replaceState(null, '', tab.hash);
+      openAnalysis(tab.hash);
+    });
+  }
+  layersToggle.addEventListener('click', () => {
+    if (!layers.hidden) return closePanel();
+    closePanel();
+    layers.hidden = false;
+    layersToggle.setAttribute('aria-expanded', 'true');
+  });
+  for (const button of document.querySelectorAll('[data-close-panel]')) button.addEventListener('click', closePanel);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !$('method').open && (!analysis.hidden || !layers.hidden)) closePanel();
+  });
+  window.addEventListener('hashchange', () => openAnalysis(location.hash));
+  if (Object.hasOwn(sections, location.hash)) openAnalysis(location.hash);
+  return closePanel;
 }
 
 async function start() {
   $('open-method').addEventListener('click', () => $('method').showModal());
-  let mapViews;
+  const closePanel = setupPanels();
   try {
-    calendar = await getJSON('data/calendar.json?v=sko-series');
-  } catch (error) {
-    $('app-status').textContent = 'Не удалось загрузить календарь. Откройте приложение через локальный веб-сервер.';
-    $('overview').hidden = true;
-    document.querySelector('.calendar-panel').hidden = true;
-    console.error(error);
-    return;
-  }
-  try {
-    const [basemap, boundary] = await Promise.all([getJSON('data/basemap.geojson'), getJSON('data/region.geojson')]);
-    mapViews = createMap(basemap, boundary);
-    mapAvailable = true;
+    const [basemap, boundary, regionalCalendar] = await Promise.all([
+      getJSON('data/basemap.geojson'), getJSON('data/region.geojson'), getJSON('data/calendar.json?v=sko-series'),
+    ]);
+    calendar = regionalCalendar;
+    const reset = createMap(basemap, boundary);
     for (const id of ['fire-layer', 'fire-points', 'fire-heat']) $(id).disabled = false;
     $('local-layers').disabled = false;
     const extraControls = $('extra-layer-controls');
@@ -803,110 +638,90 @@ async function start() {
       $('map-layer-status').textContent = `${detail} · часть спутниковых плиток недоступна.`;
       $('map-layer-status').hidden = false;
     });
-    createExtraLayers(map, extraControls, getJSON, (startDay) => {
-      if (!worldScope && startDay && displayedDay === null) showDay(1);
-      else renderLayers();
-    })
-      .then((render) => { renderExtraLayers = render; if (monthIndex !== undefined) renderLayers(); })
+    createExtraLayers(map, extraControls, getJSON, renderLayers)
+      .then((render) => { renderExtraLayers = render; renderLayers(); })
       .catch((error) => {
         $('map-layer-status').textContent = 'Не удалось загрузить каталог дополнительных слоёв.';
         $('map-layer-status').hidden = false;
         console.error(error);
       });
+    makeCalendar();
+    for (const id of ['source', 'activity-view', 'deviation-view']) $(id).disabled = false;
+    $('source').addEventListener('change', (event) => {
+      source = event.target.value;
+      chooseMonth(monthIndex);
+    });
+    $('activity-view').addEventListener('click', () => { mode = 'activity'; renderCalendar(); });
+    $('deviation-view').addEventListener('click', () => { mode = 'deviation'; renderCalendar(); });
+    $('calendar-selection').addEventListener('click', async (event) => {
+      event.preventDefault();
+      if (!worldArchive) return;
+      const index = monthIndex;
+      const row = calendar.months[index];
+      const platform = monthSource(row);
+      try {
+        if (!cachedCells.has(row.month)) cachedCells.set(row.month, getJSON(`data/${row.month}.json?v=sko-time`));
+        const data = await cachedCells.get(row.month);
+        if (index !== monthIndex || $('analysis-panel').hidden) return;
+        const counts = data.frames.map((frame) => frame?.[platform].length ?? 0);
+        const largest = Math.max(...counts);
+        if (!largest) {
+          $('calendar-selection').textContent = 'В этом месяце нет ячеек с сигналом';
+          return;
+        }
+        const day = frameDate(row.month, counts.indexOf(largest) + 1);
+        const satellite = ['Aqua', 'Suomi NPP', 'NOAA-20'][platform];
+        $('world-satellite').value = String(worldArchive.platforms.indexOf(satellite));
+        $('fire-layer').checked = true;
+        closePanel();
+        stopPlayback();
+        reset();
+        setWorldDate(day);
+      } catch (error) {
+        cachedCells.delete(row.month);
+        if (index !== monthIndex) return;
+        $('calendar-selection').textContent = 'Не удалось найти день пика. Повторите попытку.';
+        console.error(error);
+      }
+    });
+    $('case-atlas').hidden = false;
+    $('case-atlas').addEventListener('click', () => {
+      if (!worldArchive) return;
+      stopPlayback();
+      closePanel();
+      $('world-satellite').value = String(worldArchive.platforms.indexOf('NOAA-20'));
+      $('fire-layer').checked = true;
+      map.fitBounds([[53.035, 71.68], [53.346, 72.013]], { padding: [22, 70], animate: false });
+      setWorldDate(kishkenekolDay);
+    });
+    $('local-layers').addEventListener('change', renderLayers);
+    $('fire-layer').addEventListener('change', loadWorldFrame);
+    for (const [id, view] of [['fire-points', 'points'], ['fire-heat', 'heat']]) {
+      $(id).addEventListener('click', () => {
+        fireDisplay = view;
+        $('fire-points').setAttribute('aria-pressed', String(view === 'points'));
+        $('fire-heat').setAttribute('aria-pressed', String(view === 'heat'));
+        loadWorldFrame();
+      });
+    }
+    $('world-satellite').addEventListener('change', loadWorldFrame);
+    $('world-date').addEventListener('change', ({ target }) => {
+      if (!target.value || !target.validity.valid) return;
+      stopPlayback();
+      setWorldDate(target.value);
+    });
+    $('day-slider').addEventListener('input', ({ target }) => {
+      stopPlayback();
+      setWorldDate(frameDate($('world-date').value.slice(0, 7), Number(target.value)));
+    });
+    $('play-frames').addEventListener('click', togglePlayback);
+    const initial = calendar.months.findIndex((row) => row.month === kishkenekolDay.slice(0, 7));
+    chooseMonth(Math.max(0, initial));
+    loadArchive();
   } catch (error) {
-    mapStatus('Не удалось загрузить основу карты.');
-    for (const button of document.querySelectorAll('.map-tools button')) button.disabled = true;
+    mapStatus('Не удалось загрузить атлас.');
     console.error(error);
   }
-  for (const [index, row] of calendar.months.entries()) {
-    const option = element('option', periodLabel(row.month));
-    option.value = index;
-    $('period').append(option);
-  }
-  makeCalendar(() => mapViews.reset(false));
-  for (const id of ['source', 'period', 'activity-view', 'deviation-view']) $(id).disabled = false;
-  $('source').addEventListener('change', (event) => {
-    source = event.target.value;
-    chooseMonth(monthIndex);
-  });
-  $('period').addEventListener('change', (event) => chooseMonth(Number(event.target.value)));
-  $('previous').addEventListener('click', () => chooseMonth(monthIndex - 1));
-  $('next').addEventListener('click', () => chooseMonth(monthIndex + 1));
-  $('play-frames').addEventListener('click', togglePlayback);
-  $('day-slider').addEventListener('input', (event) => {
-    stopPlayback();
-    const day = Number(event.target.value);
-    if (worldScope) {
-      const date = frameDate($('world-date').value.slice(0, 7), day);
-      if (date < worldArchive.first || date > worldArchive.last) {
-        event.target.value = Number($('world-date').value.slice(-2));
-        return;
-      }
-      setWorldDate(date);
-      return;
-    }
-    showDay(day || null);
-  });
-  $('whole-month').addEventListener('click', () => {
-    stopPlayback();
-    showDay(null);
-  });
-  $('peak-day').addEventListener('click', (event) => {
-    stopPlayback();
-    showDay(Number(event.currentTarget.dataset.day));
-  });
-  $('calendar-selection').addEventListener('click', () => {
-    if (worldScope) mapViews.reset(false);
-  });
-  const redrawFires = () => worldScope ? loadWorldFrame() : renderMap(calendar.months[monthIndex]);
-  $('fire-layer').addEventListener('change', redrawFires);
-  for (const [id, view] of [['fire-points', 'points'], ['fire-heat', 'heat']]) {
-    $(id).addEventListener('click', () => {
-      fireDisplay = view;
-      $('fire-points').setAttribute('aria-pressed', String(view === 'points'));
-      $('fire-heat').setAttribute('aria-pressed', String(view === 'heat'));
-      redrawFires();
-    });
-  }
-  $('world-satellite').addEventListener('change', redrawFires);
-  $('world-date').addEventListener('change', ({ target }) => {
-    if (!target.value || !target.validity.valid) return;
-    stopPlayback();
-    setWorldDate(target.value);
-  });
-  $('open-layers').addEventListener('click', () => {
-    const layers = $('map-layer-controls');
-    layers.open = true;
-    layers.scrollIntoView({ block: 'start' });
-    layers.querySelector('summary').focus({ preventScroll: true });
-  });
-  if (matchMedia('(max-width: 820px)').matches) $('map-layer-controls').open = false;
-  $('local-layers').addEventListener('change', () => {
-    if (!worldScope && displayedDay === null && ($('weather-field').value || $('wind-layer').checked)) showDay(1);
-    else renderLayers();
-  });
-  $('activity-view').addEventListener('click', () => { mode = 'activity'; renderCalendar(); });
-  $('deviation-view').addEventListener('click', () => { mode = 'deviation'; renderCalendar(); });
-  const caseMonth = calendar.months.findIndex((row) => row.month === '2025-04');
-  const caseButton = $('case-atlas');
-  if (mapAvailable && caseMonth >= 0) {
-    caseButton.hidden = false;
-    caseButton.addEventListener('click', async () => {
-      stopPlayback();
-      if (worldScope) mapViews.reset(false);
-      source = '2';
-      $('source').value = source;
-      $('fire-layer').checked = true;
-      await chooseMonth(caseMonth);
-      showDay(12);
-      map.fitBounds([[53.035, 71.68], [53.346, 72.013]], { padding: [22, 22], animate: false });
-      $('observations').scrollIntoView();
-    });
-  }
-  $('app-status').hidden = true;
-  const initial = calendar.months.findIndex((row) => row.month === '2025-04');
-  chooseMonth(initial < 0 ? 0 : initial);
-  mapViews?.showWorld();
 }
 
 start();

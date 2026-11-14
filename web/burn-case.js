@@ -63,6 +63,7 @@ async function renderCase() {
   slider.addEventListener('input', clip);
   map.fitBounds(bounds, { maxZoom: 11 });
   map.setMaxBounds(bounds.pad(.2));
+  new ResizeObserver(() => map.invalidateSize()).observe(map.getContainer());
   clip();
 
   const scarLayer = L.geoJSON(scar, {

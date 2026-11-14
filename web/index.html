@@ -8,169 +8,126 @@
   <title>Атлас пожаров · NASA FIRMS</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=world-wrap">
+  <link rel="stylesheet" href="styles.css?v=atlas-workspace">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=world-wrap" type="module"></script>
+  <script src="app.js?v=atlas-workspace" type="module"></script>
   <script src="correlations.js?v=sko-layers" type="module"></script>
-  <script src="burn-case.js?v=2025-04-12" type="module"></script>
+  <script src="burn-case.js?v=atlas-workspace" type="module"></script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <a class="wordmark" href="#observations">
-        <img src="favicon.svg" width="36" height="36" alt="">
-        <span>Атлас <strong>пожаров</strong></span>
-      </a>
-      <nav class="site-nav" aria-label="Разделы">
-        <a href="#observations">Карта</a>
-        <a href="#season-calendar">Календарь СКО</a>
-        <a href="#correlations">Связи</a>
-        <a href="#kishkenekol-case">Кейс</a>
-      </nav>
-      <button class="quiet-button" id="open-method" type="button">
-        <span class="info-icon" aria-hidden="true">i</span> Методика
-      </button>
-    </div>
-  </header>
-
   <main id="top" class="workspace">
-    <p class="app-status" id="app-status" role="status">Загрузка данных NASA FIRMS…</p>
-
-    <div class="overview" id="overview">
-      <section class="panel map-panel" id="observations" aria-labelledby="map-title">
-        <div class="panel-heading map-heading">
-          <div>
-            <h1 id="map-title">Карта наблюдений</h1>
-            <p id="map-subtitle">NASA FIRMS · мир</p>
+    <section class="map-panel" id="observations" aria-labelledby="map-title">
+      <h1 id="map-title" class="sr-only">Мировая карта тепловых точек</h1>
+      <div id="map" tabindex="0" aria-label="Мировая карта. Стрелки перемещают карту, плюс и минус меняют масштаб."></div>
+      <header class="topbar">
+        <a class="wordmark" href="#observations"><img src="favicon.svg" width="28" height="28" alt=""> Атлас пожаров</a>
+        <div class="map-filters">
+          <div class="view-switch" role="group" aria-label="Охват карты">
+            <button type="button" id="world-view" disabled>Мир</button>
+            <button type="button" id="reset-map" disabled>СКО</button>
           </div>
-          <div class="map-filters">
-            <label class="source-field" id="regional-source">
-              <span class="sr-only">Ряд данных карты и календаря</span>
-              <select id="source" disabled>
-                <option value="unified" selected>Единый ряд</option>
-                <optgroup label="Отдельные спутники">
-                  <option value="0">Aqua / MODIS</option>
-                  <option value="1">Suomi NPP / VIIRS</option>
-                  <option value="2">NOAA-20 / VIIRS</option>
-                </optgroup>
-              </select>
-            </label>
-            <div class="period-control" id="regional-period" role="group" aria-label="Месяц на карте">
-              <button type="button" id="previous" aria-label="Предыдущий доступный месяц" disabled>‹</button>
-              <select id="period" aria-label="Выбрать месяц" disabled></select>
-              <button type="button" id="next" aria-label="Следующий доступный месяц" disabled>›</button>
-            </div>
-            <label class="source-field" id="global-source" hidden>
-              <span class="sr-only">Спутник на карте мира</span>
-              <select id="world-satellite" disabled><option value="">Все спутники</option></select>
-            </label>
-            <label class="world-date" id="global-period" hidden>
-              <span class="sr-only">Дата наблюдений UTC</span>
-              <input type="date" id="world-date" disabled>
-            </label>
-            <button type="button" class="quiet-button mobile-layer-link" id="open-layers">Слои ↓</button>
-          </div>
+          <label class="world-date">
+            <span class="sr-only">Дата наблюдений UTC</span>
+            <input type="date" id="world-date" disabled>
+          </label>
+          <label class="source-field">
+            <span class="sr-only">Спутник на карте мира</span>
+            <select id="world-satellite" disabled><option value="">Все спутники</option></select>
+          </label>
         </div>
-        <div class="atlas-layout">
-          <div class="atlas-stage">
-            <div class="map-body">
-              <div id="map" tabindex="0" aria-label="Интерактивная карта. Стрелки перемещают карту, плюс и минус меняют масштаб."></div>
-              <div class="view-switch map-switch" role="group" aria-label="Подложка карты">
-                <button type="button" id="satellite-view" aria-pressed="true" disabled>Снимок</button>
-                <button type="button" id="vector-view" aria-pressed="false" disabled>Схема</button>
-              </div>
-              <div class="map-tools" role="group" aria-label="Управление картой">
-                <button type="button" id="zoom-in" aria-label="Приблизить карту" title="Приблизить">+</button>
-                <button type="button" id="zoom-out" aria-label="Отдалить карту" title="Отдалить">−</button>
-                <button type="button" id="reset-map" aria-label="Показать СКО" title="Показать СКО"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></svg></button>
-                <button type="button" id="expand-map" aria-label="Развернуть карту" title="Развернуть карту" aria-pressed="false"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m6 0h5v-5"/></svg></button>
-              </div>
-              <button type="button" class="quiet-button" id="world-view" aria-pressed="false" disabled>Весь мир ↗</button>
-              <div class="map-legend" id="month-map-legend" aria-label="Число дней с детекциями в ячейке">
-                <strong>Дни с сигналом в ячейке</strong>
-                <span><i class="map-level-1"></i> 1–2</span>
-                <span><i class="map-level-2"></i> 3–6</span>
-                <span><i class="map-level-3"></i> 7+</span>
-              </div>
-              <div class="map-legend day-map-legend" id="day-map-legend" hidden>
-                <span><i class="map-level-1"></i> Центр ячейки с сигналом</span>
-              </div>
-              <div class="map-legend day-map-legend" id="world-point-legend" hidden><span><i class="map-level-1"></i> Точки и группы детекций</span></div>
-              <div class="map-legend heat-legend" id="heat-legend" hidden><strong id="heat-legend-title">Плотность детекций</strong><i></i><span>Меньше</span><span>Больше</span></div>
-              <div class="map-message" id="map-message" role="status" hidden></div>
-            </div>
-            <div class="map-caption">
-              <span id="regional-boundary-key"><i aria-hidden="true"></i> Граница СКО</span>
-              <span id="archive-caption" hidden>Мозаика детекций · время UTC</span>
-              <span id="scope-note" role="status" hidden></span>
-              <span id="imagery-status" role="status" hidden>Часть снимков Esri недоступна. В этих местах показан Blue Marble.</span>
-              <span id="map-summary" role="status"></span>
-            </div>
-            <div class="timeline" aria-labelledby="timeline-title">
-              <div class="timeline-heading">
-                <div>
-                  <h3 id="timeline-title">Динамика по дням</h3>
-                  <p><output id="frame-date" for="day-slider">Весь месяц</output><span class="utc-label">UTC</span></p>
-                </div>
-                <div class="view-switch fire-view" role="group" aria-label="Отображение тепловых сигналов">
-                  <button type="button" id="fire-points" aria-pressed="true" disabled>Точки</button>
-                  <button type="button" id="fire-heat" aria-pressed="false" disabled>Тепловая карта</button>
-                </div>
-              </div>
-              <div class="timeline-controls">
-                <button id="play-frames" type="button" class="play-button" disabled><span aria-hidden="true">▶</span> Воспроизвести</button>
-                <label class="day-slider">
-                  <span class="sr-only">День выбранного месяца UTC</span>
-                  <input type="range" id="day-slider" min="0" max="31" value="0" disabled>
-                </label>
-                <button id="whole-month" type="button" class="quiet-button" disabled>Весь месяц</button>
-              </div>
-              <div class="timeline-notes">
-                <button id="peak-day" type="button" class="peak-day" hidden></button>
-                <span id="timeline-outages" hidden>Штриховка — пропуск наблюдений</span>
-              </div>
-              <div class="timeline-ticks" id="timeline-ticks" aria-hidden="true"></div>
-            </div>
-          </div>
-          <details class="map-layer-controls" id="map-layer-controls" open>
-            <summary>Слои карты</summary>
-            <fieldset id="fire-controls">
-              <legend>Тепловые сигналы</legend>
-              <label style="--layer-color:#ffad55"><input type="checkbox" id="fire-layer" checked disabled> Показывать</label>
-            </fieldset>
-            <fieldset id="terrain-controls" disabled>
-              <legend>Местность · мир</legend>
-              <label style="--layer-color:#a9d7ef"><input type="checkbox" id="terrain-layer"> Рельеф</label>
-              <label class="terrain-strength" hidden>
-                <span>Интенсивность тени</span>
-                <input type="range" id="terrain-opacity" min="15" max="85" value="45" step="5">
-              </label>
-              <p id="terrain-status" class="layer-caption" role="status" hidden>Слой рельефа загрузился не полностью.</p>
-            </fieldset>
-            <fieldset id="local-layers" disabled>
-              <legend>Погода · СКО</legend>
-              <label style="--layer-color:#9ae3ef"><input type="checkbox" id="wind-layer"> Потоки ветра</label>
-              <label class="weather-choice"><span>Цветовое поле</span>
-                <select id="weather-field">
-                  <option value="">Выключено</option>
-                  <option value="cloud">Облачность</option>
-                  <option value="temperature">Температура</option>
-                  <option value="rain">Осадки</option>
-                </select>
-              </label>
-              <div id="weather-key" class="weather-key" hidden></div>
-              <p id="weather-state" class="layer-caption" hidden></p>
-              <div id="weather-inspector" class="weather-inspector" aria-live="polite" hidden></div>
-            </fieldset>
-            <div id="extra-layer-controls"></div>
-            <p id="map-layer-status" class="layer-caption" role="status" hidden></p>
-            <ul id="visible-layer-summary" class="layer-summary" hidden></ul>
-          </details>
-        </div>
-      </section>
-    </div>
+        <nav class="tool-nav" aria-label="Панели атласа">
+          <button type="button" class="quiet-button" id="open-layers" aria-controls="map-layer-controls" aria-expanded="false">Слои</button>
+          <a class="quiet-button" href="#season-calendar" aria-controls="analysis-panel" aria-expanded="false">Календарь СКО</a>
+          <a class="quiet-button" href="#correlations" aria-controls="analysis-panel" aria-expanded="false">Связи</a>
+          <a class="quiet-button" href="#kishkenekol-case" aria-controls="analysis-panel" aria-expanded="false">Кейс</a>
+          <button class="quiet-button" id="open-method" type="button" aria-label="Методика">ⓘ</button>
+        </nav>
+      </header>
 
-    <div class="analysis-row">
+      <div class="map-tools" role="group" aria-label="Управление картой">
+        <button type="button" id="zoom-in" aria-label="Приблизить карту">+</button>
+        <button type="button" id="zoom-out" aria-label="Отдалить карту">−</button>
+      </div>
+      <div class="map-message" id="map-message" role="status" hidden></div>
+
+      <aside id="map-layer-controls" class="map-layer-controls atlas-panel" aria-labelledby="layers-title" hidden>
+        <div class="drawer-heading">
+          <h2 id="layers-title">Слои карты</h2>
+          <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть слои">×</button>
+        </div>
+        <fieldset>
+          <legend>Подложка карты</legend>
+          <div class="view-switch" role="group" aria-label="Подложка карты">
+            <button type="button" id="satellite-view" aria-pressed="true" disabled>Снимок</button>
+            <button type="button" id="vector-view" aria-pressed="false" disabled>Схема</button>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Тепловые сигналы</legend>
+          <label style="--layer-color:#ffad55"><input type="checkbox" id="fire-layer" checked disabled> Показывать</label>
+        </fieldset>
+        <fieldset id="terrain-controls" disabled>
+          <legend>Местность · мир</legend>
+          <label style="--layer-color:#a9d7ef"><input type="checkbox" id="terrain-layer"> Рельеф</label>
+          <label class="terrain-strength" hidden>
+            <span>Интенсивность тени</span>
+            <input type="range" id="terrain-opacity" min="15" max="85" value="45" step="5">
+          </label>
+          <p id="terrain-status" class="layer-caption" role="status" hidden>Слой рельефа загрузился не полностью.</p>
+        </fieldset>
+        <fieldset id="local-layers" disabled>
+          <legend>Погода · СКО</legend>
+          <label style="--layer-color:#9ae3ef"><input type="checkbox" id="wind-layer"> Потоки ветра</label>
+          <label class="weather-choice"><span>Цветовое поле</span>
+            <select id="weather-field">
+              <option value="">Выключено</option>
+              <option value="cloud">Облачность</option>
+              <option value="temperature">Температура</option>
+              <option value="rain">Осадки</option>
+            </select>
+          </label>
+          <div id="weather-key" class="weather-key" hidden></div>
+          <p id="weather-state" class="layer-caption" hidden></p>
+          <div id="weather-inspector" class="weather-inspector" aria-live="polite" hidden></div>
+        </fieldset>
+        <div id="extra-layer-controls"></div>
+        <p id="map-layer-status" class="layer-caption" role="status" hidden></p>
+        <ul id="visible-layer-summary" class="layer-summary" hidden></ul>
+      </aside>
+
+      <details class="timeline" open>
+        <summary><span id="frame-date">Загрузка архива…</span> <span class="utc-label">UTC</span></summary>
+        <div class="timeline-heading">
+          <div class="view-switch fire-view" role="group" aria-label="Отображение тепловых сигналов">
+            <button type="button" id="fire-points" aria-pressed="true" disabled>Точки</button>
+            <button type="button" id="fire-heat" aria-pressed="false" disabled>Тепловая карта</button>
+          </div>
+          <div class="fire-key" id="world-point-legend"><i aria-hidden="true"></i> Тепловые детекции</div>
+          <div class="fire-key" id="heat-legend" hidden><i aria-hidden="true"></i> Плотность детекций</div>
+        </div>
+        <div class="timeline-controls">
+          <button id="play-frames" type="button" class="play-button" disabled><span aria-hidden="true">▶</span> Воспроизвести</button>
+          <label class="day-slider">
+            <span class="sr-only">День выбранного месяца UTC</span>
+            <input type="range" id="day-slider" min="1" max="31" value="1" disabled>
+          </label>
+        </div>
+        <div class="map-caption">
+          <span id="map-summary" role="status"></span>
+          <span id="regional-count"></span>
+          <span id="archive-caption"></span>
+        </div>
+        <p id="imagery-status" class="layer-caption" role="status" hidden>Часть снимков Esri недоступна. На этих участках показан Blue Marble.</p>
+      </details>
+    </section>
+
+    <aside id="analysis-panel" class="atlas-panel analysis-panel" aria-label="Анализ СКО" hidden>
+      <div class="drawer-heading">
+        <h2 id="analysis-heading">Анализ СКО</h2>
+        <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть анализ">×</button>
+      </div>
+
+    <div class="analysis-row" id="calendar-analysis" hidden>
       <section class="panel comparison" id="month-insight" aria-labelledby="deviation">
         <div class="comparison-content" id="comparison-content" aria-live="polite">
           <p class="comparison-period">Северо-Казахстанская область · <span id="comparison-period"></span></p>
@@ -200,8 +157,17 @@
       <div class="panel-heading calendar-heading">
         <div>
           <h2 id="calendar-title">Календарь активности СКО</h2>
-          <p>Выберите месяц, чтобы обновить карту и вывод. Апрель — октябрь · 2020–2025 · UTC</p>
+          <p>Выберите месяц для сравнения с нормой. Апрель — октябрь · 2020–2025 · UTC</p>
         </div>
+        <label class="source-field">
+          <span class="sr-only">Ряд данных календаря СКО</span>
+          <select id="source" disabled>
+            <option value="unified">Единый ряд</option>
+            <option value="0">Aqua / MODIS</option>
+            <option value="1">Suomi NPP / VIIRS</option>
+            <option value="2">NOAA-20 / VIIRS</option>
+          </select>
+        </label>
         <div class="view-switch" role="group" aria-label="Цветовая шкала календаря">
           <button type="button" id="deviation-view" aria-pressed="true" disabled>К норме</button>
           <button type="button" id="activity-view" aria-pressed="false" disabled>Ячейко-дни</button>
@@ -213,12 +179,12 @@
       </div>
       <div class="calendar-footer">
         <div class="calendar-key" id="calendar-key" aria-label="Легенда календаря"></div>
-        <a href="#observations" id="calendar-selection">Выбранный месяц на карте ↑</a>
+        <a href="#observations" id="calendar-selection">День пика на карте ↗</a>
       </div>
     </section>
     </div>
 
-    <section class="panel correlation-panel" id="correlations" aria-labelledby="correlation-title">
+    <section class="panel correlation-panel" id="correlations" hidden aria-labelledby="correlation-title">
       <div class="panel-heading correlation-heading">
         <div>
           <h2 id="correlation-title">Что связано с тепловыми точками</h2>
@@ -267,7 +233,7 @@
       </details>
     </section>
 
-    <section id="kishkenekol-case" class="panel burn-case" aria-labelledby="burn-case-title">
+    <section id="kishkenekol-case" class="panel burn-case" hidden aria-labelledby="burn-case-title">
       <div class="panel-heading">
         <div>
           <h2 id="burn-case-title">Что произошло к юго-западу от Кишкенеколя</h2>
@@ -308,27 +274,23 @@
       </div>
     </section>
 
-    <footer class="workspace-footer">
-      <div>События <a href="https://eonet.gsfc.nasa.gov/">NASA EONET</a> · <a href="https://earthquake.usgs.gov/fdsnws/event/1/">USGS</a>. Затопления на основе данных <a href="https://orbit.eodc.eu/dataset/GFM">Copernicus EMS, 2024–2025</a>.</div>
-      <div>Данные <a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noreferrer">NASA FIRMS</a> / LANCE / ESDIS · <a href="https://source.coop/portolan-mirrors/firms-catalog" target="_blank" rel="noreferrer">Portolan</a></div>
-      <div>Погода <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noreferrer">ERA5 / Open‑Meteo</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a></div>
-      <a href="https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/tree/main/docs/sko-validation" target="_blank" rel="noreferrer">Отчёт о проверке ↗</a>
-    </footer>
+    </aside>
+
   </main>
 
   <dialog id="method" aria-labelledby="method-title">
     <div class="dialog-heading">
-      <h2 id="method-title">Как читать календарь</h2>
+      <h2 id="method-title">Карта и календарь</h2>
       <form method="dialog"><button type="submit" class="quiet-button" aria-label="Закрыть методику">✕</button></form>
     </div>
     <p><strong>Единый ряд.</strong> С 2020 по 2023 год используются наблюдения Aqua/MODIS. Для сезонов 2024 и 2025 годов используется NOAA‑20/VIIRS с поправкой 0,2897 к месячной сумме. Источник фиксирован для каждого периода, включая месяцы без детекций. В меню доступны отдельные спутники для проверки наблюдений.</p>
-    <p><strong>Ячейко-день</strong> — участок 2 × 2 км, где спутник зарегистрировал хотя бы один подходящий тепловой сигнал за сутки UTC. Календарь суммирует такие наблюдения за месяц. Цвет ячейки на карте показывает число дней с сигналом по спутнику этого месяца.</p>
-    <p><strong>Снимок карты</strong> — статическая подложка Blue Marble от NASA GIBS. Месяц и спутник определяют отображаемые детекции.</p>
-    <p><strong>Динамика.</strong> Кадр показывает ячейки, в которых выбранный спутник отметил сигнал в этот день UTC. Известные пропуски выделены отдельно. Месячная статистика и историческая норма относятся ко всему выбранному месяцу.</p>
-    <p><strong>Слои.</strong> Цветовые поля и потоки ветра интерполированы по 17 точкам ERA5 внутри СКО. При клике карта показывает расчёт для выбранного места. Потоки передают суточное направление и относительную скорость ветра. Шкала UTC синхронизирует тепловые точки, погоду, радарные наблюдения затоплений и датированные события NASA EONET и USGS. В режиме «Весь месяц» отображаются тепловые точки и события за период. Можно включить дневные снимки Terra поверх подложки Blue Marble.</p>
+    <p><strong>Мировая карта.</strong> Точки показывают спутниковые детекции MODIS и VIIRS за выбранный день UTC. При приближении видны отдельные сигналы. Счётчик СКО использует тот же день и фильтр спутника, что и счётчик мира. Ноль записей означает, что в архиве за этот день и место нет подходящих детекций. Покрытие пролётами может быть неполным.</p>
+    <p><strong>Ячейко-день</strong> — участок 2 × 2 км, где спутник зарегистрировал хотя бы один подходящий тепловой сигнал за сутки UTC. Календарь суммирует их за месяц. Кнопка «День пика» открывает дату с наибольшим числом ячеек в СКО на мировой карте.</p>
+    <p><strong>Слои.</strong> Яркость тепловой карты показывает относительную плотность детекций. Ветер и погодные поля рассчитаны по 17 точкам ERA5 внутри СКО. Шкала UTC синхронизирует детекции, погоду и доступные датированные слои. Подложка использует Blue Marble и снимки Esri при приближении.</p>
     <p><strong>Шкала Aqua.</strong> Месячные суммы Suomi NPP и NOAA‑20 умножаются на коэффициенты 0,2932 и 0,2897, рассчитанные по 2020–2023 годам. Коэффициенты применяются к суммам, а карта сохраняет исходные наблюдения.</p>
     <p><strong>Историческая норма</strong> — медиана средних суточных значений Aqua за тот же месяц в 2020–2023 годах, умноженная на число включённых дней выбранного месяца. Для месяцев 2020–2023 сравнение включает выбранный год в базовый период. Отклонения до 10% включительно отмечены одним цветом. Этот цвет показывает размер отклонения.</p>
-    <p><strong>Наблюдения.</strong> Стандартные данные FIRMS (SP) отфильтрованы по полигону СКО, по типу предполагаемого горения растительности и по уверенности. Даты известных сбоев исключены. Облака, геометрия пролётов и локальное покрытие не проверялись. Показатель отражает спутниковые детекции. Число пожаров и площадь выгорания требуют отдельных данных.</p>
+    <p><strong>Календарь СКО.</strong> Стандартные данные FIRMS (SP) отфильтрованы по границе области, типу теплового сигнала и уверенности. Известные даты сбоев исключены. Число пожаров и площадь выгорания требуют отдельных данных.</p>
+    <p class="dialog-links"><a href="https://earthdata.nasa.gov/firms">NASA FIRMS / LANCE / ESDIS</a> <a href="https://source.coop/portolan-mirrors/firms-catalog">Portolan</a> <a href="https://open-meteo.com/en/docs/historical-weather-api">ERA5 / Open‑Meteo</a> <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> <a href="https://orbit.eodc.eu/dataset/GFM">Copernicus EMS</a> <a href="https://eonet.gsfc.nasa.gov/">NASA EONET</a> <a href="https://earthquake.usgs.gov/fdsnws/event/1/">USGS</a></p>
     <p class="dialog-links"><a href="https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/tree/main/docs/sko-validation" target="_blank" rel="noreferrer">Отчёт и даты исключений ↗</a> <a href="https://www.earthdata.nasa.gov/data/projects/lance/disclaimer" target="_blank" rel="noreferrer">Дисклеймер NASA ↗</a></p>
   </dialog>
   <noscript><p class="app-status">Включите JavaScript, чтобы открыть карту и календарь.</p></noscript>
