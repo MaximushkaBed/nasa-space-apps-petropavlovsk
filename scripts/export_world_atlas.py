@@ -1,6 +1,7 @@
 """Package a completed world calendar and its matching matrix from the analysis API."""
 
 import argparse
+import gzip
 import json
 from pathlib import Path
 import re
@@ -42,6 +43,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
     data = bundle(completed(base, "analyses", args.analysis_id), completed(base, "matrices", args.matrix_id))
+    encoded = (json.dumps(data, ensure_ascii=False, allow_nan=False, indent=1) + "\n").encode()
     temporary = args.output.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(data, ensure_ascii=False, allow_nan=False, indent=1) + "\n", encoding="utf-8")
+    temporary.write_bytes(encoded)
     temporary.replace(args.output)
+    compressed = args.output.with_suffix(".json.gz")
+    temporary = compressed.with_suffix(".gz.tmp")
+    temporary.write_bytes(gzip.compress(encoded, mtime=0))
+    temporary.replace(compressed)

@@ -168,7 +168,18 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   }
 
   function loadDefault() {
-    worldDownload ??= request('data/world-atlas.json').then(snapshot => {
+    const download = async () => {
+      if ('DecompressionStream' in window) {
+        try {
+          const response = await fetch('data/world-atlas.json.gz');
+          if (response.ok && response.body) {
+            return await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
+          }
+        } catch { /* Older deployments and browsers can use the JSON copy. */ }
+      }
+      return request('data/world-atlas.json');
+    };
+    worldDownload ??= download().then(snapshot => {
       if (snapshot.analysis?.result?.config?.preset !== 'world' || !snapshot.matrix?.result) {
         throw new Error('Готовый мировой обзор временно недоступен.');
       }
