@@ -1,5 +1,7 @@
 'use strict';
 
+import { createExtraLayers } from './map-layers.js?v=sko-layers';
+
 const $ = (id) => document.getElementById(id);
 const sources = ['Aqua / MODIS', 'Suomi NPP / VIIRS', 'NOAA-20 / VIIRS'];
 const sourceTags = ['MODIS', 'Suomi', 'NOAA‑20'];
@@ -19,8 +21,9 @@ let weatherLayer;
 let displayedDay = null;
 let displayedMonth = null;
 let playbackTimer;
-let weatherMode = '';
-let weatherRequest = 0;
+const weatherModes = new Set();
+let layerRequest = 0;
+let renderExtraLayers;
 let weatherData;
 let monthIndex;
 let source = 'unified';
@@ -73,6 +76,11 @@ function createMap(basemap, boundary) {
   map.attributionControl.addAttribution('<a href="https://www.naturalearthdata.com/">Natural Earth</a> · <a href="https://www.geoboundaries.org/">geoBoundaries</a>');
   const satellite = L.imageOverlay('assets/sko-blue-marble.webp', [[46, 57], [61, 84]], {
     className: 'satellite-image',
+    pane: 'tilePane', zIndex: 2,
+    attribution: '<a href="https://nasa-gibs.github.io/gibs-api-docs/">Blue Marble · NASA GIBS</a>',
+  });
+  const world = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg', {
+    noWrap: true, maxNativeZoom: 8, maxZoom: 12, zIndex: 1,
     attribution: '<a href="https://nasa-gibs.github.io/gibs-api-docs/">Blue Marble · NASA GIBS</a>',
   });
   const geography = L.geoJSON(basemap, {
@@ -138,7 +146,31 @@ function createMap(basemap, boundary) {
     }).addTo(map);
   }
   L.control.scale({ metric: true, imperial: false, position: 'bottomright', maxWidth: 88 }).addTo(map);
-  const reset = () => map.fitBounds(region.getBounds(), { padding: [25, 24], animate: false });
+  const reset = () => {
+    world.remove();
+    map.setMinZoom(5);
+    map.setMaxBounds([[47, 58], [60, 83]]);
+    $('world-view').setAttribute('aria-pressed', 'false');
+    $('world-view').textContent = 'Весь мир';
+    map.fitBounds(region.getBounds(), { padding: [25, 24], animate: false });
+  };
+  $('world-view').addEventListener('click', () => {
+    if (map.hasLayer(world)) {
+      reset();
+      return;
+    }
+    setBasemap(true);
+    map.setMaxBounds(null);
+    map.setMinZoom(0);
+    world.addTo(map);
+    map.fitBounds([[-64, -178], [75, 178]], { padding: [6, 6], animate: false });
+    $('world-view').setAttribute('aria-pressed', 'true');
+    $('world-view').textContent = 'Вернуться к СКО';
+  });
+  $('world-view').disabled = false;
+  world.on('tileerror', () => {
+    $('map-layer-status').textContent = 'Мировая спутниковая подложка NASA GIBS недоступна. Можно вернуться к СКО.';
+  });
   map.on('zoomend', () => $('map').classList.toggle('detail-zoom', map.getZoom() >= 7.5));
   $('zoom-in').addEventListener('click', () => map.zoomIn());
   $('zoom-out').addEventListener('click', () => map.zoomOut());
@@ -175,7 +207,7 @@ function updateTimeline(data, date) {
   slider.setAttribute('aria-valuetext', date ? dayFormatter.format(new Date(date)) : 'Весь месяц на карте');
   $('frame-date').textContent = date ? dayFormatter.format(new Date(date)) : 'Весь месяц';
   $('whole-month').disabled = displayedDay === null;
-  for (const id of ['day-slider', 'play-frames', 'weather']) $(id).disabled = false;
+  for (const id of ['day-slider', 'play-frames']) $(id).disabled = false;
 }
 
 function renderTimelineOverview(data, row, platform) {
@@ -200,7 +232,7 @@ function renderTimelineOverview(data, row, platform) {
 }
 
 function weatherIcon(mode, sample) {
-  const [temperature, speed, from, rain] = sample;
+  const [temperature, speed, from, rain, cloud] = sample;
   if (mode === 'wind') {
     const arrow = element('span', '↑', 'wind-arrow');
     arrow.style.transform = `rotate(${from + 180}deg)`;
@@ -211,55 +243,49 @@ function weatherIcon(mode, sample) {
   if (mode === 'temperature') {
     return element('span', `${number.format(temperature)}°`, `weather-sample ${temperature >= 25 ? 'warm' : 'temperature'}`);
   }
+  if (mode === 'cloud') return element('span', `☁ ${number.format(cloud)}%`, 'weather-sample cloud');
   return element('span', `${number.format(rain)} мм`, 'weather-sample rain');
 }
 
-async function renderWeather() {
-  const request = ++weatherRequest;
+async function renderWeather(date, request) {
   weatherLayer.clearLayers();
-  const summary = $('weather-summary');
-  summary.hidden = !weatherMode;
-  if (!weatherMode) return;
-  const date = displayedDay === null ? null : frameDate(calendar.months[monthIndex].month, displayedDay);
-  if (!date) {
-    summary.textContent = 'Выберите день на шкале, чтобы увидеть погоду.';
-    return;
-  }
-  summary.textContent = 'Загрузка погоды…';
+  if (!weatherModes.size) return null;
+  if (!date) return 'Выберите день на шкале, чтобы увидеть слои ERA5.';
   try {
-    weatherData ??= getJSON('data/weather.json');
+    weatherData ??= getJSON('data/weather.json?v=sko-layers');
     const data = await weatherData;
-    if (request !== weatherRequest) return;
+    if (request !== layerRequest) return null;
     const samples = data.days[date];
-    if (!samples) {
-      summary.textContent = 'Архивная погода за этот день недоступна.';
-      return;
-    }
-    const shown = weatherMode === 'wind' ? 1 : weatherMode === 'temperature' ? 0 : 3;
-    const values = samples.map((sample) => sample[shown]);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = min === max ? number.format(min) : `от ${number.format(min)} до ${number.format(max)}`;
-    const descriptions = {
-      wind: `Средний ветер ${range} м/с. Стрелки показывают, куда он дул.`,
-      temperature: `Суточный максимум температуры ${range} °C.`,
-      rain: `Сумма осадков за сутки ${range} мм.`,
-    };
-    summary.textContent = `${descriptions[weatherMode]} ERA5 · ${samples.length} точек.`;
+    if (!samples) return 'Архивная погода за этот день недоступна.';
+    const modes = [...weatherModes];
     data.points.forEach((point, index) => {
       const sample = samples[index];
-      const label = weatherIcon(weatherMode, sample);
+      const label = element('span', undefined, 'weather-stack');
+      label.append(...modes.map((mode) => weatherIcon(mode, sample)));
       const detail = element('div',
-        `Макс. ${number.format(sample[0])} °C · ветер ${number.format(sample[1])} м/с (от ${sample[2]}°) · осадки ${number.format(sample[3])} мм`);
+        `Макс. ${number.format(sample[0])} °C · ветер ${number.format(sample[1])} м/с (от ${sample[2]}°) · осадки ${number.format(sample[3])} мм · облачность ${number.format(sample[4])}%`);
       L.marker(point, { pane: 'weather-layer', keyboard: false,
-        icon: L.divIcon({ html: label, className: 'weather-marker', iconSize: null, iconAnchor: [18, 9] }),
+        icon: L.divIcon({ html: label, className: 'weather-marker', iconSize: [0, 0] }),
       }).bindTooltip(detail).addTo(weatherLayer);
     });
+    return `Погода ERA5 · ${samples.length} точек СКО${weatherModes.has('wind') ? ' · стрелки показывают, куда дул ветер' : ''}.`;
   } catch (error) {
     weatherData = undefined;
-    if (request === weatherRequest) summary.textContent = 'Не удалось загрузить архивную погоду.';
     console.error(error);
+    return 'Не удалось загрузить архивную погоду.';
   }
+}
+
+async function renderLayers() {
+  const request = ++layerRequest;
+  const month = calendar.months[monthIndex].month;
+  const date = displayedDay === null ? null : frameDate(month, displayedDay);
+  const [weather, events] = await Promise.all([renderWeather(date, request), renderExtraLayers?.(month, date)]);
+  if (request !== layerRequest) return;
+  const items = [weather, ...(events ?? [])].filter(Boolean);
+  const summary = $('visible-layer-summary');
+  summary.replaceChildren(...items.map((item) => element('li', item)));
+  summary.hidden = items.length === 0;
 }
 
 async function renderMap(row) {
@@ -280,8 +306,13 @@ async function renderMap(row) {
     const period = date ? dayFormatter.format(new Date(date)) : periodLabel(row.month);
     updateTimeline(data, date);
     renderTimelineOverview(data, row, platform);
-    $('month-map-legend').hidden = day !== null;
-    $('day-map-legend').hidden = day === null;
+    const fireVisible = $('fire-layer').checked;
+    $('month-map-legend').hidden = day !== null || !fireVisible;
+    $('day-map-legend').hidden = day === null || !fireVisible;
+    if (!fireVisible) {
+      $('map-summary').textContent = 'Слой тепловых точек выключен';
+      return;
+    }
     const frame = day === null ? undefined : data.frames[day - 1];
     if (frame === null) {
       $('map-summary').textContent = 'День исключён из анализа';
@@ -317,12 +348,8 @@ async function renderMap(row) {
 
 function showDay(day) {
   displayedDay = day;
-  if (day === null) {
-    weatherMode = '';
-    $('weather').value = '';
-  }
   renderMap(calendar.months[monthIndex]);
-  renderWeather();
+  renderLayers();
 }
 
 function togglePlayback() {
@@ -488,8 +515,8 @@ function chooseMonth(index) {
   if (displayedMonth !== row.month) {
     stopPlayback();
     displayedMonth = row.month;
-    displayedDay = weatherMode ? 1 : null;
-    for (const id of ['day-slider', 'play-frames', 'whole-month', 'weather']) $(id).disabled = true;
+    displayedDay = displayedDay === null ? null : 1;
+    for (const id of ['day-slider', 'play-frames', 'whole-month']) $(id).disabled = true;
     $('frame-date').textContent = 'Загрузка…';
     $('map-summary').textContent = 'Загрузка ячеек…';
     $('timeline-ticks').replaceChildren();
@@ -503,7 +530,7 @@ function chooseMonth(index) {
   $('calendar-selection').textContent = `${periodLabel(row.month)} на карте ↑`;
   renderCalendar();
   renderComparison(row);
-  if (mapAvailable) renderWeather();
+  if (mapAvailable) renderLayers();
   return renderMap(row);
 }
 
@@ -522,6 +549,20 @@ async function start() {
     const [basemap, boundary] = await Promise.all([getJSON('data/basemap.geojson'), getJSON('data/region.geojson')]);
     createMap(basemap, boundary);
     mapAvailable = true;
+    $('local-layers').disabled = false;
+    const extraControls = $('extra-layer-controls');
+    extraControls.addEventListener('layer-tile-error', ({ detail }) => {
+      $('map-layer-status').textContent = `${detail} · часть спутниковых плиток недоступна.`;
+    });
+    createExtraLayers(map, extraControls, getJSON, (startDay) => {
+      if (startDay && displayedDay === null) showDay(1);
+      else renderLayers();
+    })
+      .then((render) => { renderExtraLayers = render; if (monthIndex !== undefined) renderLayers(); })
+      .catch((error) => {
+        $('map-layer-status').textContent = 'Не удалось загрузить каталог дополнительных слоёв.';
+        console.error(error);
+      });
   } catch (error) {
     mapStatus('Не удалось загрузить основу карты.');
     for (const button of document.querySelectorAll('.map-tools button')) button.disabled = true;
@@ -555,10 +596,13 @@ async function start() {
     stopPlayback();
     showDay(Number(event.currentTarget.dataset.day));
   });
-  $('weather').addEventListener('change', (event) => {
-    weatherMode = event.target.value;
-    if (weatherMode && displayedDay === null) showDay(1);
-    else renderWeather();
+  $('fire-layer').addEventListener('change', () => renderMap(calendar.months[monthIndex]));
+  $('local-layers').addEventListener('change', ({ target }) => {
+    if (!target.hasAttribute('data-weather')) return;
+    if (target.checked) weatherModes.add(target.value);
+    else weatherModes.delete(target.value);
+    if (target.checked && displayedDay === null) showDay(1);
+    else renderLayers();
   });
   $('activity-view').addEventListener('click', () => { mode = 'activity'; renderCalendar(); });
   $('deviation-view').addEventListener('click', () => { mode = 'deviation'; renderCalendar(); });

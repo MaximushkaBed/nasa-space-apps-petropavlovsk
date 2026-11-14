@@ -135,14 +135,13 @@ h1 em { display: block; color: var(--yellow); font-style: normal; }
 .timeline-heading p { display: flex; align-items: baseline; gap: 6px; color: var(--sky); }
 #frame-date { font: 13px var(--mono); }
 .utc-label { color: var(--muted); font: 9px var(--mono); }
-.weather-control { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
-.weather-control select { background: #102447; border: 1px solid var(--line); border-radius: 4px; padding: 7px; color: var(--text); }
+#world-view[aria-pressed='true'] { border-color: var(--sky); color: var(--sky); }
 .timeline-controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; margin-top: 11px; }
 .play-button { background: var(--yellow); color: var(--deep-blue); border: 0; border-radius: 4px; min-width: 143px; min-height: 34px; padding-inline: 9px; font-size: 12px; font-weight: 700; text-align: left; }
 .play-button:hover:not(:disabled) { background: #f4ff67; }
 .day-slider { display: flex; padding-block: 8px; }
 .day-slider input { accent-color: var(--yellow); width: 100%; margin: 0; cursor: pointer; }
-.day-slider input:focus-visible, .weather-control select:focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; }
+.day-slider input:focus-visible, .map-layer-controls input:focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; }
 .timeline-notes { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin: 9px 0 6px; color: var(--muted); font-size: 10px; }
 .peak-day { border: 0; padding: 0; color: var(--sky); background: none; font-size: 11px; text-align: left; }
 .peak-day:hover { text-decoration: underline; }
@@ -150,12 +149,22 @@ h1 em { display: block; color: var(--yellow); font-style: normal; }
 .timeline-ticks i { flex: 1; height: 5px; background: #eafe07; opacity: var(--activity, .14); border-radius: 1px; }
 .timeline-ticks i.gap { opacity: 1; background: repeating-linear-gradient(135deg, #475f82, #475f82 1px, #243758 1px, #243758 3px); }
 .timeline-ticks i.current { opacity: 1; outline: 1px solid #f5f8ff; outline-offset: 1px; }
-.weather-summary { color: #c7ddff; font-size: 11px; line-height: 1.5; margin-top: 9px; }
+.map-layer-controls { margin-top: 12px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 4px; background: #091938; }
+.map-layer-controls summary { color: var(--sky); font-weight: 650; cursor: pointer; }
+.map-layer-controls fieldset { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 13px; border: 0; min-width: 0; padding: 4px 0 2px; margin: 8px 0 0; }
+.map-layer-controls legend { padding: 0; color: var(--muted); font: 10px var(--mono); }
+.map-layer-controls label { display: inline-flex; align-items: center; gap: 5px; min-height: 23px; font-size: 12px; cursor: pointer; }
+.map-layer-controls input { accent-color: var(--layer-color); margin: 0; width: 14px; height: 14px; }
+.map-layer-controls label:has(input:checked) { color: var(--layer-color); }
+.layer-caption, .layer-summary { color: var(--muted); font-size: 11px; line-height: 1.55; margin: 7px 0 0; }
+.layer-summary { padding-inline-start: 15px; color: #c7ddff; }
 .weather-marker { border: 0; background: transparent; }
+.weather-stack { display: grid; justify-items: start; position: relative; width: max-content; margin-top: -8px; }
 .weather-sample { display: inline-flex; align-items: center; gap: 3px; padding: 2px 4px; border: 1px solid #86b1df; border-radius: 3px; color: #e4f6ff; background: #0a2147f0; white-space: nowrap; font: 10px var(--mono); }
 .weather-sample.wind { color: #b1ebff; border-color: #7ac4df; }
 .weather-sample.warm { color: #ffde8f; border-color: #d69655; }
 .weather-sample.rain { color: #b3d5ff; }
+.weather-sample.cloud { color: #95e9ff; border-color: #67bace; }
 .wind-arrow { display: inline-block; color: #72e3ff; font: bold 14px/1 system-ui, sans-serif; }
 .leaflet-container .leaflet-control-attribution { background: #07173fee; color: #e4edff; font-size: 9px; }
 .leaflet-control-attribution a { color: #d3e5ff; }
@@ -321,6 +330,4 @@ dialog strong { color: var(--text); }
   .timeline-controls { gap: 7px; }
   .play-button { min-width: 111px; font-size: 10px; padding-inline: 6px; }
   .timeline-controls .quiet-button { padding-inline: 7px; font-size: 11px; }
-  .weather-control { gap: 4px; }
-  .weather-control > span { max-width: 53px; }
 }

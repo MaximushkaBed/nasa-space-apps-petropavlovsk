@@ -16,7 +16,10 @@ const timeFactors = [
   ['Осадки за предыдущие 7 дней', 'Осадки 7 дн.', 'Больше осадков за предыдущие семь дней'],
   ['Влажность воздуха', 'Влажн. воздуха', 'Выше относительная влажность воздуха'],
   ['Влажность почвы 0–7 см', 'Влажн. почвы', 'Выше влажность верхнего слоя почвы'],
-  ['Расход Ишима', 'Расход Ишима', 'Выше модельный расход воды в Ишиме у Петропавловска'],
+  ['Облачность', 'Облака', 'Выше средняя облачность за день', 'ERA5 оценивает среднюю облачность за сутки. Видимость в момент пролёта требует отдельной проверки.'],
+  ['Наводнения в СКО', 'Затопления', 'Больше обследованных ячеек с сигналом затопления', 'Сравниваются только даты с достаточным радарным покрытием СКО. Площадь и расположение покрытия меняются по датам.'],
+  ['Вулканическая активность', 'Вулканы', 'Больше сообщений о вулканической активности', 'Архив NASA EONET показан на мировой карте. Для корреляции нужны сопоставимые локальные наблюдения по датам.'],
+  ['Другие природные события', 'Другие события', 'Больше сообщений о природных событиях', 'Штормы, землетрясения и другие события доступны на мировой карте. Для корреляции нужны сопоставимые локальные наблюдения по датам.'],
 ];
 const spaceFactors = [
   ['Плотность тепловых точек', 'Сигналы/км²', 'Больше ячейко-дней с сигналом на км²'],
@@ -51,10 +54,11 @@ function selectPair(row, col, button) {
   activeCell.setAttribute('aria-pressed', 'true');
   byId('factor-pair').textContent = `${factors[row][0]} и ${factors[col][0].toLocaleLowerCase('ru')}`;
   byId('factor-value').textContent = value === null
-    ? 'Нет оценки'
+    ? `Нет оценки${n ? ` · ${count.format(n)} ${spatial ? 'уч.' : 'дн.'}` : ''}`
     : `ρ ${label(value)} · ${count.format(n)} ${spatial ? 'уч.' : 'дн.'}`;
 
   let reading = 'В доступных наблюдениях мало пар с различающимися значениями.';
+  const context = [factors[row][3], factors[col][3]].filter(Boolean).join(' ');
   if (value !== null) {
     const strength = Math.abs(value);
     if (strength < .1) {
@@ -67,7 +71,7 @@ function selectPair(row, col, button) {
       reading = `${left} — обычно ${right}. ${strength < .3 ? 'Связь слабая.' : strength < .6 ? 'Связь умеренная.' : 'Связь сильная.'}`;
     }
   }
-  byId('factor-reading').textContent = reading;
+  byId('factor-reading').textContent = value === null && context ? context : `${reading} ${context}`.trim();
   const otherName = other === 'aqua' ? 'Aqua / MODIS' : 'NOAA‑20 / VIIRS';
   byId('factor-check').textContent = check === null
     ? `${otherName} · нет оценки`
@@ -89,7 +93,8 @@ function render() {
     : `До ${count.format(data.days)} суток · ${mode === 'within'
       ? 'дни сравниваются внутри отдельных месяцев каждого года.'
       : 'все даты сравниваются вместе, включая сезонные различия.'}`;
-  byId('factor-scope').textContent = base;
+  byId('factor-scope').textContent = spatial ? base : `${base} Наводнения: ${data.coverage.flood} совместимых дат.`;
+  table.style.minWidth = spatial ? '' : '790px';
   table.replaceChildren();
   const headers = table.createTHead().insertRow();
   headers.append(document.createElement('th'));
@@ -133,7 +138,7 @@ function render() {
 }
 
 try {
-  const response = await fetch('data/correlations.json?v=sko-factors');
+  const response = await fetch('data/correlations.json?v=sko-layers');
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   data = await response.json();
   for (const button of buttons) {

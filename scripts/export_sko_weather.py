@@ -12,8 +12,8 @@ from fetch_firms import PROJECT_ROOT, contains_point, load_region
 
 
 FIELDS = ("temperature_2m_max", "wind_speed_10m_mean",
-          "wind_direction_10m_dominant", "precipitation_sum")
-UNITS = ("°C", "m/s", "°", "mm")
+          "wind_direction_10m_dominant", "precipitation_sum", "cloud_cover_mean")
+UNITS = ("°C", "m/s", "°", "mm", "%")
 ENDPOINT = "https://archive-api.open-meteo.com/v1/archive"
 
 

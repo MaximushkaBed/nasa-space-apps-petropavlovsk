@@ -8,10 +8,10 @@
   <title>Пожары СКО · Спутниковый календарь</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=sko-factors">
+  <link rel="stylesheet" href="styles.css?v=sko-layers">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=sko-time" defer></script>
-  <script src="correlations.js?v=sko-factors" type="module"></script>
+  <script src="app.js?v=sko-layers" type="module"></script>
+  <script src="correlations.js?v=sko-layers" type="module"></script>
 </head>
 <body>
   <header class="topbar">
@@ -105,15 +105,7 @@
               <h3 id="timeline-title">Динамика по дням</h3>
               <p><output id="frame-date" for="day-slider">Весь месяц</output><span class="utc-label">UTC</span></p>
             </div>
-            <label class="weather-control">
-              <span>Погода на карте</span>
-              <select id="weather" disabled>
-                <option value="">Слой выключен</option>
-                <option value="wind">Ветер</option>
-                <option value="temperature">Температура</option>
-                <option value="rain">Осадки</option>
-              </select>
-            </label>
+            <button type="button" class="quiet-button" id="world-view" aria-pressed="false" disabled>Весь мир</button>
           </div>
           <div class="timeline-controls">
             <button id="play-frames" type="button" class="play-button" disabled><span aria-hidden="true">▶</span> Воспроизвести</button>
@@ -128,7 +120,20 @@
             <span id="timeline-outages" hidden>Штриховка — пропуск наблюдений</span>
           </div>
           <div class="timeline-ticks" id="timeline-ticks" aria-hidden="true"></div>
-          <p id="weather-summary" class="weather-summary" hidden></p>
+          <details class="map-layer-controls" id="map-layer-controls" open>
+            <summary>Слои карты</summary>
+            <fieldset id="local-layers" disabled>
+              <legend>Пожары и погода · СКО</legend>
+              <label style="--layer-color:#ffad55"><input type="checkbox" id="fire-layer" checked> Тепловые точки</label>
+              <label style="--layer-color:#95e9ff"><input type="checkbox" value="cloud" data-weather> Облачность</label>
+              <label style="--layer-color:#ffe0a7"><input type="checkbox" value="temperature" data-weather> Температура</label>
+              <label style="--layer-color:#d6ee93"><input type="checkbox" value="wind" data-weather> Ветер</label>
+              <label style="--layer-color:#6eb5ff"><input type="checkbox" value="rain" data-weather> Осадки</label>
+            </fieldset>
+            <div id="extra-layer-controls"></div>
+            <p id="map-layer-status" class="layer-caption">Выберите слои и дату или нажмите «Воспроизвести».</p>
+            <ul id="visible-layer-summary" class="layer-summary" hidden></ul>
+          </details>
         </div>
       </section>
 
@@ -219,17 +224,18 @@
         </aside>
       </div>
       <p class="factor-limits">Связи описывают наблюдения. Для вывода о причине нужно проверить облачность, пролёты спутников и землепользование.</p>
-      <p class="factor-limits">Расход Ишима показывает паводковые условия у Петропавловска. Для анализа затоплений и сухостоя нужны карты затопленных территорий и данные лесной инвентаризации.</p>
+      <p class="factor-limits">Наводнения сопоставляются только в дни с радарным покрытием. Для вулканов и других событий мирового каталога пока мало сопоставимых наблюдений в СКО. Для сухостоя нужны данные лесной инвентаризации.</p>
       <details class="factor-method">
         <summary>Как считали и откуда данные</summary>
         <p><strong>По дням.</strong> Число ячеек 2 × 2 км с тепловым сигналом за дату UTC. «Все дни» сравнивает весь архив, «Дни внутри месяца» усредняет коэффициенты по отдельным месяцам каждого года с весом по числу дат. Даты известных сбоев исключены. Погода — среднее по 17 точкам ERA5. Осадки за 7 дней считаются до выбранной даты. <a href="https://open-meteo.com/en/docs/historical-weather-api">ERA5 / Open‑Meteo</a></p>
         <p><strong>По участкам.</strong> Число ячейко-дней за шесть сезонов на км² внутри СКО. Расстояние считается от центра участка до ближайшего населённого пункта. Высота — медиана, перепад — разница 90-го и 10-го процентилей. Покров — доли леса, травы, пашни и заболоченной растительности по карте 2021 года. Доли связаны между собой, поскольку делят площадь одного участка. <a href="https://www.geonames.org/export/">GeoNames</a> · <a href="https://doi.org/10.5270/ESA-c5d3d65">Copernicus DEM GLO‑90</a> · <a href="https://esa-worldcover.org/en/data-access">ESA WorldCover, CC BY 4.0</a></p>
-        <p><strong>Расход воды.</strong> Среднесуточный модельный расход Ишима для ячейки у Петропавловска. <a href="https://open-meteo.com/en/docs/flood-api">GloFAS / Open‑Meteo, CC BY 4.0</a></p>
+        <p><strong>Облачность и наводнения.</strong> Облачность — средняя суточная по ERA5, отдельно от облачности в момент пролёта. Затопление — доля обследованных ячеек 500 м со спутниковым сигналом затопления по Sentinel‑1. В расчёте участвуют даты с покрытием от 25% площади СКО. Даты без покрытия исключаются. События NASA EONET доступны на мировой карте по датам сообщений. <a href="https://orbit.eodc.eu/dataset/GFM">Copernicus GFM</a> · <a href="https://eonet.gsfc.nasa.gov/docs/v3">NASA EONET</a></p>
         <p>Рельеф получен из Copernicus WorldDEM‑90 © DLR e.V. 2010–2014 и © Airbus Defence and Space GmbH 2014–2018, предоставленного в рамках Copernicus ЕС и ESA. Карта покрова содержит производные данные ESA WorldCover 2021 © ESA WorldCover consortium. Расстояния рассчитаны по данным GeoNames, CC BY.</p>
       </details>
     </section>
 
     <footer class="workspace-footer">
+      <div>События <a href="https://eonet.gsfc.nasa.gov/">NASA EONET</a> · <a href="https://earthquake.usgs.gov/fdsnws/event/1/">USGS</a>. Затопления на основе данных <a href="https://orbit.eodc.eu/dataset/GFM">Copernicus EMS, 2024–2025</a>.</div>
       <div>Данные <a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noreferrer">NASA FIRMS</a> / LANCE / ESDIS · <a href="https://source.coop/portolan-mirrors/firms-catalog" target="_blank" rel="noreferrer">Portolan</a></div>
       <div>Погода <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noreferrer">ERA5 / Open‑Meteo</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a></div>
       <a href="https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/tree/main/docs/sko-validation" target="_blank" rel="noreferrer">Отчёт о проверке ↗</a>
@@ -245,7 +251,7 @@
     <p><strong>Ячейко-день</strong> — участок 2 × 2 км, где спутник зарегистрировал хотя бы один подходящий тепловой сигнал за сутки UTC. Календарь суммирует такие наблюдения за месяц. Цвет ячейки на карте показывает число дней с сигналом по спутнику этого месяца.</p>
     <p><strong>Снимок карты</strong> — статическая подложка Blue Marble от NASA GIBS. Месяц и спутник определяют отображаемые детекции.</p>
     <p><strong>Динамика.</strong> Кадр показывает ячейки, в которых выбранный спутник отметил сигнал в этот день UTC. Известные пропуски выделены отдельно. Месячная статистика и историческая норма относятся ко всему выбранному месяцу.</p>
-    <p><strong>Погода.</strong> Дневные значения ERA5 из Open‑Meteo показаны в 17 точках СКО. Температура — суточный максимум на высоте 2 м, ветер — средняя скорость и преобладающее направление на высоте 10 м, осадки — сумма за сутки. Наложение помогает сравнить условия и детекции по времени, а для вывода о причинах или распространении пожара нужен отдельный анализ.</p>
+    <p><strong>Слои.</strong> Погода ERA5 показана в 17 точках СКО. Галочки управляют каждым слоем отдельно. Шкала UTC синхронизирует тепловые точки, погоду, радарные наблюдения затоплений и датированные события NASA EONET и USGS. В режиме «Весь месяц» отображаются тепловые точки и события за период. Можно включить дневные снимки Terra поверх подложки Blue Marble.</p>
     <p><strong>Шкала Aqua.</strong> Месячные суммы Suomi NPP и NOAA‑20 умножаются на коэффициенты 0,2932 и 0,2897, рассчитанные по 2020–2023 годам. Коэффициенты применяются к суммам, а карта сохраняет исходные наблюдения.</p>
     <p><strong>Историческая норма</strong> — медиана средних суточных значений Aqua за тот же месяц в 2020–2023 годах, умноженная на число включённых дней выбранного месяца. Для месяцев 2020–2023 сравнение включает выбранный год в базовый период. Отклонения до 10% включительно отмечены одним цветом. Этот цвет показывает размер отклонения.</p>
     <p><strong>Наблюдения.</strong> Стандартные данные FIRMS (SP) отфильтрованы по полигону СКО, по типу предполагаемого горения растительности и по уверенности. Даты известных сбоев исключены. Облака, геометрия пролётов и локальное покрытие не проверялись. Показатель отражает спутниковые детекции. Число пожаров и площадь выгорания требуют отдельных данных.</p>

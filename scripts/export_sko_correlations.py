@@ -56,7 +56,7 @@ def dates_between(start, end):
     return [(start + timedelta(days=i)).isoformat() for i in range((end - start).days + 1)]
 
 
-def weather_and_river(year, points):
+def supplementary_weather(year, points):
     first, last = date(year, 4, 1), date(year, 10, 31)
     start = first - timedelta(days=7)
     dates = dates_between(start, last)
@@ -79,17 +79,7 @@ def weather_and_river(year, points):
     if fields.shape != (3, len(dates)) or not np.isfinite(fields).all():
         raise ValueError(f"{year}: missing daily weather data")
 
-    river = read_api(f"glofas-ishim-{year}", "https://flood-api.open-meteo.com/v1/flood", {
-        "latitude": 54.87, "longitude": 69.09, "daily": "river_discharge",
-        "start_date": first.isoformat(), "end_date": last.isoformat(),
-    })
-    if (river["daily"]["time"] != dates[7:] or river["utc_offset_seconds"] != 0
-            or abs(river["latitude"] - 54.875) > .026 or abs(river["longitude"] - 69.075) > .026
-            or river["daily_units"]["river_discharge"] != "m³/s"):
-        raise ValueError(f"{year}: unexpected river dates, coordinates or units")
-    flow = river["daily"]["river_discharge"]
-    # Missing river values remain missing for pairwise correlations.
-    return {day: [fields[0, i], fields[1, i], fields[2, i-7:i].sum(), flow[i-7]]
+    return {day: [fields[0, i], fields[1, i], fields[2, i-7:i].sum()]
             for i, day in enumerate(dates[7:], start=7)}
 
 
@@ -180,15 +170,17 @@ def pair(a, b, groups):
     if groups is None:
         groups = [np.ones(len(a), dtype=bool)]
     n = 0
+    overlap = 0
     total = 0
     for group in groups:
         valid = group & np.isfinite(a) & np.isfinite(b)
         x, y = a[valid], b[valid]
+        overlap += len(x)
         if len(x) < 5 or np.ptp(x) == 0 or np.ptp(y) == 0:
             continue
         total += len(x) * np.corrcoef(rankdata(x), rankdata(y))[0, 1]
         n += len(x)
-    return [round(float(np.clip(total/n, -1, 1)), 4), n] if n else [None, 0]
+    return [round(float(np.clip(total/n, -1, 1)), 4), n] if n else [None, overlap]
 
 
 def matrix(data, groups=None):
@@ -203,10 +195,11 @@ def main():
     CACHE.mkdir(parents=True, exist_ok=True)
     calendar = json.loads((WEB / "calendar.json").read_text(encoding="utf-8"))
     weather = json.loads((WEB / "weather.json").read_text(encoding="utf-8"))
+    floods = json.loads((WEB / "hazards/gfm/daily.json").read_text(encoding="utf-8"))
     months = [item["month"] for item in calendar["months"]]
     years = sorted({int(key[:4]) for key in months})
     with ThreadPoolExecutor(max_workers=5) as pool:
-        extras = list(pool.map(lambda year: weather_and_river(year, weather["points"]), years))
+        extras = list(pool.map(lambda year: supplementary_weather(year, weather["points"]), years))
         grids, landscape = spatial_units(shape(load_region("sko")), pool)
     extras_by_day = {day: values for season in extras for day, values in season.items()}
     index = {(x, y): i for i, (x, y, _) in enumerate(grids)}
@@ -223,9 +216,11 @@ def main():
             if frame is None:
                 continue
             date_label = f"{key}-{i:02}"
-            temperature, wind, _, rain = np.mean(weather["days"][date_label], axis=0)
-            humidity, soil, prior_rain, flow = extras_by_day[date_label]
-            conditions.append([temperature, wind, rain, prior_rain, humidity, soil, flow])
+            temperature, wind, _, rain, cloud = np.mean(weather["days"][date_label], axis=0)
+            humidity, soil, prior_rain = extras_by_day[date_label]
+            flood, coverage = floods.get(date_label, (np.nan, 0))
+            conditions.append([temperature, wind, rain, prior_rain, humidity, soil, cloud,
+                               flood if coverage >= 25 else np.nan, np.nan, np.nan])
             date_labels.append(key)
             for sensor, slot in SENSORS.items():
                 daily[sensor].append(len(frame[slot]))
@@ -237,7 +232,10 @@ def main():
     if len(date_labels) != sum(item["days"] for item in calendar["months"]):
         raise ValueError("Matrix dates differ from the calendar")
     areas = [area for _, _, area in grids]
-    output = {"days": len(date_labels), "areas": len(grids), "results": {}}
+    output = {"days": len(date_labels), "areas": len(grids),
+              "coverage": {"flood": sum(math.isfinite(row[7]) for row in conditions),
+                           "floodMinimumPercent": 25},
+              "results": {}}
     for sensor in SENSORS:
         # Preserve ties for equal averages of the reported decimal API values.
         time_data = np.column_stack((daily[sensor], np.round(conditions, 8))).T

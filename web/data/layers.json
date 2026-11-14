@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "layers": [
+    {
+      "id": "daily-imagery",
+      "label": "Снимок Terra за день",
+      "group": "Спутниковые наблюдения",
+      "color": "#a8d7a4",
+      "format": "xyz",
+      "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpeg",
+      "source": "NASA GIBS · MODIS / Terra",
+      "sourceUrl": "https://nasa-gibs.github.io/gibs-api-docs/",
+      "maxNativeZoom": 9,
+      "opacity": 0.9,
+      "underlay": true
+    },
+    {
+      "id": "gfm",
+      "label": "Затопления · СКО",
+      "group": "Спутниковые наблюдения",
+      "color": "#3adaff",
+      "format": "geojson",
+      "url": "hazards/gfm/{month}.geojson",
+      "range": ["2024-04", "2025-10"],
+      "source": "Copernicus EMS / Sentinel-1",
+      "sourceUrl": "https://orbit.eodc.eu/dataset/GFM",
+      "coverage": "observations"
+    },
+    {
+      "id": "flood-reports",
+      "label": "Наводнения",
+      "group": "События NASA EONET · мир",
+      "color": "#479dff",
+      "format": "geojson",
+      "url": "hazards/eonet/{month}.geojson",
+      "category": "floods",
+      "source": "NASA EONET",
+      "sourceUrl": "https://eonet.gsfc.nasa.gov/"
+    },
+    {
+      "id": "volcanoes",
+      "label": "Вулканическая активность",
+      "group": "События NASA EONET · мир",
+      "color": "#ee83ff",
+      "format": "geojson",
+      "url": "hazards/eonet/{month}.geojson",
+      "category": "volcanoes",
+      "source": "NASA EONET",
+      "sourceUrl": "https://eonet.gsfc.nasa.gov/"
+    },
+    {
+      "id": "storms",
+      "label": "Штормы и циклоны",
+      "group": "События NASA EONET · мир",
+      "color": "#d5a5ff",
+      "format": "geojson",
+      "url": "hazards/eonet/{month}.geojson",
+      "category": "severeStorms",
+      "source": "NASA EONET",
+      "sourceUrl": "https://eonet.gsfc.nasa.gov/"
+    },
+    {
+      "id": "earthquakes",
+      "label": "Землетрясения M ≥ 5,5",
+      "group": "События USGS · мир",
+      "color": "#fa8585",
+      "format": "geojson",
+      "url": "hazards/usgs/{month}.geojson",
+      "source": "USGS ComCat",
+      "sourceUrl": "https://earthquake.usgs.gov/fdsnws/event/1/"
+    },
+    {
+      "id": "other",
+      "label": "Лёд и другие события",
+      "group": "События NASA EONET · мир",
+      "color": "#a4e8ac",
+      "format": "geojson",
+      "url": "hazards/eonet/{month}.geojson",
+      "categories": ["drought", "snow", "seaLakeIce", "waterColor", "landslides", "dustHaze"],
+      "source": "NASA EONET",
+      "sourceUrl": "https://eonet.gsfc.nasa.gov/"
+    }
+  ]
+}
