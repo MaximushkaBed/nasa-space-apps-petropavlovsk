@@ -362,7 +362,7 @@ function updateFireViewport() {
   const span = activePeriod;
   fireViewport.select(visible && span && span.start !== span.end ? {
     start: span.start, end: span.end, satellite,
-    maxWidth: worldArchive.detailMaxWidth ?? 20, maxHeight: worldArchive.detailMaxHeight ?? 15,
+    maxWidth: worldArchive.viewportMaxWidth ?? 20, maxHeight: worldArchive.viewportMaxHeight ?? 15,
     key: `${span.start}/${span.end}/${satellite}`,
   } : undefined);
 }
