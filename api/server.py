@@ -515,6 +515,14 @@ def run_matrix(identifier,analysis_id,analysis):
         progress(status='error',progress=0,message='Матрица не рассчитана. '+str(error)[:240])
 
 
+def job_status(info, compact=False):
+    if not compact or info['status'] != 'done':
+        return info
+    result = info['result']
+    keys = ('config', 'extract_id', 'snapshot_at', 'monthly')
+    return {**info, 'result': {key: result[key] for key in keys}}
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
 
@@ -631,7 +639,7 @@ class Handler(BaseHTTPRequestHandler):
                         writer.writerow({**row,'grid_km':result['config']['grid_km'],'quality_scope':result['config']['quality'],
                           'aqua_equivalent':row['aqua_equivalent'], 'model_valid':row['model_valid']})
                     return self.respond(200,('\ufeff'+stream.getvalue()).encode(),'text/csv; charset=utf-8','nasa-space-apps-monthly.csv')
-                return self.respond(200, info)
+                return self.respond(200, job_status(info, parse_qs(parsed.query).get('view') == ['calendar']))
             if match := re.fullmatch(r'/api/v1/maps/([0-9a-f]{32})',parsed.path):
                 query=parse_qs(parsed.query)
                 return self.respond(200,map_cells(match[1],query.get('month',[''])[0],query.get('platform',[''])[0],query.get('day',[None])[0],query.get('start',[None])[0],query.get('end',[None])[0]))

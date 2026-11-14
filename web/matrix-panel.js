@@ -8,10 +8,10 @@ const text=value=>value===null||value===undefined?'—':typeof value==='number'?
 const element=(tag,attrs={},content)=>{const node=document.createElement(tag);Object.entries(attrs).forEach(([name,value])=>node.setAttribute(name,value));if(content!==undefined)node.textContent=content;return node;};
 const svg=(tag,attrs={},content)=>{const node=document.createElementNS(svgNS,tag);Object.entries(attrs).forEach(([name,value])=>node.setAttribute(name,value));if(content!==undefined)node.textContent=content;return node;};
 
-export function mountMatrixPanel(root,{request,getAnalysis,bridge={}}){
+export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=false}){
  root.classList.add('matrix-tool');
  root.innerHTML=`<div class="matrix-intro"><h4>Связи факторов выбранной территории</h4><p>Корреляция Спирмена показывает совместное изменение величин и не доказывает причину горения.</p></div>
- <p class="matrix-scope"></p><button class="primary matrix-run" type="button">Рассчитать матрицу</button>
+ <p class="matrix-scope"></p><button class="primary matrix-run" type="button" ${automatic?'hidden':''}>Рассчитать матрицу</button>
  <p class="matrix-status" role="status">Сначала постройте временной анализ. Матрица рассчитывается отдельным запросом.</p><progress class="matrix-progress" max="100" value="0" hidden aria-label="Прогресс расчёта матрицы"></progress>
  <div class="matrix-controls" hidden><label>Метод<select class="matrix-mode"><option value="within">По дням · внутри месяцев</option><option value="pooled">По дням · весь период</option><option value="space">По участкам</option></select></label><label>Спутник<select class="matrix-platform"></select></label></div>
  <div class="matrix-warnings" hidden></div><div class="matrix-grid"></div><p class="matrix-definition" hidden></p>
@@ -24,7 +24,7 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={}}){
  function fields(){return mode==='space'?result?.space_factors||[]:result?.time_factors||[];}
  function cellAt(i,j){const value=result?.results?.[platform]?.[mode]?.[i]?.[j];return Array.isArray(value)?{rho:value[0],n:value[1]}:value&&typeof value==='object'?value:{rho:null,n:null};}
  function detailAt(i,j){return result?.pair_details?.[platform]?.[mode]?.[i]?.[j]||{};}
- function roiName(config){const names={sko:'Северо-Казахстанская область',california:'Калифорния · окно',brazil:'Мату-Гросу · окно',canada:'Альберта · окно'};return config?.roi_name||names[config?.preset]||(Array.isArray(config?.bbox)?`Область ${config.bbox.map(value=>text(value)).join(', ')}`:'Выбранная область');}
+ function roiName(config){const names={world:'Весь мир',sko:'Северо-Казахстанская область',california:'Калифорния · окно',brazil:'Мату-Гросу · окно',canada:'Альберта · окно'};return config?.roi_name||names[config?.preset]||(Array.isArray(config?.bbox)?`Область ${config.bbox.map(value=>text(value)).join(', ')}`:'Выбранная область');}
  function refresh(){
   const analysis=getAnalysis();
   const config=result?.config||analysis?.result?.config;
@@ -32,7 +32,7 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={}}){
   $('.matrix-run').disabled=busy||!analysis||analysis.platform==='all';
   $('.matrix-run').textContent=busy?'Матрица рассчитывается…':result?'Рассчитать заново':'Рассчитать матрицу';
   $('.matrix-progress').hidden=!busy;
-  if(!busy&&!result&&analysis&&!hasError)status('Нажмите «Рассчитать матрицу», чтобы получить факторы для этой территории.');
+  if(!automatic&&!busy&&!result&&analysis&&!hasError)status('Нажмите «Рассчитать матрицу», чтобы получить факторы для этой территории.');
   if(analysis?.platform!==lastSource){lastSource=analysis?.platform;if(result&&result.platforms?.includes(lastSource)){platform=lastSource;$('.matrix-platform').value=platform;if(visible)render();}}
  }
  async function start(){
@@ -53,17 +53,20 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={}}){
     status(job.message||'Матрица рассчитывается…');$('.matrix-progress').value=job.progress||0;
     if(job.status==='error'||job.status==='failed')throw new Error(job.message||'Не удалось рассчитать матрицу.');
     if(job.status==='done'){
-     if(!job.result)throw new Error('Сервис вернул матрицу без результатов.');
-     if(job.result.analysis_id&&job.result.analysis_id!==analysisId)throw new Error('Сохранённая матрица относится к другому расчёту. Рассчитайте матрицу этой территории.');
-     const current=getAnalysis();
-     if(!current||current.id!==analysisId||!sameScientificConfig(job.result.config,current.result.config)||job.result.extract_id!==current.result.extract_id||job.result.snapshot_at!==current.result.snapshot_at)throw new Error('Параметры сохранённой матрицы не совпадают с территорией, историей или снимком текущего анализа. Рассчитайте матрицу выбранной территории.');
-     result=job.result;busy=false;const preferred=restorePlatform||getAnalysis()?.platform;restorePlatform=null;platform=result.platforms?.includes(preferred)?preferred:result.platforms?.[0]||null;
-     $('.matrix-platform').replaceChildren(...(result.platforms||[]).map(name=>new Option(name,name)));$('.matrix-platform').value=platform||'';
-     status('Матрица готова. Выберите пару, чтобы увидеть реальные наблюдения.');showResults();refresh();render();return;
+     accept(job.result);return;
     }
     await new Promise(resolve=>setTimeout(resolve,1200));
    }
   }catch(error){if(token===epoch&&polling===pollEpoch){busy=false;status(error.message,true);refresh();}}
+ }
+ function accept(snapshot){
+  if(!snapshot)throw new Error('Сервис вернул матрицу без результатов.');
+  if(snapshot.analysis_id&&snapshot.analysis_id!==analysisId)throw new Error('Матрица относится к другому расчёту.');
+  const current=getAnalysis();
+  if(!current||current.id!==analysisId||!sameScientificConfig(snapshot.config,current.result.config)||snapshot.extract_id!==current.result.extract_id||snapshot.snapshot_at!==current.result.snapshot_at)throw new Error('Параметры матрицы не совпадают с календарём.');
+  result=snapshot;busy=false;const preferred=restorePlatform||current.platform;restorePlatform=null;platform=result.platforms?.includes(preferred)?preferred:result.platforms?.[0]||null;
+  $('.matrix-platform').replaceChildren(...(result.platforms||[]).map(name=>new Option(name,name)));$('.matrix-platform').value=platform||'';
+  status('Матрица готова. Выберите пару, чтобы увидеть реальные наблюдения.');showResults();refresh();if(visible)render();
  }
  function hideResults(){for(const selector of ['.matrix-controls','.matrix-warnings','.matrix-definition','.matrix-pair','.matrix-exports','.matrix-provenance'])$(selector).hidden=true;$('.matrix-grid').replaceChildren();}
  function showResults(){
@@ -151,7 +154,11 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={}}){
   const copy=plot.cloneNode(true);copy.setAttribute('x',24);copy.setAttribute('y',118);copy.setAttribute('width',width-48);copy.setAttribute('height',270);doc.append(copy,svg('text',{x:28,y:414},`Снимок архива ${result.snapshot_at||'не указан'} · матрица ${id}`),svg('text',{x:28,y:437},'Показаны исходные парные наблюдения. Пропуски не заменены нулями. Локальная видимость неизвестна.'),svg('text',{x:28,y:460},'Корреляция не доказывает причину. Для режима внутри месяцев итоговая ρ объединяет отдельные внутримесячные связи.'));
   save(new Blob([new XMLSerializer().serializeToString(doc)],{type:'image/svg+xml;charset=utf-8'}),`nasa-space-apps-matrix-${platform}-${mode}.svg`);
  }
- function reset(){++epoch;++pollEpoch;id=result=analysisId=null;busy=false;pair=[0,1];lastSource=null;hideResults();status('Матрица рассчитывается отдельно по данным календаря.');refresh();}
+ function reset(){++epoch;++pollEpoch;id=result=analysisId=restorePlatform=null;busy=false;pair=[0,1];lastSource=null;hideResults();status(automatic?'Ожидаем данные календаря…':'Матрица рассчитывается отдельно по данным календаря.');refresh();}
+ function loadSnapshot(matrixId,snapshot){
+  reset();analysisId=getAnalysis()?.id;id=matrixId;
+  accept(snapshot);
+ }
  function pause(){paused=true;++pollEpoch;}
  function resume(){paused=false;if(busy&&id&&!result)poll();}
  async function restore(matrixId,state={}){const analysis=getAnalysis();if(!analysis)return;reset();analysisId=analysis.id;id=String(matrixId);busy=true;restorePlatform=state?.platform||null;if(state&&['within','pooled','space'].includes(state.mode)){mode=state.mode;$('.matrix-mode').value=mode;}if(Array.isArray(state?.pair)&&state.pair.length===2&&state.pair.every(index=>Number.isInteger(index)&&index>=0))pair=[...state.pair];refresh();status('Восстанавливаю сохранённую матрицу…');if(!paused)await poll();}
@@ -160,5 +167,5 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={}}){
  $('.matrix-platform').addEventListener('change',()=>{platform=$('.matrix-platform').value;render();});
  $('.matrix-export-csv').addEventListener('click',()=>exportData('csv'));$('.matrix-export-json').addEventListener('click',()=>exportData('json'));$('.matrix-export-image').addEventListener('click',exportImage);
  $('.matrix-on-map').addEventListener('click',()=>{const factors=fields();bridge.navigate?.('atlas',{context:getAnalysis()?.context,from:'matrix',matrixPair:{matrixId:id,platform,mode,factor_x:factors[pair[0]]?.id,factor_y:factors[pair[1]]?.id,unitIds:pairedValues().map(point=>point.unit.id)}});});
- refresh();return {refresh,reset,pause,resume,restore,setVisible(value){visible=value;if(visible&&result)render();},getState:()=>({id,result,busy,platform,mode,pair:[...pair]}),exportData,exportImage};
+ refresh();return {refresh,reset,pause,resume,restore,start,loadSnapshot,setVisible(value){visible=value;if(visible&&result)render();},getState:()=>({id,result,busy,platform,mode,pair:[...pair]}),exportData,exportImage};
 }

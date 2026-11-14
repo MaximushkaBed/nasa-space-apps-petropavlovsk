@@ -7,7 +7,7 @@ import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=fire-cont
 import { createFireViewport } from './fire-viewport.js?v=paired-days';
 import { createAreaAnalysis, inRing } from './area-analysis.js?v=territory';
 import { createAreaLayerClip } from './area-layer-clip.js';
-import { createAtlasStudy } from './atlas-study.js';
+import { createAtlasStudy } from './atlas-study.js?v=auto-study';
 import { addDays, createPeriodPicker, daysBetween } from './period-picker.js?v=atlas-periods';
 
 export function mountAtlas(root, bridge = {}) {

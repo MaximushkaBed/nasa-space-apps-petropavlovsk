@@ -1,8 +1,8 @@
-import { mountMatrixPanel } from './matrix-panel.js?v=territory';
-import { addDays } from './period-picker.js';
+import { mountMatrixPanel } from './matrix-panel.js?v=auto-study';
 
 const sources = ['Aqua', 'Terra', 'Suomi-NPP', 'NOAA-20', 'NOAA-21'];
 const preferred = ['NOAA-20', 'NOAA-21', 'Suomi-NPP', 'Aqua', 'Terra'];
+const defaultStudyDates = { start: '2022-01-01', end: '2025-12-31', baseline_start: 2022, baseline_end: 2024 };
 const number = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
 const monthName = new Intl.DateTimeFormat('ru', { month: 'short', timeZone: 'UTC' });
 
@@ -19,10 +19,14 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   const status = $('study-status');
   const start = $('study-start'), end = $('study-end');
   const baselineStart = $('study-baseline-start'), baselineEnd = $('study-baseline-end');
-  const platform = $('study-platform');
+  const platform = $('study-platform'), retry = $('study-retry');
   platform.add(new Option('Авто · доступный спутник', 'auto'));
   for (const source of sources) platform.add(new Option(source, source));
-  let roi, scopeKey, archive, current, job, generation = 0;
+  let roi, scopeKey, archive, job, timer, controller, worldSnapshot, worldDownload;
+  const analyses = new Map();
+  const matrices = new Map();
+  const dates = { start, end, baseline_start: baselineStart, baseline_end: baselineEnd };
+  for (const input of Object.values(dates)) input.disabled = true;
 
   function matrixSource() {
     if (platform.value !== 'auto') return platform.value;
@@ -31,7 +35,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     return (available(selected) ? selected : preferred.find(available)) || 'NOAA-20';
   }
   const matrix = mountMatrixPanel($('external-factors'), {
-    request, getAnalysis: () => job && { ...job, platform: matrixSource() },
+    request, automatic: true, getAnalysis: () => job && { ...job, platform: matrixSource() },
   });
 
   function setScope(next) {
@@ -40,18 +44,21 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     roi = next;
     scopeKey = key;
     $('study-area').textContent = roi?.name || 'Весь мир';
-    invalidate();
+    if (!roi && worldSnapshot) setDates(worldSnapshot.analysis.result.config);
+    else if (roi && archive && (!start.value || start.value < archive.first || end.value > archive.last)) setArchiveDates();
+    schedule();
   }
 
-  function invalidate() {
-    ++generation;
-    current = job = undefined;
-    $('study-run').disabled = !archive;
+  function schedule(delay = roi ? 650 : 0) {
+    clearTimeout(timer);
+    controller?.abort();
+    job = undefined;
+    retry.hidden = true;
     $('study-calendar').replaceChildren();
     $('study-calendar-detail').textContent = '';
-    status.textContent = roi ? 'Рассчитайте активность внутри границы.'
-      : 'Мировой обзор · сетка 250 км · широты 85° ю. ш. — 85° с. ш. Первый расчёт может занять несколько минут.';
     matrix.reset();
+    status.textContent = roi ? 'Готовим календарь и связи для выбранной области…' : 'Загружаем готовый мировой обзор…';
+    timer = setTimeout(load, delay);
   }
 
   function renderCalendar() {
@@ -112,8 +119,12 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   }
 
   function config() {
-    if (!archive || !start.value || !end.value || start.value > end.value || start.value < archive.first || end.value > archive.last) {
+    if (!archive || !Object.values(dates).every(input => input.value && input.validity.valid) || start.value > end.value || start.value < archive.first || end.value > archive.last) {
       throw new Error('Укажите диапазон дат внутри архива FIRMS.');
+    }
+    if (baselineStart.valueAsNumber < Number(start.value.slice(0, 4)) || baselineEnd.valueAsNumber > Number(end.value.slice(0, 4))
+      || baselineStart.valueAsNumber > baselineEnd.valueAsNumber) {
+      throw new Error('Базовые годы должны находиться внутри выбранного периода.');
     }
     return {
       preset: roi?.preset === 'sko' ? 'sko' : roi ? 'custom' : 'world',
@@ -124,67 +135,144 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     };
   }
 
-  async function run() {
-    if (current) return current;
-    let body;
-    try { body = config(); } catch (error) { status.textContent = error.message; return; }
-    const button = $('study-run');
-    if (job) invalidate();
-    const revision = ++generation;
-    button.disabled = true;
-    status.textContent = 'Отправляем запрос к архиву FIRMS…';
-    current = (async () => {
-      try {
-        let progress = await request('/api/v1/analyses', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-        });
-        const { id } = progress;
-        while (revision === generation && (progress.status === 'queued' || progress.status === 'running')) {
-          status.textContent = progress.message || 'Расчёт в очереди…';
-          await new Promise(resolve => setTimeout(resolve, 1100));
-          if (revision !== generation) return;
-          progress = await request(`/api/v1/analyses/${encodeURIComponent(id)}`);
-        }
-        if (revision !== generation) return;
-        if (progress.status !== 'done' || !progress.result) throw new Error(progress.message || 'Расчёт не завершился.');
-        job = { id, result: progress.result };
-        status.textContent = `${body.start} — ${body.end} UTC · SP · ${job.result.config.grid_km} км · локальная видимость неизвестна.`;
-        renderCalendar();
-        matrix.refresh();
-      } catch (error) {
-        if (revision === generation) status.textContent = error.message;
-      } finally {
-        if (revision === generation) { current = undefined; button.disabled = false; }
-      }
-    })();
-    return current;
+  function showJob(analysis, snapshot = false) {
+    job = analysis;
+    const { start, end, grid_km: grid } = job.result.config;
+    const snapshotDate = job.result.snapshot_at?.slice(0, 10);
+    status.textContent = `${start} — ${end} UTC · SP · сетка ${grid} км · локальная видимость неизвестна.${snapshot ? ` Готовый мировой обзор · 85° ю. ш. — 85° с. ш.${snapshotDate ? ` · снимок архива ${snapshotDate}` : ''}` : ''}`;
+    renderCalendar();
+    matrix.refresh();
   }
 
-  $('study-run').addEventListener('click', run);
-  for (const input of [start, end, baselineStart, baselineEnd]) input.addEventListener('change', invalidate);
+  function setDates(cfg) {
+    const bounds = archive ?? cfg;
+    start.min = end.min = bounds.first ?? cfg.start;
+    start.max = end.max = bounds.last ?? cfg.end;
+    for (const [name, input] of Object.entries(dates)) {
+      input.value = cfg[name];
+      input.disabled = !archive;
+    }
+    for (const baseline of [baselineStart, baselineEnd]) {
+      baseline.min = cfg.start.slice(0, 4);
+      baseline.max = cfg.end.slice(0, 4);
+    }
+  }
+
+  function setArchiveDates() {
+    const preferredDates = worldSnapshot?.analysis.result.config ?? defaultStudyDates;
+    const first = preferredDates.start < archive.first ? archive.first : preferredDates.start;
+    const last = preferredDates.end > archive.last ? archive.last : preferredDates.end;
+    const range = first <= last ? { start: first, end: last } : { start: archive.first, end: archive.last };
+    const year = Number(range.start.slice(0, 4));
+    setDates({ ...range, baseline_start: year, baseline_end: Math.min(year + 2, Number(range.end.slice(0, 4))) });
+  }
+
+  function loadDefault() {
+    worldDownload ??= request('data/world-atlas.json').then(snapshot => {
+      if (snapshot.analysis?.result?.config?.preset !== 'world' || !snapshot.matrix?.result) {
+        throw new Error('Готовый мировой обзор временно недоступен.');
+      }
+      worldSnapshot = snapshot;
+      return snapshot;
+    }).catch(error => {
+      worldDownload = undefined;
+      throw error;
+    });
+    return worldDownload;
+  }
+
+  async function load() {
+    const signal = (controller = new AbortController()).signal;
+    let key;
+    try {
+      const snapshot = await loadDefault().catch(error => {
+        if (!roi) throw error;
+        return null;
+      });
+      if (signal.aborted) return;
+      const defaults = snapshot?.analysis.result.config ?? defaultStudyDates;
+      if (!start.value) setDates(defaults);
+      const useDefault = !roi && Object.entries(dates).every(([name, input]) => String(defaults[name]) === input.value);
+      if (useDefault) {
+        showJob(snapshot.analysis, true);
+        matrix.loadSnapshot(snapshot.matrix.id, snapshot.matrix.result);
+        return;
+      }
+      if (!archive) return;
+      const body = config();
+      key = JSON.stringify(body);
+      if (!analyses.has(key)) {
+        const created = request('/api/v1/analyses', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: key,
+        }).then(job => job.id);
+        analyses.set(key, created);
+        if (analyses.size > 20) analyses.delete(analyses.keys().next().value);
+      }
+      const id = await analyses.get(key);
+      let progress;
+      while (!signal.aborted) {
+        progress = await request(`/api/v1/analyses/${encodeURIComponent(id)}?view=calendar`, { signal });
+        if (signal.aborted || !['queued', 'running'].includes(progress.status)) break;
+        status.textContent = progress.message || 'Готовим календарь…';
+        await new Promise(resolve => setTimeout(resolve, 1250));
+      }
+      if (signal.aborted) return;
+      if (progress.status !== 'done' || !progress.result) throw new Error(progress.message || 'Расчёт календаря не завершился.');
+      showJob({ id, result: progress.result });
+      const saved = matrices.get(id);
+      if (saved) await matrix.restore(saved);
+      else await matrix.start();
+      if (signal.aborted) return;
+      const finished = matrix.getState();
+      if (finished.result) {
+        matrices.set(id, finished.id);
+        if (matrices.size > 20) matrices.delete(matrices.keys().next().value);
+      } else {
+        matrices.delete(id);
+        retry.hidden = false;
+      }
+    } catch (error) {
+      if (signal.aborted) return;
+      if (key && !job) analyses.delete(key);
+      status.textContent = error.message;
+      retry.hidden = false;
+    }
+  }
+
+  retry.addEventListener('click', () => schedule(0));
+  for (const input of [start, end]) input.addEventListener('change', () => {
+    if (start.value && end.value && start.value <= end.value) {
+      const first = Number(start.value.slice(0, 4));
+      const last = Number(end.value.slice(0, 4));
+      for (const baseline of [baselineStart, baselineEnd]) {
+        baseline.min = first;
+        baseline.max = last;
+        baseline.value = Math.min(last, Math.max(first, baseline.valueAsNumber || first));
+      }
+    }
+    schedule(750);
+  });
+  for (const input of [baselineStart, baselineEnd]) input.addEventListener('change', () => schedule(750));
   platform.addEventListener('change', () => { renderCalendar(); matrix.refresh(); });
 
   return {
     setScope,
     setArchive(value) {
       archive = value;
-      const complete = addDays(archive.last, -1);
-      const year = Number(complete.slice(0, 4));
-      const endYear = year - 1;
       start.min = end.min = archive.first;
       start.max = end.max = archive.last;
-      start.value = `${endYear - 3}-01-01` < archive.first ? archive.first : `${endYear - 3}-01-01`;
-      end.value = `${endYear}-12-31` >= start.value ? `${endYear}-12-31` : archive.last;
-      baselineStart.value = start.value.slice(0, 4);
-      baselineEnd.value = String(Math.min(Number(end.value.slice(0, 4)), Number(baselineStart.value) + 2));
-      invalidate();
+      if (!start.value || end.value > archive.last || start.value < archive.first) {
+        if (roi) setArchiveDates();
+        else setDates(worldSnapshot?.analysis.result.config ?? defaultStudyDates);
+      }
+      for (const input of Object.values(dates)) input.disabled = false;
+      if (roi) schedule();
     },
     show(tab) {
       panel.hidden = !tab;
       $('activity-calendar').hidden = tab !== '#activity-calendar';
       $('external-factors').hidden = tab !== '#external-factors';
       matrix.setVisible(tab === '#external-factors');
-      $('study-run').textContent = tab === '#external-factors' ? 'Подготовить данные для матрицы' : 'Рассчитать календарь';
     },
   };
 }
