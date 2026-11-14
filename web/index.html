@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="vendor/leaflet.css">
   <link rel="stylesheet" href="styles.css?v=terrain-overlay">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=terrain-overlay" type="module"></script>
+  <script src="app.js?v=esri-imagery" type="module"></script>
   <script src="correlations.js?v=sko-layers" type="module"></script>
   <script src="burn-case.js?v=2025-04-12" type="module"></script>
 </head>
@@ -103,6 +103,7 @@
             </div>
             <div class="map-caption">
               <span><i aria-hidden="true"></i> Граница СКО</span>
+              <span id="imagery-status" role="status" hidden>Часть снимков Esri недоступна. В этих местах показан Blue Marble.</span>
               <span id="map-summary"></span>
             </div>
             <div class="timeline" aria-labelledby="timeline-title">

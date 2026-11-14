@@ -1,11 +1,13 @@
 'use strict';
 
-import { createExtraLayers } from './map-layers.js?v=sko-atlas';
+import { createExtraLayers } from './map-layers.js?v=esri-imagery';
 import { createWeatherOverlay } from './weather-overlay.js?v=sko-atlas';
 
 const $ = (id) => document.getElementById(id);
 const sources = ['Aqua / MODIS', 'Suomi NPP / VIIRS', 'NOAA-20 / VIIRS'];
 const sourceTags = ['MODIS', 'Suomi', 'NOAA‑20'];
+const detailedImageryMinZoom = 6;
+const atlasMaxZoom = 17;
 const monthNames = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 const fullMonths = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
 const number = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
@@ -69,7 +71,7 @@ function addTerrainControl(map) {
   const strength = opacity.closest('label');
   const status = $('terrain-status');
   const tiles = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/ASTER_GDEM_Greyscale_Shaded_Relief/default/GoogleMapsCompatible_Level12/{z}/{y}/{x}.jpeg', {
-    pane: 'terrain-shading', noWrap: true, maxNativeZoom: 12, maxZoom: 12,
+    pane: 'terrain-shading', noWrap: true, maxNativeZoom: 12, maxZoom: map.getMaxZoom(),
     opacity: opacity.valueAsNumber / 100,
     attribution: '<a href="https://worldview.earthdata.nasa.gov/?l=ASTER_GDEM_Greyscale_Shaded_Relief">ASTER GDEM · NASA GIBS</a>',
   });
@@ -98,7 +100,7 @@ function createMap(basemap, boundary) {
     river: { color: '#6498af', weight: .85, opacity: .67 },
   };
   map = L.map('map', {
-    zoomControl: false, minZoom: 5, maxZoom: 12, zoomSnap: .25,
+    zoomControl: false, minZoom: 5, maxZoom: atlasMaxZoom, zoomSnap: .25,
     maxBounds: [[47, 58], [60, 83]], maxBoundsViscosity: .8, zoomAnimation: false,
   });
   map.attributionControl.setPrefix(false);
@@ -113,8 +115,23 @@ function createMap(basemap, boundary) {
     attribution: '<a href="https://nasa-gibs.github.io/gibs-api-docs/">Blue Marble · NASA GIBS</a>',
   });
   const worldDetails = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg', {
-    noWrap: true, minZoom: 3, maxNativeZoom: 8, maxZoom: 12, zIndex: 2,
+    noWrap: true, minZoom: 3, maxNativeZoom: 8, maxZoom: atlasMaxZoom, zIndex: 2,
   });
+  const detailedImagery = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?blankTile=false', {
+    className: 'esri-imagery', minZoom: detailedImageryMinZoom, maxZoom: atlasMaxZoom,
+    noWrap: true, zIndex: 3,
+    attribution: '<a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9">Esri World Imagery</a> · Vantor, Earthstar Geographics, GIS User Community',
+  });
+  const imageryStatus = $('imagery-status');
+  detailedImagery.on('loading', () => { imageryStatus.hidden = true; });
+  detailedImagery.on('tileerror', () => { imageryStatus.hidden = false; });
+  const updateDetailedImagery = () => {
+    if (map.hasLayer(satellite) && map.getZoom() >= detailedImageryMinZoom) detailedImagery.addTo(map);
+    else {
+      detailedImagery.remove();
+      imageryStatus.hidden = true;
+    }
+  };
   map.createPane('local-geography').style.zIndex = 401;
   const geography = L.geoJSON(basemap, {
     pane: 'local-geography',
@@ -142,16 +159,12 @@ function createMap(basemap, boundary) {
     });
     $('satellite-view').setAttribute('aria-pressed', String(useSatellite));
     $('vector-view').setAttribute('aria-pressed', String(!useSatellite));
+    updateDetailedImagery();
   };
   $('satellite-view').addEventListener('click', () => setBasemap(true));
   $('vector-view').addEventListener('click', () => setBasemap(false));
   $('satellite-view').disabled = false;
   $('vector-view').disabled = false;
-  satellite.once('error', () => {
-    setBasemap(false);
-    $('satellite-view').disabled = true;
-    $('satellite-view').title = 'Снимок недоступен';
-  });
   setBasemap(true);
   const activityPane = map.createPane('activity-cells');
   activityPane.style.zIndex = 415;
@@ -213,6 +226,7 @@ function createMap(basemap, boundary) {
   map.on('zoomend', () => {
     $('map').classList.toggle('detail-zoom', map.getZoom() >= 7.5);
     $('map').classList.toggle('world-scale', map.getZoom() < 4);
+    updateDetailedImagery();
   });
   $('zoom-in').addEventListener('click', () => map.zoomIn());
   $('zoom-out').addEventListener('click', () => map.zoomOut());

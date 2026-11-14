@@ -96,8 +96,8 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
         if (path !== entry.key) {
           shown.clearLayers();
           const tiles = L.tileLayer(/^https:\/\//.test(path) ? path : `data/${path}`, {
-            maxNativeZoom: spec.maxNativeZoom ?? 8, maxZoom: 12, opacity: spec.opacity ?? .65,
-            noWrap: true, pane: spec.underlay ? 'tilePane' : 'event-layers', zIndex: 3,
+            maxNativeZoom: spec.maxNativeZoom ?? 8, maxZoom: map.getMaxZoom(), opacity: spec.opacity ?? .65,
+            noWrap: true, pane: spec.underlay ? 'tilePane' : 'event-layers', zIndex: 4,
           });
           tiles.on('tileerror', () => {
             if (entry.key === path && input.checked) controls.dispatchEvent(new CustomEvent('layer-tile-error', { detail: spec.label }));
