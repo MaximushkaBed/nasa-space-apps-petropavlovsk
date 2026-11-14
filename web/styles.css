@@ -110,6 +110,7 @@ h1 em { color: var(--yellow); font-style: normal; white-space: nowrap; }
 .map-body { position: relative; border: 1px solid #425e8b; background: #142647; border-radius: 6px; overflow: hidden; }
 #map { width: 100%; height: var(--map-height); z-index: 0; background: #122747; font-family: inherit; }
 #map .satellite-image { filter: brightness(.74) saturate(.73); }
+#map .leaflet-terrain-shading-pane { mix-blend-mode: soft-light; }
 .map-tools { position: absolute; top: 13px; right: 13px; z-index: 500; display: grid; gap: 5px; }
 .map-tools button { display: grid; place-items: center; border: 1px solid #62799f; border-radius: 4px; width: 35px; height: 35px; background: #07173fee; font-size: 20px; }
 .map-tools button:hover { background: #1b4384; }
@@ -162,6 +163,9 @@ h1 em { color: var(--yellow); font-style: normal; white-space: nowrap; }
 .map-layer-controls label:hover { background: #152d56; }
 .map-layer-controls input { flex: none; accent-color: var(--layer-color); margin: 0; width: 15px; height: 15px; }
 .map-layer-controls label:has(input:checked) { color: var(--layer-color); }
+.map-layer-controls .terrain-strength { grid-column: 1 / -1; display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
+.terrain-strength input[type='range'] { width: 100%; accent-color: var(--sky); }
+#terrain-status { grid-column: 1 / -1; margin: 0 6px; }
 .map-layer-controls .weather-choice { display: grid; gap: 4px; color: var(--muted); font-size: 11px; }
 .weather-choice select { width: 100%; border: 1px solid #355787; border-radius: 4px; padding: 5px 4px; background: #102447; color: var(--text); font-size: 12px; }
 .layer-caption, .layer-summary { color: var(--muted); font-size: 11px; line-height: 1.55; margin: 7px 0 0; }

@@ -60,6 +60,35 @@ async function getJSON(path) {
   return response.json();
 }
 
+function addTerrainControl(map) {
+  const pane = map.createPane('terrain-shading');
+  pane.style.zIndex = 405;
+  pane.style.pointerEvents = 'none';
+  const toggle = $('terrain-layer');
+  const opacity = $('terrain-opacity');
+  const strength = opacity.closest('label');
+  const status = $('terrain-status');
+  const tiles = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/ASTER_GDEM_Greyscale_Shaded_Relief/default/GoogleMapsCompatible_Level12/{z}/{y}/{x}.jpeg', {
+    pane: 'terrain-shading', noWrap: true, maxNativeZoom: 12, maxZoom: 12,
+    opacity: opacity.valueAsNumber / 100,
+    attribution: '<a href="https://worldview.earthdata.nasa.gov/?l=ASTER_GDEM_Greyscale_Shaded_Relief">ASTER GDEM · NASA GIBS</a>',
+  });
+  tiles.on('loading', () => { status.hidden = true; });
+  tiles.on('tileerror', () => { status.hidden = false; });
+  const showTerrain = () => {
+    strength.hidden = !toggle.checked;
+    if (toggle.checked) tiles.addTo(map);
+    else {
+      tiles.remove();
+      status.hidden = true;
+    }
+  };
+  toggle.addEventListener('change', showTerrain);
+  opacity.addEventListener('input', () => tiles.setOpacity(opacity.valueAsNumber / 100));
+  $('terrain-controls').disabled = false;
+  showTerrain();
+}
+
 function createMap(basemap, boundary) {
   const styles = {
     country: { color: '#7890a0', weight: 1.1, fillColor: '#162846', fillOpacity: 1 },
@@ -207,6 +236,7 @@ function createMap(basemap, boundary) {
   });
   new ResizeObserver(() => map.invalidateSize({ pan: true })).observe($('map'));
   reset();
+  addTerrainControl(map);
 }
 
 function mapStatus(message) {

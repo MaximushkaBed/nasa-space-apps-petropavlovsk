@@ -8,9 +8,9 @@
   <title>Пожары СКО · Спутниковый календарь</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=kishkenekol-evidence">
+  <link rel="stylesheet" href="styles.css?v=terrain-overlay">
   <script src="vendor/leaflet.js" defer></script>
-  <script src="app.js?v=sko-burn-case" type="module"></script>
+  <script src="app.js?v=terrain-overlay" type="module"></script>
   <script src="correlations.js?v=sko-layers" type="module"></script>
   <script src="burn-case.js?v=2025-04-12" type="module"></script>
 </head>
@@ -132,6 +132,15 @@
             <fieldset id="fire-controls">
               <legend>Пожары · СКО</legend>
               <label style="--layer-color:#ffad55"><input type="checkbox" id="fire-layer" checked disabled> Тепловые точки</label>
+            </fieldset>
+            <fieldset id="terrain-controls" disabled>
+              <legend>Местность · мир</legend>
+              <label style="--layer-color:#a9d7ef"><input type="checkbox" id="terrain-layer"> Рельеф</label>
+              <label class="terrain-strength" hidden>
+                <span>Интенсивность тени</span>
+                <input type="range" id="terrain-opacity" min="15" max="85" value="45" step="5">
+              </label>
+              <p id="terrain-status" class="layer-caption" role="status" hidden>Слой рельефа загрузился не полностью.</p>
             </fieldset>
             <fieldset id="local-layers" disabled>
               <legend>Погода · СКО</legend>
