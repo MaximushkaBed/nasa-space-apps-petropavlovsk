@@ -41,11 +41,11 @@ async function getJSON(path) {
 
 function createMap(basemap, boundary) {
   const styles = {
-    country: { color: '#73818a', weight: 1.45, fillColor: '#202b33', fillOpacity: 1 },
-    province: { color: '#52606b', weight: .65, opacity: .75, dashArray: '3 3' },
-    road: { color: '#586169', weight: .65, opacity: .64 },
-    lake: { color: '#416272', weight: .8, fillColor: '#243f50', fillOpacity: 1 },
-    river: { color: '#4e7788', weight: 1.05, opacity: .88 },
+    country: { color: '#7890a0', weight: 1.1, fillColor: '#162846', fillOpacity: 1 },
+    province: { color: '#74838e', weight: .65, opacity: .58, dashArray: '3 4' },
+    road: { color: '#84959f', weight: .6, opacity: .37 },
+    lake: { color: '#6098b1', weight: .75, fillColor: '#193c58', fillOpacity: 1 },
+    river: { color: '#6498af', weight: .85, opacity: .67 },
   };
   map = L.map('map', {
     zoomControl: false, minZoom: 5, maxZoom: 12, zoomSnap: .25,
@@ -53,18 +53,42 @@ function createMap(basemap, boundary) {
   });
   map.attributionControl.setPrefix(false);
   map.attributionControl.addAttribution('<a href="https://www.naturalearthdata.com/">Natural Earth</a> · <a href="https://www.geoboundaries.org/">geoBoundaries</a>');
-  L.geoJSON(basemap, {
+  const satellite = L.imageOverlay('assets/sko-blue-marble.webp', [[46, 57], [61, 84]], {
+    className: 'satellite-image',
+    attribution: '<a href="https://nasa-gibs.github.io/gibs-api-docs/">Blue Marble · NASA GIBS</a>',
+  });
+  const geography = L.geoJSON(basemap, {
     filter: (feature) => feature.properties.style !== 'city',
     style: (feature) => {
       const style = styles[feature.properties.style];
-      return feature.properties.country === 'RUS' ? { ...style, fillColor: '#26313a' } : style;
+      return feature.properties.country === 'RUS' ? { ...style, fillColor: '#1b3154' } : style;
     },
     interactive: false,
   }).addTo(map);
 
   region = L.geoJSON(boundary, { interactive: false, style: {
-    color: '#87abb9', weight: 1.4, opacity: .9, fillColor: '#3b6576', fillOpacity: .19, dashArray: '4 3',
+    color: '#c4e0fb', weight: 1.65, opacity: .94, fillColor: '#4776aa', fillOpacity: .13, dashArray: '5 4',
   } }).addTo(map);
+  const setBasemap = (useSatellite) => {
+    if (useSatellite) satellite.addTo(map);
+    else satellite.remove();
+    geography.eachLayer((layer) => {
+      const style = layer.feature.properties.style;
+      if (style === 'country' || style === 'lake') layer.setStyle({ fillOpacity: useSatellite ? 0 : 1 });
+    });
+    $('satellite-view').setAttribute('aria-pressed', String(useSatellite));
+    $('vector-view').setAttribute('aria-pressed', String(!useSatellite));
+  };
+  $('satellite-view').addEventListener('click', () => setBasemap(true));
+  $('vector-view').addEventListener('click', () => setBasemap(false));
+  $('satellite-view').disabled = false;
+  $('vector-view').disabled = false;
+  satellite.once('error', () => {
+    setBasemap(false);
+    $('satellite-view').disabled = true;
+    $('satellite-view').title = 'Снимок недоступен';
+  });
+  setBasemap(true);
   const activityPane = map.createPane('activity-cells');
   activityPane.style.zIndex = 415;
   const heatCanvas = L.canvas({ padding: .5, pane: 'activity-cells' });
@@ -137,10 +161,10 @@ async function renderMap(row) {
       if (!count) continue;
       visible++;
       const [west, south, east, north] = cell;
-      const color = count < 3 ? '#cf813f' : count < 7 ? '#ff9d54' : '#ffe2a4';
+      const color = count < 3 ? '#ff9c57' : count < 7 ? '#ffc064' : '#eafe07';
       const shape = L.rectangle([[south, west], [north, east]], {
         renderer: map.heatCanvas, pane: 'activity-cells', color, weight: .7,
-        opacity: .9, fillColor: color, fillOpacity: .82,
+        opacity: 1, fillColor: color, fillOpacity: .85,
       });
       shape.bindPopup(() => cellPopup(cell, count, row, sourceLabel));
       cellLayer.addLayer(shape);
@@ -185,9 +209,7 @@ function renderComparison(row) {
   $('coverage-description').textContent = row.excluded
     ? `Исключено дней со сбоями: ${row.excluded}. Локальное покрытие неизвестно.`
     : 'Локальное покрытие неизвестно.';
-  const badge = $('period-badge');
-  badge.hidden = false;
-  badge.textContent = row.split === 'test' ? 'Проверка' : 'Базовый период';
+  $('comparison-period').textContent = periodLabel(row.month);
 }
 
 function cellAppearance(row) {
