@@ -1,4 +1,4 @@
-import { mountMatrixPanel } from './matrix-panel.js';
+import { mountMatrixPanel } from './matrix-panel.js?v=dark';
 import { sameScientificConfig, scientificSignature } from './scientific-context.js';
 
 export function mountWorkbench(root, bridge={}) {
@@ -39,10 +39,10 @@ function selectedPreset(){return settings?.presets.find(p=>p.id===$('preset').va
 function areaName(config){return (config.preset==='sko'?settings?.presets.find(p=>p.id==='sko')?.name:config.roi_name)||settings?.presets.find(p=>p.id===config.preset&&p.id!=='custom')?.name || `Область ${config.bbox[1].toFixed(2)}°, ${config.bbox[0].toFixed(2)}°` ;}
 function showBounds(fit=true){
   if(roiLayer)roiLayer.remove();const bbox=formConfig().bbox;
-  if($('preset').value==='sko'&&(roiGeometry||settings?.region_geometry))roiLayer=L.geoJSON(roiGeometry||settings.region_geometry,{style:{color:'#257b73',weight:1.8,fillOpacity:.04}}).addTo(map);
-  else if(roiCircle)roiLayer=L.circle([roiCircle.center[1],roiCircle.center[0]],{radius:roiCircle.radius_km*1000,color:'#257b73',weight:1.8,fillOpacity:.04}).addTo(map);
-  else if(roiGeometry)roiLayer=L.geoJSON(roiGeometry,{style:{color:'#257b73',weight:1.8,fillOpacity:.04}}).addTo(map);
-  else roiLayer=L.rectangle([[bbox[1],bbox[0]],[bbox[3],bbox[2]]],{color:'#257b73',weight:1.8,fillOpacity:.04}).addTo(map);
+  if($('preset').value==='sko'&&(roiGeometry||settings?.region_geometry))roiLayer=L.geoJSON(roiGeometry||settings.region_geometry,{style:{color:'#8bc6ff',weight:1.8,fillOpacity:.04}}).addTo(map);
+  else if(roiCircle)roiLayer=L.circle([roiCircle.center[1],roiCircle.center[0]],{radius:roiCircle.radius_km*1000,color:'#8bc6ff',weight:1.8,fillOpacity:.04}).addTo(map);
+  else if(roiGeometry)roiLayer=L.geoJSON(roiGeometry,{style:{color:'#8bc6ff',weight:1.8,fillOpacity:.04}}).addTo(map);
+  else roiLayer=L.rectangle([[bbox[1],bbox[0]],[bbox[3],bbox[2]]],{color:'#8bc6ff',weight:1.8,fillOpacity:.04}).addTo(map);
   if(fit)map.fitBounds(roiLayer.getBounds(),{padding:[35,35],maxZoom:8});
   $('area-note').textContent=$('preset').value==='sko'?'Анализ по исходной границе СКО, не по прямоугольнику.':roiGeometry?'Анализ по переданной геометрии территории; прямоугольник показывает только её охват.':roiCircle?`Анализ по окружности радиусом ${n(roiCircle.radius_km)} км.`:'Анализ по выделенному прямоугольнику; административные границы могут отличаться.';
 }
@@ -179,7 +179,7 @@ function renderInsights(){
  $('points-value').textContent=row.points===null?'Нет доступного ряда':`${n(row.points)} детекций · ${row.eligible_days}/${row.calendar_days} дней глобального продукта${row.nrt_points||row.preliminary_days?' · есть NRT':''}`;
  $('baseline-value').textContent=n(comparisonAvailable(row)?baseline:null);
  $('anomaly-value').textContent=anomalyAvailable?`${row.anomaly_pct>0?'+':''}${n(row.anomaly_pct)}%`:'—';
- $('anomaly-value').style.color=row.anomaly_pct>50?'#bb552e':'#315b4e';
+ $('anomaly-value').style.color=row.anomaly_pct>50?'var(--orange)':'var(--app-accent)';
  $('anomaly-context').textContent=!comparisonAvailable(row)?comparisonMessage(row):unvalidated?'Этот месяц не допущен к SP-калибровке. Оперативные и непроверенные периоды доступны в исходном режиме.':row.cells===null?'В этом периоде у выбранной платформы нет доступного продукта.':comparisonMessage(row);
  const aqua=sourceRows('Aqua').find(r=>r.month===month);
  const disagrees=anomalyAvailable&&comparisonAvailable(aqua)&&source!=='Aqua'&&Number.isFinite(aqua?.anomaly_pct)&&row.anomaly_pct*aqua.anomaly_pct<0&&Math.abs(row.anomaly_pct)>1&&Math.abs(aqua.anomaly_pct)>1;
@@ -197,7 +197,7 @@ function chart(id, series, options={}){
  for(let i=0;i<4;i++){const value=max*i/3;svg.append(svgElement('line',{x1:left,y1:y(value),x2:width-right,y2:y(value),class:'gridline'}),svgElement('text',{x:left-7,y:y(value)+3,'text-anchor':'end'},n(value)));}
  if(options.band){
   let segment=[];
-  const drawBand=()=>{if(segment.length>1){const low=segment.map(([i,v])=>[x(i),y(v[0])]),high=segment.map(([i,v])=>[x(i),y(v[1])]).reverse();svg.append(svgElement('polygon',{points:[...low,...high].map(p=>p.join(',')).join(' '),fill:'#c9e2d5','fill-opacity':'.7'}));}segment=[];};
+  const drawBand=()=>{if(segment.length>1){const low=segment.map(([i,v])=>[x(i),y(v[0])]),high=segment.map(([i,v])=>[x(i),y(v[1])]).reverse();svg.append(svgElement('polygon',{points:[...low,...high].map(p=>p.join(',')).join(' '),fill:'#70c1ff','fill-opacity':'.20'}));}segment=[];};
   options.band.forEach((v,i)=>{if(v.every(Number.isFinite))segment.push([i,v]);else drawBand();});drawBand();
  }
  const stride=Math.max(1,Math.ceil(count/Math.max(3,Math.floor(width/100))));
@@ -221,7 +221,7 @@ function renderChart(){
   }else{keys=dates;values=rows.map(r=>r.value);reference=rows.map(r=>r.aqua);labelsX=keys.map(k=>k.slice(8));click=i=>selectFrame(i+1);}
   $('series-caption').textContent=`${step==='week'?'Исходная шкала: неперекрывающиеся недели; крайние окна могут быть неполными.':'Исходная шкала: дни выбранного месяца; разрывы — нет доступного продукта.'} Ноль — нет записанных детекций, локальная видимость неизвестна.`;
  }
- const lines=[{name:labels[source],values,color:'#dd773b'}];if(source!=='Aqua')lines.push({name:'Aqua / MODIS',values:reference,color:'#218b83'});
+ const lines=[{name:labels[source],values,color:'#ffa46e'}];if(source!=='Aqua')lines.push({name:'Aqua / MODIS',values:reference,color:'#70c1ff'});
  chart('series-chart',lines,{labels:labelsX,tooltips:keys,focus:step==='month'?keys.indexOf(month):frame-1,onSelect:click});
 }
 function renderCalendar(){
@@ -240,7 +240,13 @@ function renderCalendar(){
    if(noData){button.classList.add('missing');button.textContent='—';button.title=anomalies&&row&&!comparisonAvailable(row)?comparisonMessage(row):missingComparisonBaseline&&value!==null?'Историческая база не допущена к SP-калибровке':calibrated()&&row?.cells!==null?'Период не допущен к SP-калибровке':anomalies?'Процентное отклонение не оценено':'Нет доступного ряда';}
    else{
     const intensity=Math.log1p(value)/Math.log1p(max);
-    button.style.background=anomalies?(row.anomaly_pct>0?`hsl(24 75% ${94-Math.min(1,row.anomaly_pct/200)*35}%)`:`hsl(159 24% ${94-Math.min(1,-row.anomaly_pct/100)*27}%)`):`hsl(${44-22*intensity} ${43+intensity*40}% ${96-48*intensity}%)`;
+    if (anomalies) {
+     const deviation = row.anomaly_pct;
+     const magnitude = Math.min(1, Math.abs(deviation) / (deviation > 0 ? 200 : 100));
+     button.style.background = `hsl(${deviation > 0 ? 22 : 210} 59% ${19 + magnitude * 19}%)`;
+    } else {
+     button.style.background = `hsl(${30 - 16 * intensity} 64% ${18 + intensity * 21}%)`;
+    }
     button.textContent=anomalies?`${row.anomaly_pct>0?'+':''}${Math.round(row.anomaly_pct)}%`:n(value);
     button.title=`${formatMonth(key)}: ${n(value)} ячейко-дней${calibrated()?' в шкале Aqua':''}; ${n(row.points)} детекций. ${value===0?'Обнаружений нет; ':''}локальная видимость неизвестна.`;
     if(value===0)button.classList.add('zero-detections');
@@ -264,8 +270,8 @@ function renderSeason(){
  $('season-year-label').textContent=selectedYear?`ISO-${selectedYear}`:'Выбранный ISO-год';
  if(weekly?.weeks?.length){
   const lookup=new Map(weekly.weeks.map(row=>[Number(row.week),row])),profile=Array.from({length:53},(_,i)=>lookup.get(i+1)),observed=weeklyValues(selectedYear);
-  const lines=[{name:'Базовая медиана',values:profile.map(row=>row?.years>=3?row.median:null),color:'#218b83'},
-   {name:String(selectedYear),values:observed.map(row=>row&&Number.isFinite(row.rate)?row.rate:null),color:'#dd773b'}];
+  const lines=[{name:'Базовая медиана',values:profile.map(row=>row?.years>=3?row.median:null),color:'#70c1ff'},
+   {name:String(selectedYear),values:observed.map(row=>row&&Number.isFinite(row.rate)?row.rate:null),color:'#ffa46e'}];
   const options={labels:profile.map((_,i)=>String(i+1)),tooltips:profile.map((_,i)=>`Неделя ISO ${i+1}`),band:profile.map(row=>row?.years>=3?[row.low,row.high]:[null,null]),label:'Недельный сезонный профиль в исходной шкале: ячейко-дни на день глобального продукта'};
   chart('season-chart',lines,options);chart('calendar-season-chart',lines,options);
   const text='Недели ISO · исходные ячейко-дни на день глобального продукта. Полоса — межгодовой диапазон 10–90%, не прогноз и не локальное покрытие.';
@@ -273,8 +279,8 @@ function renderSeason(){
   $('season-unit').textContent='Исходные ячейко-дни / доступный день';
  }else{
   const profile=result.profiles[source]?.months||[],lookup=new Map(sourceRows().filter(row=>row.month.startsWith(selectedYear)).map(row=>[Number(row.month.slice(5)),row]));
-  const lines=[{name:'Базовая медиана',values:profile.map(row=>row.years>=3?row.median:null),color:'#218b83'},
-   {name:String(selectedYear),values:profile.map(row=>{const observed=lookup.get(row.month);return observed?.eligible_days&&!observed.partial?observed.cells/observed.eligible_days:null;}),color:'#dd773b'}];
+  const lines=[{name:'Базовая медиана',values:profile.map(row=>row.years>=3?row.median:null),color:'#70c1ff'},
+   {name:String(selectedYear),values:profile.map(row=>{const observed=lookup.get(row.month);return observed?.eligible_days&&!observed.partial?observed.cells/observed.eligible_days:null;}),color:'#ffa46e'}];
   const options={labels:months,tooltips:longMonths,band:profile.map(row=>row.years>=3?[row.low,row.high]:[null,null]),label:'Месячный профиль в исходной шкале'};
   chart('season-chart',lines,options);chart('calendar-season-chart',lines,options);
   $('seasonal-caption').textContent=$('season-detail-caption').textContent='Показан месячный профиль в исходной шкале: недельные результаты ещё не доступны. Полоса — межгодовой диапазон 10–90%, не прогнозный интервал.';
@@ -306,8 +312,8 @@ function renderComparison(){
  if(!weekly?.weeks?.length){empty('compare-chart','Недельные результаты ещё не доступны. Сравнение сезонов появится после их расчёта.');return;}
  if(!compareYearA||!compareYearB||compareYearA===compareYearB){empty('compare-chart','Для сравнения выберите два разных года с доступным рядом выбранного спутника.');return;}
  const a=weeklyValues(compareYearA),b=weeklyValues(compareYearB);
- chart('compare-chart',[{name:compareYearA,values:a.map(row=>row?.rate??null),color:'#218b83'},
-  {name:compareYearB,values:b.map(row=>row?.rate??null),color:'#dd773b'}],
+ chart('compare-chart',[{name:compareYearA,values:a.map(row=>row?.rate??null),color:'#70c1ff'},
+  {name:compareYearB,values:b.map(row=>row?.rate??null),color:'#ffa46e'}],
   {labels:Array.from({length:53},(_,i)=>String(i+1)),tooltips:Array.from({length:53},(_,i)=>`Неделя ISO ${i+1}`),label:`Сравнение ${compareYearA} и ${compareYearB}: исходные ячейко-дни на доступный день`});
  const metrics=weekly.year_metrics||{},ma=metrics[compareYearA]||{},mb=metrics[compareYearB]||{};
  const table=document.createElement('table'),caption=document.createElement('caption');caption.textContent='ISO-годы · активность по одинаковому историческому порогу';table.append(caption);
@@ -328,7 +334,7 @@ function renderValidation(){
  const status=document.createElement('div');status.className='validation-status'+(model.accepted?'':' warn');status.textContent=model.accepted?'Локальная проверка пройдена · результат экспериментальный':'Калибровка не допущена: не выполнены условия отложенной проверки.';host.append(status);
  for(const [name,value] of [['Коэффициент',coefficient(model.coefficient)],['MAE до → после',`${n(model.mae_before)} → ${n(model.mae_after)}`],['Обучение / тест',`${model.fit_months} / ${model.test_months} мес.`],['Смещение на тесте',model.bias_pct===undefined?'—':`${n(model.bias_pct)}%`]]){const block=document.createElement('div');block.append(document.createTextNode(name));const strong=document.createElement('strong');strong.textContent=value;block.append(strong);host.append(block);}
  const pairs=model.pairs.filter(p=>Number(p.month.slice(0,4))>result.config.baseline_end);
- chart('validation-chart',[{name:'Aqua на общих SP-датах',values:pairs.map(p=>p.aqua),color:'#218b83'},{name:'Исходный '+source,values:pairs.map(p=>p.partner),color:'#b3bdb8',width:1},{name:'Оценка Aqua по '+source,values:pairs.map(p=>model.coefficient===null?null:p.partner*model.coefficient),color:'#dd773b'}],{labels:pairs.map(p=>p.month.slice(2)),tooltips:pairs.map(p=>p.month),label:'Отложенная проверка калибровки: Aqua, исходный и скорректированный спутник'});
+ chart('validation-chart',[{name:'Aqua на общих SP-датах',values:pairs.map(p=>p.aqua),color:'#70c1ff'},{name:'Исходный '+source,values:pairs.map(p=>p.partner),color:'#b0bedb',width:1},{name:'Оценка Aqua по '+source,values:pairs.map(p=>model.coefficient===null?null:p.partner*model.coefficient),color:'#ffa46e'}],{labels:pairs.map(p=>p.month.slice(2)),tooltips:pairs.map(p=>p.month),label:'Отложенная проверка калибровки: Aqua, исходный и скорректированный спутник'});
  $('validation-note').textContent=`Обучение ${model.fit_start}–${model.fit_end}; контроль — только последующие годы. Общие SP-даты, ≥10 дней в месяце. Условия прототипа: ≥24 месяца обучения, ≥12 теста, MAE ниже исходной и не выше сезонной модели (${n(model.seasonal_mae)}), смещение ≤35%.${model.coefficient_interval?` Разброс коэффициента по выборкам целых лет: ${coefficient(model.coefficient_interval[0])}–${coefficient(model.coefficient_interval[1])}.`:''} Локальная видимость неизвестна.`;
 }
 function selectMonth(key){if(!result||!key)return;stopPlaying();clearRangeFocus();month=key;frame=0;mapYear=null;$('focus-month').value=month;renderAll();updateMap();publishContext();}
@@ -410,8 +416,8 @@ function exportImage(){
  const metadata=[`${labels[source]} · ${result.config.start} — ${result.config.end} · сетка ${result.config.grid_km} км`,
   `База ${result.config.baseline_start}–${result.config.baseline_end} · ${mode} · снимок архива ${result.snapshot_at}`];
  const root=svgElement('svg',{xmlns:ns,width,viewBox:`0 0 ${width} 700`,role:'img','aria-label':`NASA Space Apps: ${title}`});
- root.append(svgElement('style',{},'text{font-family:Arial,sans-serif;fill:#385349;font-size:12px}.gridline{stroke:#e5ece7}.axisline{stroke:#cbd9d0}'));
- root.append(svgElement('rect',{width:'100%',height:'100%',fill:'#fff'}),svgElement('text',{x:30,y:35,style:'font-size:22px;font-weight:700'},'NASA Space Apps · '+title));
+ root.append(svgElement('style',{},'text{font-family:Arial,sans-serif;fill:#f5f8ff;font-size:12px}.gridline{stroke:#2a4072}.axisline{stroke:#526c96}'));
+ root.append(svgElement('rect',{width:'100%',height:'100%',fill:'#07132d'}),svgElement('text',{x:30,y:35,style:'font-size:22px;font-weight:700'},'NASA Space Apps · '+title));
  metadata.forEach((line,index)=>root.append(svgElement('text',{x:30,y:62+index*20},line)));
  if(calendarMode)root.append(svgElement('text',{x:30,y:111,'font-size':11},`Календарь: отклонения от базы (%). ${formatMonth(month)}: ${comparisonMessage(currentRow())}`));
  let contentHeight=0;
@@ -419,7 +425,7 @@ function exportImage(){
   const grid=$('calendar-grid'),children=[...grid.children],cellWidth=(width-112)/12,rowHeight=32,left=72;
   const rows=Math.ceil(children.length/13);
   children.forEach((node,index)=>{const column=index%13,row=Math.floor(index/13),x=column===0?28:left+(column-1)*cellWidth,y=headerHeight+row*rowHeight;
-   if(node.classList.contains('calendar-cell'))root.append(svgElement('rect',{x,y,width:cellWidth-5,height:rowHeight-5,rx:3,fill:node.classList.contains('missing')?'#e5eae6':getComputedStyle(node).backgroundColor,stroke:node.classList.contains('focus')?'#234d3c':'none'}));
+   if(node.classList.contains('calendar-cell'))root.append(svgElement('rect',{x,y,width:cellWidth-5,height:rowHeight-5,rx:3,fill:node.classList.contains('missing')?'#162a51':getComputedStyle(node).backgroundColor,stroke:node.classList.contains('focus')?'#8bc6ff':'none'}));
    root.append(svgElement('text',{x:column===0?x:x+(cellWidth-5)/2,y:y+19,'text-anchor':column===0?'start':'middle','font-size':11},node.textContent));
   });
   contentHeight=rows*rowHeight+20;

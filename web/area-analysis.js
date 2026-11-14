@@ -95,6 +95,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     const approximate = !withinDetail && archiveFrame?.approximate && !(regionalCounts && archiveFrame.regionalExact);
     const missing = withinDetail && detail.missing?.length > 0;
     byId('area-count').textContent = points ? `Тепловые детекции · ${approximate ? '≈ ' : ''}${number.format(total)}`
+      : archiveFrame?.local ? 'Часть области за пределами загруженного кадра'
       : archiveFrame?.failed ? 'Детекции за эту дату недоступны' : 'Данные ещё не загружены';
     const coverage = byId('area-coverage');
     coverage.hidden = !points || (!approximate && !missing && total > 0);

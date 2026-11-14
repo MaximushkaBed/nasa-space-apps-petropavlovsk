@@ -1,4 +1,6 @@
 const zoomDelay = 220;
+const cacheLimit = 12;
+const cacheLifetime = 60_000;
 const wrap = (longitude) => ((longitude + 180) % 360 + 360) % 360 - 180;
 
 function boundsFor(map) {
@@ -30,8 +32,16 @@ export function createFireViewport(map, minZoom, onFrame) {
   let query;
   let request;
   let timer;
-  let cached;
+  const cache = new Map();
   let attempt;
+  let pending;
+
+  function publish(frame) {
+    onFrame(frame);
+    if (frame?.status === 'loading') return;
+    pending?.resolve();
+    pending = undefined;
+  }
 
   function abort() {
     clearTimeout(timer);
@@ -41,38 +51,42 @@ export function createFireViewport(map, minZoom, onFrame) {
     request = undefined;
   }
 
-  function refresh(allowBusyRetry = true) {
+  function refresh(allowBusyRetry = true, immediate = false) {
     clearTimeout(timer);
     if (!query || map.getZoom() < minZoom) {
       abort();
-      onFrame(undefined);
+      publish(undefined);
       return;
     }
     const view = boundsFor(map);
-    if (cached && contains(cached.bounds, view)) {
+    const cached = cache.get(query.key);
+    if (cached && cached.expiresAt > Date.now() && contains(cached.bounds, view)) {
       abort();
-      onFrame(cached.frame);
+      cache.delete(query.key);
+      cache.set(query.key, cached);
+      publish(cached.frame);
       return;
     }
     const bounds = requestBounds(view, query);
     if (!bounds) {
       abort();
-      onFrame({ status: 'too_wide' });
+      publish({ status: 'too_wide' });
       return;
     }
     const bbox = [wrap(bounds.west), bounds.south, wrap(bounds.east), bounds.north].map((n) => n.toFixed(4)).join(',');
-    if (attempt?.bbox === bbox) {
-      onFrame(attempt.frame);
+    if ((request && attempt && contains(attempt.bounds, view))
+      || (attempt?.bbox === bbox && attempt.frame.status !== 'ok')) {
+      publish(attempt.frame);
       return;
     }
     abort();
-    onFrame({ status: 'loading' });
+    publish({ status: 'loading' });
     timer = setTimeout(async () => {
       const params = new URLSearchParams({ start: query.start, end: query.end, bbox });
       if (query.satellite !== '') params.set('satellite', query.satellite);
       const controller = new AbortController();
       request = controller;
-      attempt = { bbox, frame: { status: 'loading' } };
+      attempt = { bbox, bounds, frame: { status: 'loading' } };
       try {
         const response = await fetch(`/api/fires/viewport?${params}`, { signal: controller.signal });
         if (!response.ok && response.status !== 404) throw new Error(`HTTP ${response.status}`);
@@ -87,27 +101,46 @@ export function createFireViewport(map, minZoom, onFrame) {
         if (frame.status === 'ok') {
           if (!Array.isArray(frame.points)) throw new Error('Invalid detail frame');
           frame.contains = (area) => contains(bounds, area);
-          cached = { bounds, frame };
+          frame.coversView = () => frame.contains(boundsFor(map));
+          frame.countVisible = () => {
+            const currentView = boundsFor(map);
+            return frame.points.reduce((total, [lon, lat]) =>
+              total + Number(contains(currentView, { west: lon, east: lon, south: lat, north: lat })), 0);
+          };
+          cache.delete(query.key);
+          cache.set(query.key, { bounds, frame, expiresAt: Date.now() + cacheLifetime });
+          if (cache.size > cacheLimit) cache.delete(cache.keys().next().value);
         }
-        onFrame(frame);
+        publish(frame);
       } catch {
         if (controller.signal.aborted) return;
         attempt.frame = { status: 'error' };
-        onFrame(attempt.frame);
+        publish(attempt.frame);
       } finally {
         if (request === controller) request = undefined;
       }
-    }, zoomDelay);
+    }, immediate ? 0 : zoomDelay);
   }
 
   map.on('moveend resize', () => refresh());
   return {
-    select(next) {
-      if (query?.key === next?.key) return;
+    fits(limits) {
+      return map.getZoom() >= minZoom && Boolean(requestBounds(boundsFor(map), limits));
+    },
+    select(next, immediate = false) {
+      if (query?.key === next?.key) return pending?.promise;
       abort();
+      pending?.resolve();
+      pending = undefined;
       query = next;
-      cached = attempt = undefined;
-      refresh();
+      attempt = undefined;
+      if (query) {
+        pending = {};
+        pending.promise = new Promise((resolve) => { pending.resolve = resolve; });
+      }
+      const promise = pending?.promise;
+      refresh(true, immediate);
+      return promise;
     },
     retry() {
       attempt = undefined;

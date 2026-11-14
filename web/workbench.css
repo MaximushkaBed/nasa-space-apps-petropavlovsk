@@ -81,4 +81,65 @@ fieldset>legend~.pair{width:100%}
 @media(max-width:750px){.work-panels>.workspace-top{grid-template-columns:1fr}.work-panels .insights{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:15px}.work-panels .insight-main{grid-column:1;grid-row:3/span 2;border:0}.work-panels .insight-row{grid-column:2;flex-direction:column;gap:2px}.work-panels .insight-explanation,.work-panels .season-callout,.work-panels .science-warning{grid-column:1/-1}.map-mode-control{font-size:8px}.work-panels .map-frame,.work-panels #analysis-map{min-height:310px}.work-panels .analysis-heading{flex-direction:column}.work-panels .view-controls{width:100%;flex-direction:row;align-items:center}.work-panels .analysis-heading p{max-width:none}.contextbar{align-items:flex-start}.context-actions{max-width:110px;gap:5px}.context-actions #export-csv,.context-actions #export-image{width:100%;font-size:9px}.calendar-season .chart-legend{font-size:8px}.calendar-grid{gap:3px;grid-template-columns:30px repeat(12,minmax(22px,1fr))}}
 @media(max-width:620px){#analysis-form fieldset:nth-child(2){grid-column:1/-1}#analysis-form fieldset:nth-child(3){grid-column:1/-1}.work-panels{gap:10px}.work-panels .analysis-tabs{padding:0 13px;gap:15px}.work-panels .analysis-view{padding:11px 13px}.calendar-cell{font-size:8px;height:29px}.work-panels .analysis-heading{padding:13px}.work-panels .view-controls select{width:190px;font-size:9px}.calendar-season .chart-toolbar{align-items:flex-start;flex-direction:column}.calendar-season .chart-container{height:175px}.compare-map-actions button{font-size:9px}.compare-metrics table{font-size:9px}.compare-controls{gap:8px}.compare-metrics tbody th{width:46%}#view-series .chart-container,#view-compare .chart-container,#view-validation .chart-container{height:220px}.work-panels .map-frame,.work-panels #analysis-map{min-height:290px}.brand strong{font-size:16px}.appbar nav a{font-size:9px}}
 
+/* Match the atlas across analysis panels, controls, and map overlays. */
+& {
+  --ink: var(--app-ink);
+  --muted: var(--app-muted);
+  --line: var(--app-line);
+  --teal: #70c1ff;
+  --orange: #ffa46e;
+  color: var(--ink);
+  background: var(--app-bg);
+}
+.filters, .analysis-panel, .insights, .timeline-bar, dialog { background: var(--app-surface); }
+.eyebrow, .text-button, .map-mode-control select { color: var(--app-accent); }
+label, .hint, .archive-foot, .metric-label, .metric-unit, .utc, .insight-main p, .insight-row > span,
+.insight-explanation, .season-callout p, .analysis-heading p, .analysis-tabs button, .chart-toolbar,
+.segmented button, .chart-caption, .empty-state, .calendar-label, .validation-summary, .timeline-bar,
+.timeline-bar output, .quality-bar, .quality-bar strong, .job-banner span:not(.spinner), .compare-map-actions,
+.compare-metrics caption, .compare-metrics tbody th, .focus-scope p { color: var(--muted); }
+.empty-state strong, .calendar-season h4, .validation-summary strong, .compare-metrics td, dialog { color: var(--ink); }
+.step, .segmented .selected, .validation-status, .job-banner, .focus-scope, .compare-metrics thead th,
+.dialog-content pre { color: var(--ink); background: var(--app-control); }
+.step { color: var(--app-accent); }
+.outline, input:not([type=checkbox]):not([type=range]), select { background: var(--app-bg); color: var(--ink); border-color: var(--app-control-line); }
+button:hover:not(:disabled) { background: var(--app-hover); }
+:is(button, a, input, select, summary):focus-visible { outline-color: var(--app-accent); }
+.primary, .primary:disabled { background: var(--app-primary); color: var(--app-bg); }
+.primary:hover:not(:disabled) { background: #bbdfff; }
+.map-frame, #analysis-map { background: var(--app-bg); }
+.map-frame, .map-chip, .map-bottom, .map-mode-control, .segmented, .job-banner,
+.calendar-season, dialog, .compare-metrics tbody tr + tr, .work-panels .insight-main { border-color: var(--line); }
+.map-chip, .map-bottom, .map-mode-control, .leaflet-container .leaflet-control-attribution {
+  background: var(--app-surface);
+  color: var(--muted);
+}
+.map-mode-control select { background: transparent; }
+.map-buttons button, .map-retry, .leaflet-bar a, .leaflet-bar a.leaflet-disabled,
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: var(--app-surface);
+  border-color: var(--app-control-line);
+  color: var(--ink);
+}
+.leaflet-bar a:hover { background: var(--app-hover); }
+.leaflet-container :is(.leaflet-popup-close-button, .leaflet-control-attribution a) { color: var(--app-accent); }
+.draw-instruction { background: var(--app-surface); border: 1px solid var(--app-control-line); }
+.insight-main > strong { color: var(--orange); }
+.season-callout { border-left-color: var(--teal); }
+.analysis-tabs button.active { color: var(--app-accent); border-bottom-color: currentColor; }
+.compare-map-actions button[aria-pressed=true] { color: var(--app-accent); background: var(--app-hover); border-color: currentColor; }
+.chart-container text { fill: var(--muted); }
+.chart-container .gridline { stroke: var(--line); }
+.chart-container .axisline { stroke: var(--app-control-line); }
+.calendar-cell { color: var(--ink); background: var(--app-control); }
+.calendar-cell.missing { color: var(--muted); background: repeating-linear-gradient(135deg, #102144 0 3px, #162a51 3px 6px); }
+.calendar-cell.zero-detections { color: var(--muted); background: var(--app-bg) !important; }
+.calendar-cell.focus { outline-color: var(--app-accent); }
+.archive-indicator { background: var(--teal); }
+.checkbox input, .timeline-bar input, .job-banner progress { accent-color: var(--app-accent); }
+.spinner { border-color: var(--app-control-line); border-top-color: var(--app-accent); }
+.science-warning, .validation-status.warn, .error-banner { color: var(--app-warning); background: var(--app-warning-bg); border-color: #866644; }
+.quality-mark { color: var(--app-warning); border-color: #866644; }
+.focus-scope { border-left-color: var(--teal); }
+dialog::backdrop { background: #020918b8; }
 }
