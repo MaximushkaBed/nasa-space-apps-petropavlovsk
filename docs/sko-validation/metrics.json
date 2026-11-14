@@ -1,0 +1,2643 @@
+{
+  "fit_years": [
+    2020,
+    2021,
+    2022,
+    2023
+  ],
+  "test_years": [
+    2024,
+    2025
+  ],
+  "months": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "scenarios": [
+    {
+      "grid_m": 1000,
+      "light": "all",
+      "platform": "Suomi-NPP",
+      "factor": 0.24781140139243124,
+      "fit_aqua_cell_days": 3595,
+      "fit_viirs_cell_days": 14507,
+      "test_monthly_points": {
+        "periods": 14,
+        "mae": 321.2142857142857,
+        "bias_pct": 412.20183486238534
+      },
+      "test_monthly_raw": {
+        "periods": 14,
+        "mae": 181.78571428571428,
+        "bias_pct": 242.9665071770335
+      },
+      "test_monthly_adjusted": {
+        "periods": 14,
+        "mae": 19.16753980836837,
+        "bias_pct": -15.008989225791996
+      },
+      "factor_without_2022": 0.24749585929489706,
+      "test_monthly_adjusted_without_2022": {
+        "periods": 14,
+        "mae": 19.21744053722128,
+        "bias_pct": -15.11720959685061
+      },
+      "test_weekly_raw": {
+        "periods": 62,
+        "mae": 41.306451612903224,
+        "bias_pct": 242.9665071770335
+      },
+      "test_weekly_adjusted": {
+        "periods": 62,
+        "mae": 5.393517478769982,
+        "bias_pct": -15.008989225792005
+      },
+      "test_intersection": 278,
+      "test_union": 4351,
+      "by_year": {
+        "2020": {
+          "aqua_cell_days": 1558,
+          "viirs_cell_days": 6034,
+          "aqua_points": 1659,
+          "viirs_points": 10124,
+          "raw": {
+            "periods": 7,
+            "mae": 639.4285714285714,
+            "bias_pct": 287.29139922978175
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 26.116810603747943,
+            "bias_pct": -4.024775609632214
+          },
+          "aqua_top_weeks": [
+            2,
+            3,
+            4,
+            29,
+            1
+          ],
+          "viirs_top_weeks": [
+            2,
+            3,
+            29,
+            4,
+            1
+          ]
+        },
+        "2021": {
+          "aqua_cell_days": 1116,
+          "viirs_cell_days": 4478,
+          "aqua_points": 1176,
+          "viirs_points": 7240,
+          "raw": {
+            "periods": 7,
+            "mae": 480.2857142857143,
+            "bias_pct": 301.2544802867383
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 20.84002796679435,
+            "bias_pct": -0.56456492515169
+          },
+          "aqua_top_weeks": [
+            3,
+            4,
+            5,
+            29,
+            6
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            5,
+            29,
+            6
+          ]
+        },
+        "2022": {
+          "aqua_cell_days": 457,
+          "viirs_cell_days": 1828,
+          "aqua_points": 477,
+          "viirs_points": 3014,
+          "raw": {
+            "periods": 7,
+            "mae": 195.85714285714286,
+            "bias_pct": 300.0
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 6.292735526691549,
+            "bias_pct": -0.8754394430275075
+          },
+          "aqua_top_weeks": [
+            6,
+            4,
+            5,
+            27,
+            25
+          ],
+          "viirs_top_weeks": [
+            4,
+            6,
+            5,
+            28,
+            26
+          ]
+        },
+        "2023": {
+          "aqua_cell_days": 464,
+          "viirs_cell_days": 2167,
+          "aqua_points": 495,
+          "viirs_points": 3322,
+          "raw": {
+            "periods": 7,
+            "mae": 243.28571428571428,
+            "bias_pct": 367.0258620689655
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 11.057430403056653,
+            "bias_pct": 15.734333365818642
+          },
+          "aqua_top_weeks": [
+            5,
+            2,
+            3,
+            4,
+            6
+          ],
+          "viirs_top_weeks": [
+            5,
+            2,
+            4,
+            3,
+            6
+          ]
+        },
+        "2024": {
+          "aqua_cell_days": 83,
+          "viirs_cell_days": 354,
+          "aqua_points": 85,
+          "viirs_points": 467,
+          "raw": {
+            "periods": 7,
+            "mae": 39.57142857142857,
+            "bias_pct": 326.50602409638554
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 5.288215541265793,
+            "bias_pct": 5.693055533639347
+          },
+          "aqua_top_weeks": [
+            3,
+            29,
+            4,
+            27,
+            19
+          ],
+          "viirs_top_weeks": [
+            3,
+            6,
+            4,
+            27,
+            29
+          ]
+        },
+        "2025": {
+          "aqua_cell_days": 962,
+          "viirs_cell_days": 3230,
+          "aqua_points": 1005,
+          "viirs_points": 5116,
+          "raw": {
+            "periods": 7,
+            "mae": 324,
+            "bias_pct": 235.75883575883577
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 33.04686407547094,
+            "bias_pct": -16.79513238071175
+          },
+          "aqua_top_weeks": [
+            2,
+            1,
+            3,
+            4,
+            30
+          ],
+          "viirs_top_weeks": [
+            2,
+            1,
+            4,
+            3,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "grid_m": 1000,
+      "light": "all",
+      "platform": "NOAA-20",
+      "factor": 0.24479095737437015,
+      "fit_aqua_cell_days": 3595,
+      "fit_viirs_cell_days": 14686,
+      "test_monthly_points": {
+        "periods": 14,
+        "mae": 321.7142857142857,
+        "bias_pct": 413.2110091743119
+      },
+      "test_monthly_raw": {
+        "periods": 14,
+        "mae": 188.21428571428572,
+        "bias_pct": 252.1531100478469
+      },
+      "test_monthly_adjusted": {
+        "periods": 14,
+        "mae": 19.79994552635163,
+        "bias_pct": -13.796103049025636
+      },
+      "factor_without_2022": 0.2435012027624738,
+      "test_monthly_adjusted_without_2022": {
+        "periods": 14,
+        "mae": 19.971482889733842,
+        "bias_pct": -14.250294146803483
+      },
+      "test_weekly_raw": {
+        "periods": 62,
+        "mae": 42.66129032258065,
+        "bias_pct": 252.1531100478469
+      },
+      "test_weekly_adjusted": {
+        "periods": 62,
+        "mae": 5.519513866618636,
+        "bias_pct": -13.79610304902563
+      },
+      "test_intersection": 258,
+      "test_union": 4467,
+      "by_year": {
+        "2020": {
+          "aqua_cell_days": 1558,
+          "viirs_cell_days": 5943,
+          "aqua_points": 1659,
+          "viirs_points": 9692,
+          "raw": {
+            "periods": 7,
+            "mae": 626.4285714285714,
+            "bias_pct": 281.45057766367137
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 33.91775451839459,
+            "bias_pct": -6.624347902703351
+          },
+          "aqua_top_weeks": [
+            2,
+            3,
+            4,
+            29,
+            1
+          ],
+          "viirs_top_weeks": [
+            2,
+            3,
+            29,
+            4,
+            1
+          ]
+        },
+        "2021": {
+          "aqua_cell_days": 1116,
+          "viirs_cell_days": 4669,
+          "aqua_points": 1176,
+          "viirs_points": 7371,
+          "raw": {
+            "periods": 7,
+            "mae": 507.57142857142856,
+            "bias_pct": 318.36917562724017
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 14.11989066360577,
+            "bias_pct": 2.4129910377181187
+          },
+          "aqua_top_weeks": [
+            3,
+            4,
+            5,
+            29,
+            6
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            5,
+            29,
+            6
+          ]
+        },
+        "2022": {
+          "aqua_cell_days": 457,
+          "viirs_cell_days": 1799,
+          "aqua_points": 477,
+          "viirs_points": 2810,
+          "raw": {
+            "periods": 7,
+            "mae": 191.71428571428572,
+            "bias_pct": 293.6542669584245
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 6.218040505048541,
+            "bias_pct": -3.6369951167413745
+          },
+          "aqua_top_weeks": [
+            6,
+            4,
+            5,
+            27,
+            25
+          ],
+          "viirs_top_weeks": [
+            4,
+            5,
+            6,
+            28,
+            3
+          ]
+        },
+        "2023": {
+          "aqua_cell_days": 464,
+          "viirs_cell_days": 2275,
+          "aqua_points": 495,
+          "viirs_points": 3426,
+          "raw": {
+            "periods": 7,
+            "mae": 258.7142857142857,
+            "bias_pct": 390.30172413793105
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 13.308564035719153,
+            "bias_pct": 20.021428454028474
+          },
+          "aqua_top_weeks": [
+            5,
+            2,
+            3,
+            4,
+            6
+          ],
+          "viirs_top_weeks": [
+            5,
+            4,
+            2,
+            3,
+            6
+          ]
+        },
+        "2024": {
+          "aqua_cell_days": 83,
+          "viirs_cell_days": 422,
+          "aqua_points": 85,
+          "viirs_points": 541,
+          "raw": {
+            "periods": 7,
+            "mae": 48.42857142857143,
+            "bias_pct": 408.43373493975906
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 5.111573704791735,
+            "bias_pct": 24.459980737330365
+          },
+          "aqua_top_weeks": [
+            3,
+            29,
+            4,
+            27,
+            19
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            29,
+            6,
+            27
+          ]
+        },
+        "2025": {
+          "aqua_cell_days": 962,
+          "viirs_cell_days": 3258,
+          "aqua_points": 1005,
+          "viirs_points": 5053,
+          "raw": {
+            "periods": 7,
+            "mae": 328,
+            "bias_pct": 238.66943866943868
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 34.488317347911526,
+            "bias_pct": -17.09678387466758
+          },
+          "aqua_top_weeks": [
+            2,
+            1,
+            3,
+            4,
+            30
+          ],
+          "viirs_top_weeks": [
+            2,
+            1,
+            3,
+            4,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "grid_m": 2000,
+      "light": "all",
+      "platform": "Suomi-NPP",
+      "factor": 0.2931985294117647,
+      "fit_aqua_cell_days": 3190,
+      "fit_viirs_cell_days": 10880,
+      "test_monthly_points": {
+        "periods": 14,
+        "mae": 321.2142857142857,
+        "bias_pct": 412.20183486238534
+      },
+      "test_monthly_raw": {
+        "periods": 14,
+        "mae": 128.35714285714286,
+        "bias_pct": 190.73482428115017
+      },
+      "test_monthly_adjusted": {
+        "periods": 14,
+        "mae": 19.242253151260503,
+        "bias_pct": -14.756977071978948
+      },
+      "factor_without_2022": 0.2933530592835253,
+      "test_monthly_adjusted_without_2022": {
+        "periods": 14,
+        "mae": 19.227661116227114,
+        "bias_pct": -14.712049856866452
+      },
+      "test_weekly_raw": {
+        "periods": 62,
+        "mae": 29.274193548387096,
+        "bias_pct": 190.73482428115017
+      },
+      "test_weekly_adjusted": {
+        "periods": 62,
+        "mae": 5.127134724857685,
+        "bias_pct": -14.756977071978948
+      },
+      "test_intersection": 368,
+      "test_union": 3301,
+      "by_year": {
+        "2020": {
+          "aqua_cell_days": 1360,
+          "viirs_cell_days": 4374,
+          "aqua_points": 1659,
+          "viirs_points": 10124,
+          "raw": {
+            "periods": 7,
+            "mae": 430.57142857142856,
+            "bias_pct": 221.61764705882354
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 28.562237394957975,
+            "bias_pct": -5.7021788494809655
+          },
+          "aqua_top_weeks": [
+            2,
+            3,
+            4,
+            29,
+            1
+          ],
+          "viirs_top_weeks": [
+            2,
+            3,
+            29,
+            4,
+            1
+          ]
+        },
+        "2021": {
+          "aqua_cell_days": 989,
+          "viirs_cell_days": 3367,
+          "aqua_points": 1176,
+          "viirs_points": 7240,
+          "raw": {
+            "periods": 7,
+            "mae": 339.7142857142857,
+            "bias_pct": 240.4448938321537
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 22.19157037815125,
+            "bias_pct": -0.18205778266816663
+          },
+          "aqua_top_weeks": [
+            3,
+            4,
+            29,
+            5,
+            6
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            5,
+            29,
+            6
+          ]
+        },
+        "2022": {
+          "aqua_cell_days": 414,
+          "viirs_cell_days": 1417,
+          "aqua_points": 477,
+          "viirs_points": 3014,
+          "raw": {
+            "periods": 7,
+            "mae": 143.28571428571428,
+            "bias_pct": 242.27053140096618
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 7.108587184873946,
+            "bias_pct": 0.35321646774652377
+          },
+          "aqua_top_weeks": [
+            6,
+            4,
+            5,
+            27,
+            25
+          ],
+          "viirs_top_weeks": [
+            4,
+            6,
+            5,
+            28,
+            3
+          ]
+        },
+        "2023": {
+          "aqua_cell_days": 427,
+          "viirs_cell_days": 1722,
+          "aqua_points": 495,
+          "viirs_points": 3322,
+          "raw": {
+            "periods": 7,
+            "mae": 185,
+            "bias_pct": 303.27868852459017
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 11.126838235294121,
+            "bias_pct": 18.240718418514955
+          },
+          "aqua_top_weeks": [
+            5,
+            2,
+            3,
+            4,
+            6
+          ],
+          "viirs_top_weeks": [
+            5,
+            2,
+            4,
+            3,
+            6
+          ]
+        },
+        "2024": {
+          "aqua_cell_days": 76,
+          "viirs_cell_days": 304,
+          "aqua_points": 85,
+          "viirs_points": 467,
+          "raw": {
+            "periods": 7,
+            "mae": 33.42857142857143,
+            "bias_pct": 300.0
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 5.461659663865547,
+            "bias_pct": 17.279411764705884
+          },
+          "aqua_top_weeks": [
+            3,
+            29,
+            4,
+            27,
+            19
+          ],
+          "viirs_top_weeks": [
+            3,
+            6,
+            4,
+            27,
+            29
+          ]
+        },
+        "2025": {
+          "aqua_cell_days": 863,
+          "viirs_cell_days": 2426,
+          "aqua_points": 1005,
+          "viirs_points": 5116,
+          "raw": {
+            "periods": 7,
+            "mae": 223.28571428571428,
+            "bias_pct": 181.11239860950172
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 33.02284663865546,
+            "bias_pct": -17.578258128280275
+          },
+          "aqua_top_weeks": [
+            2,
+            1,
+            3,
+            4,
+            30
+          ],
+          "viirs_top_weeks": [
+            2,
+            1,
+            4,
+            5,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "grid_m": 2000,
+      "light": "all",
+      "platform": "NOAA-20",
+      "factor": 0.28965767729047487,
+      "fit_aqua_cell_days": 3190,
+      "fit_viirs_cell_days": 11013,
+      "test_monthly_points": {
+        "periods": 14,
+        "mae": 321.7142857142857,
+        "bias_pct": 413.2110091743119
+      },
+      "test_monthly_raw": {
+        "periods": 14,
+        "mae": 133.28571428571428,
+        "bias_pct": 198.7220447284345
+      },
+      "test_monthly_adjusted": {
+        "periods": 14,
+        "mae": 20.34213462012427,
+        "bias_pct": -13.472866368500316
+      },
+      "factor_without_2022": 0.2890763303134437,
+      "test_monthly_adjusted_without_2022": {
+        "periods": 14,
+        "mae": 20.39549396765892,
+        "bias_pct": -13.646527526175763
+      },
+      "test_weekly_raw": {
+        "periods": 62,
+        "mae": 30.322580645161292,
+        "bias_pct": 198.7220447284345
+      },
+      "test_weekly_adjusted": {
+        "periods": 62,
+        "mae": 5.314852242071687,
+        "bias_pct": -13.47286636850032
+      },
+      "test_intersection": 356,
+      "test_union": 3388,
+      "by_year": {
+        "2020": {
+          "aqua_cell_days": 1360,
+          "viirs_cell_days": 4352,
+          "aqua_points": 1659,
+          "viirs_points": 9692,
+          "raw": {
+            "periods": 7,
+            "mae": 427.42857142857144,
+            "bias_pct": 220.0
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 33.38042054195692,
+            "bias_pct": -7.3095432670480465
+          },
+          "aqua_top_weeks": [
+            2,
+            3,
+            4,
+            29,
+            1
+          ],
+          "viirs_top_weeks": [
+            2,
+            3,
+            29,
+            4,
+            1
+          ]
+        },
+        "2021": {
+          "aqua_cell_days": 989,
+          "viirs_cell_days": 3465,
+          "aqua_points": 1176,
+          "viirs_points": 7371,
+          "raw": {
+            "periods": 7,
+            "mae": 353.7142857142857,
+            "bias_pct": 250.35389282103134
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 17.724909522512355,
+            "bias_pct": 1.4826948242159175
+          },
+          "aqua_top_weeks": [
+            3,
+            4,
+            29,
+            5,
+            6
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            5,
+            29,
+            6
+          ]
+        },
+        "2022": {
+          "aqua_cell_days": 414,
+          "viirs_cell_days": 1410,
+          "aqua_points": 477,
+          "viirs_points": 2810,
+          "raw": {
+            "periods": 7,
+            "mae": 142.28571428571428,
+            "bias_pct": 240.57971014492753
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 5.41238276841655,
+            "bias_pct": -1.348472227157109
+          },
+          "aqua_top_weeks": [
+            6,
+            4,
+            5,
+            27,
+            25
+          ],
+          "viirs_top_weeks": [
+            4,
+            5,
+            6,
+            28,
+            3
+          ]
+        },
+        "2023": {
+          "aqua_cell_days": 427,
+          "viirs_cell_days": 1786,
+          "aqua_points": 495,
+          "viirs_points": 3426,
+          "raw": {
+            "periods": 7,
+            "mae": 194.14285714285714,
+            "bias_pct": 318.26697892271665
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 12.904087377255443,
+            "bias_pct": 21.154241602058107
+          },
+          "aqua_top_weeks": [
+            5,
+            2,
+            3,
+            4,
+            6
+          ],
+          "viirs_top_weeks": [
+            5,
+            2,
+            4,
+            3,
+            6
+          ]
+        },
+        "2024": {
+          "aqua_cell_days": 76,
+          "viirs_cell_days": 356,
+          "aqua_points": 85,
+          "viirs_points": 541,
+          "raw": {
+            "periods": 7,
+            "mae": 40,
+            "bias_pct": 368.42105263157896
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 6.157735663047566,
+            "bias_pct": 35.68175409922244
+          },
+          "aqua_top_weeks": [
+            3,
+            29,
+            4,
+            27,
+            19
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            6,
+            29,
+            27
+          ]
+        },
+        "2025": {
+          "aqua_cell_days": 863,
+          "viirs_cell_days": 2449,
+          "aqua_points": 1005,
+          "viirs_points": 5053,
+          "raw": {
+            "periods": 7,
+            "mae": 226.57142857142858,
+            "bias_pct": 183.77752027809964
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 34.52653357720097,
+            "bias_pct": -17.80166260899502
+          },
+          "aqua_top_weeks": [
+            2,
+            1,
+            3,
+            4,
+            30
+          ],
+          "viirs_top_weeks": [
+            2,
+            1,
+            4,
+            3,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "grid_m": 5000,
+      "light": "all",
+      "platform": "Suomi-NPP",
+      "factor": 0.304,
+      "fit_aqua_cell_days": 2508,
+      "fit_viirs_cell_days": 8250,
+      "test_monthly_points": {
+        "periods": 14,
+        "mae": 321.2142857142857,
+        "bias_pct": 412.20183486238534
+      },
+      "test_monthly_raw": {
+        "periods": 14,
+        "mae": 94.92857142857143,
+        "bias_pct": 173.6220472440945
+      },
+      "test_monthly_adjusted": {
+        "periods": 14,
+        "mae": 16.589714285714287,
+        "bias_pct": -16.818897637795274
+      },
+      "factor_without_2022": 0.30532959326788217,
+      "test_monthly_adjusted_without_2022": {
+        "periods": 14,
+        "mae": 16.484201562813062,
+        "bias_pct": -16.45509160583539
+      },
+      "test_weekly_raw": {
+        "periods": 62,
+        "mae": 21.693548387096776,
+        "bias_pct": 173.6220472440945
+      },
+      "test_weekly_adjusted": {
+        "periods": 62,
+        "mae": 4.575225806451613,
+        "bias_pct": -16.818897637795274
+      },
+      "test_intersection": 382,
+      "test_union": 2465,
+      "by_year": {
+        "2020": {
+          "aqua_cell_days": 1060,
+          "viirs_cell_days": 3180,
+          "aqua_points": 1659,
+          "viirs_points": 10124,
+          "raw": {
+            "periods": 7,
+            "mae": 302.85714285714283,
+            "bias_pct": 200.0
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 28.24685714285714,
+            "bias_pct": -8.799999999999997
+          },
+          "aqua_top_weeks": [
+            2,
+            3,
+            4,
+            29,
+            1
+          ],
+          "viirs_top_weeks": [
+            2,
+            3,
+            4,
+            29,
+            6
+          ]
+        },
+        "2021": {
+          "aqua_cell_days": 775,
+          "viirs_cell_days": 2540,
+          "aqua_points": 1176,
+          "viirs_points": 7240,
+          "raw": {
+            "periods": 7,
+            "mae": 252.14285714285714,
+            "bias_pct": 227.74193548387098
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 24.78742857142857,
+            "bias_pct": -0.36645161290322487
+          },
+          "aqua_top_weeks": [
+            3,
+            4,
+            29,
+            5,
+            6
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            5,
+            29,
+            6
+          ]
+        },
+        "2022": {
+          "aqua_cell_days": 331,
+          "viirs_cell_days": 1120,
+          "aqua_points": 477,
+          "viirs_points": 3014,
+          "raw": {
+            "periods": 7,
+            "mae": 112.71428571428571,
+            "bias_pct": 238.36858006042297
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 6.7302857142857135,
+            "bias_pct": 2.864048338368577
+          },
+          "aqua_top_weeks": [
+            4,
+            6,
+            5,
+            27,
+            25
+          ],
+          "viirs_top_weeks": [
+            4,
+            5,
+            6,
+            28,
+            3
+          ]
+        },
+        "2023": {
+          "aqua_cell_days": 342,
+          "viirs_cell_days": 1410,
+          "aqua_points": 495,
+          "viirs_points": 3322,
+          "raw": {
+            "periods": 7,
+            "mae": 152.57142857142858,
+            "bias_pct": 312.280701754386
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 12.377142857142857,
+            "bias_pct": 25.333333333333332
+          },
+          "aqua_top_weeks": [
+            5,
+            2,
+            3,
+            4,
+            6
+          ],
+          "viirs_top_weeks": [
+            5,
+            2,
+            4,
+            3,
+            6
+          ]
+        },
+        "2024": {
+          "aqua_cell_days": 67,
+          "viirs_cell_days": 260,
+          "aqua_points": 85,
+          "viirs_points": 467,
+          "raw": {
+            "periods": 7,
+            "mae": 28.428571428571427,
+            "bias_pct": 288.05970149253733
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 5.011428571428571,
+            "bias_pct": 17.97014925373134
+          },
+          "aqua_top_weeks": [
+            3,
+            29,
+            4,
+            26,
+            27
+          ],
+          "viirs_top_weeks": [
+            3,
+            6,
+            4,
+            29,
+            27
+          ]
+        },
+        "2025": {
+          "aqua_cell_days": 695,
+          "viirs_cell_days": 1825,
+          "aqua_points": 1005,
+          "viirs_points": 5116,
+          "raw": {
+            "periods": 7,
+            "mae": 161.42857142857142,
+            "bias_pct": 162.58992805755395
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 28.168,
+            "bias_pct": -20.1726618705036
+          },
+          "aqua_top_weeks": [
+            2,
+            1,
+            3,
+            4,
+            30
+          ],
+          "viirs_top_weeks": [
+            2,
+            1,
+            4,
+            5,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "grid_m": 5000,
+      "light": "all",
+      "platform": "NOAA-20",
+      "factor": 0.30050323508267435,
+      "fit_aqua_cell_days": 2508,
+      "fit_viirs_cell_days": 8346,
+      "test_monthly_points": {
+        "periods": 14,
+        "mae": 321.7142857142857,
+        "bias_pct": 413.2110091743119
+      },
+      "test_monthly_raw": {
+        "periods": 14,
+        "mae": 102.64285714285714,
+        "bias_pct": 188.58267716535434
+      },
+      "test_monthly_adjusted": {
+        "periods": 14,
+        "mae": 16.861045496559512,
+        "bias_pct": -13.279971922992006
+      },
+      "factor_without_2022": 0.30185801442041044,
+      "test_monthly_adjusted_without_2022": {
+        "periods": 14,
+        "mae": 16.775404088424057,
+        "bias_pct": -12.889006074739825
+      },
+      "test_weekly_raw": {
+        "periods": 62,
+        "mae": 23.338709677419356,
+        "bias_pct": 188.58267716535434
+      },
+      "test_weekly_adjusted": {
+        "periods": 62,
+        "mae": 4.590733053500614,
+        "bias_pct": -13.279971922992008
+      },
+      "test_intersection": 376,
+      "test_union": 2585,
+      "by_year": {
+        "2020": {
+          "aqua_cell_days": 1060,
+          "viirs_cell_days": 3203,
+          "aqua_points": 1659,
+          "viirs_points": 9692,
+          "raw": {
+            "periods": 7,
+            "mae": 306.14285714285717,
+            "bias_pct": 202.16981132075472
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 30.35000513505186,
+            "bias_pct": -9.19699415379189
+          },
+          "aqua_top_weeks": [
+            2,
+            3,
+            4,
+            29,
+            1
+          ],
+          "viirs_top_weeks": [
+            2,
+            3,
+            29,
+            4,
+            1
+          ]
+        },
+        "2021": {
+          "aqua_cell_days": 775,
+          "viirs_cell_days": 2590,
+          "aqua_points": 1176,
+          "viirs_points": 7371,
+          "raw": {
+            "periods": 7,
+            "mae": 259.2857142857143,
+            "bias_pct": 234.19354838709677
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 23.697750847283555,
+            "bias_pct": 0.4262424340808498
+          },
+          "aqua_top_weeks": [
+            3,
+            4,
+            29,
+            5,
+            6
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            5,
+            29,
+            6
+          ]
+        },
+        "2022": {
+          "aqua_cell_days": 331,
+          "viirs_cell_days": 1134,
+          "aqua_points": 477,
+          "viirs_points": 2810,
+          "raw": {
+            "periods": 7,
+            "mae": 114.71428571428571,
+            "bias_pct": 242.59818731117824
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 4.612611687378042,
+            "bias_pct": 2.9518636204690942
+          },
+          "aqua_top_weeks": [
+            4,
+            6,
+            5,
+            27,
+            25
+          ],
+          "viirs_top_weeks": [
+            4,
+            5,
+            6,
+            28,
+            3
+          ]
+        },
+        "2023": {
+          "aqua_cell_days": 342,
+          "viirs_cell_days": 1419,
+          "aqua_points": 495,
+          "viirs_points": 3426,
+          "raw": {
+            "periods": 7,
+            "mae": 153.85714285714286,
+            "bias_pct": 314.9122807017544
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 12.05915579747356,
+            "bias_pct": 24.682482626407868
+          },
+          "aqua_top_weeks": [
+            5,
+            2,
+            3,
+            4,
+            6
+          ],
+          "viirs_top_weeks": [
+            5,
+            2,
+            3,
+            4,
+            6
+          ]
+        },
+        "2024": {
+          "aqua_cell_days": 67,
+          "viirs_cell_days": 312,
+          "aqua_points": 85,
+          "viirs_points": 541,
+          "raw": {
+            "periods": 7,
+            "mae": 35,
+            "bias_pct": 365.67164179104475
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 5.50426209304714,
+            "bias_pct": 39.93583484446925
+          },
+          "aqua_top_weeks": [
+            3,
+            29,
+            4,
+            26,
+            27
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            6,
+            29,
+            27
+          ]
+        },
+        "2025": {
+          "aqua_cell_days": 695,
+          "viirs_cell_days": 1887,
+          "aqua_points": 1005,
+          "viirs_points": 5053,
+          "raw": {
+            "periods": 7,
+            "mae": 170.28571428571428,
+            "bias_pct": 171.5107913669065
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 28.217828900071886,
+            "bias_pct": -18.41012883438755
+          },
+          "aqua_top_weeks": [
+            2,
+            1,
+            3,
+            4,
+            30
+          ],
+          "viirs_top_weeks": [
+            2,
+            1,
+            4,
+            3,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "grid_m": 2000,
+      "light": "D",
+      "platform": "Suomi-NPP",
+      "factor": 0.34616240266963294,
+      "fit_aqua_cell_days": 3112,
+      "fit_viirs_cell_days": 8990,
+      "test_monthly_points": {
+        "periods": 14,
+        "mae": 296.14285714285717,
+        "bias_pct": 379.8165137614679
+      },
+      "test_monthly_raw": {
+        "periods": 14,
+        "mae": 113.14285714285714,
+        "bias_pct": 167.8381256656017
+      },
+      "test_monthly_adjusted": {
+        "periods": 14,
+        "mae": 16.54045765135865,
+        "bias_pct": -7.284510893064231
+      },
+      "factor_without_2022": 0.3440697233800682,
+      "test_monthly_adjusted_without_2022": {
+        "periods": 14,
+        "mae": 16.724164997564014,
+        "bias_pct": -7.845010191600476
+      },
+      "test_weekly_raw": {
+        "periods": 62,
+        "mae": 25.870967741935484,
+        "bias_pct": 167.8381256656017
+      },
+      "test_weekly_adjusted": {
+        "periods": 62,
+        "mae": 4.290735225519394,
+        "bias_pct": -7.284510893064232
+      },
+      "test_intersection": 364,
+      "test_union": 3090,
+      "by_year": {
+        "2020": {
+          "aqua_cell_days": 1337,
+          "viirs_cell_days": 3757,
+          "aqua_points": 1630,
+          "viirs_points": 8496,
+          "raw": {
+            "periods": 7,
+            "mae": 345.7142857142857,
+            "bias_pct": 181.00224382946897
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 23.39841093278246,
+            "bias_pct": -2.7275881204329915
+          },
+          "aqua_top_weeks": [
+            2,
+            3,
+            4,
+            29,
+            1
+          ],
+          "viirs_top_weeks": [
+            2,
+            3,
+            4,
+            29,
+            1
+          ]
+        },
+        "2021": {
+          "aqua_cell_days": 969,
+          "viirs_cell_days": 2773,
+          "aqua_points": 1151,
+          "viirs_points": 5728,
+          "raw": {
+            "periods": 7,
+            "mae": 257.7142857142857,
+            "bias_pct": 186.17131062951498
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 17.202129350071512,
+            "bias_pct": -0.9382515373692365
+          },
+          "aqua_top_weeks": [
+            3,
+            4,
+            29,
+            5,
+            6
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            5,
+            29,
+            6
+          ]
+        },
+        "2022": {
+          "aqua_cell_days": 388,
+          "viirs_cell_days": 1073,
+          "aqua_points": 449,
+          "viirs_points": 2117,
+          "raw": {
+            "periods": 7,
+            "mae": 97.85714285714286,
+            "bias_pct": 176.5463917525773
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 7.312505959002064,
+            "bias_pct": -4.270036581310273
+          },
+          "aqua_top_weeks": [
+            6,
+            4,
+            5,
+            27,
+            25
+          ],
+          "viirs_top_weeks": [
+            4,
+            6,
+            5,
+            28,
+            27
+          ]
+        },
+        "2023": {
+          "aqua_cell_days": 418,
+          "viirs_cell_days": 1387,
+          "aqua_points": 482,
+          "viirs_points": 2548,
+          "raw": {
+            "periods": 7,
+            "mae": 138.42857142857142,
+            "bias_pct": 231.8181818181818
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 9.413634196726525,
+            "bias_pct": 14.862979067650931
+          },
+          "aqua_top_weeks": [
+            5,
+            2,
+            3,
+            4,
+            6
+          ],
+          "viirs_top_weeks": [
+            5,
+            2,
+            4,
+            3,
+            6
+          ]
+        },
+        "2024": {
+          "aqua_cell_days": 76,
+          "viirs_cell_days": 281,
+          "aqua_points": 85,
+          "viirs_points": 436,
+          "raw": {
+            "periods": 7,
+            "mae": 30.428571428571427,
+            "bias_pct": 269.7368421052632
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 6.588209121245829,
+            "bias_pct": 27.988993618640595
+          },
+          "aqua_top_weeks": [
+            3,
+            29,
+            4,
+            27,
+            19
+          ],
+          "viirs_top_weeks": [
+            3,
+            6,
+            4,
+            29,
+            27
+          ]
+        },
+        "2025": {
+          "aqua_cell_days": 863,
+          "viirs_cell_days": 2234,
+          "aqua_points": 1005,
+          "viirs_points": 4794,
+          "raw": {
+            "periods": 7,
+            "mae": 195.85714285714286,
+            "bias_pct": 158.86442641946698
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 26.49270618147147,
+            "bias_pct": -10.390868184940903
+          },
+          "aqua_top_weeks": [
+            2,
+            1,
+            3,
+            4,
+            30
+          ],
+          "viirs_top_weeks": [
+            2,
+            1,
+            4,
+            3,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "grid_m": 2000,
+      "light": "D",
+      "platform": "NOAA-20",
+      "factor": 0.3437154848685664,
+      "fit_aqua_cell_days": 3112,
+      "fit_viirs_cell_days": 9054,
+      "test_monthly_points": {
+        "periods": 14,
+        "mae": 296.14285714285717,
+        "bias_pct": 380.3669724770642
+      },
+      "test_monthly_raw": {
+        "periods": 14,
+        "mae": 118.57142857142857,
+        "bias_pct": 176.78381256656016
+      },
+      "test_monthly_adjusted": {
+        "periods": 14,
+        "mae": 18.031919593549812,
+        "bias_pct": -4.865117659914369
+      },
+      "factor_without_2022": 0.3402448163877092,
+      "test_monthly_adjusted_without_2022": {
+        "periods": 14,
+        "mae": 18.323703650833306,
+        "bias_pct": -5.825742514200616
+      },
+      "test_weekly_raw": {
+        "periods": 62,
+        "mae": 27.096774193548388,
+        "bias_pct": 176.78381256656016
+      },
+      "test_weekly_adjusted": {
+        "periods": 62,
+        "mae": 4.709851999116412,
+        "bias_pct": -4.865117659914368
+      },
+      "test_intersection": 350,
+      "test_union": 3188,
+      "by_year": {
+        "2020": {
+          "aqua_cell_days": 1337,
+          "viirs_cell_days": 3702,
+          "aqua_points": 1630,
+          "viirs_points": 8024,
+          "raw": {
+            "periods": 7,
+            "mae": 337.85714285714283,
+            "bias_pct": 176.8885564697083
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 27.45694089431663,
+            "bias_pct": -4.82911555845678
+          },
+          "aqua_top_weeks": [
+            2,
+            3,
+            4,
+            29,
+            1
+          ],
+          "viirs_top_weeks": [
+            2,
+            3,
+            4,
+            29,
+            1
+          ]
+        },
+        "2021": {
+          "aqua_cell_days": 969,
+          "viirs_cell_days": 2868,
+          "aqua_points": 1151,
+          "viirs_points": 5904,
+          "raw": {
+            "periods": 7,
+            "mae": 271.2857142857143,
+            "bias_pct": 195.9752321981424
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 9.434724983432734,
+            "bias_pct": 1.731270444071045
+          },
+          "aqua_top_weeks": [
+            3,
+            4,
+            29,
+            5,
+            6
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            5,
+            29,
+            6
+          ]
+        },
+        "2022": {
+          "aqua_cell_days": 388,
+          "viirs_cell_days": 1048,
+          "aqua_points": 449,
+          "viirs_points": 1974,
+          "raw": {
+            "periods": 7,
+            "mae": 94.28571428571429,
+            "bias_pct": 170.10309278350516
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 8.388336646785952,
+            "bias_pct": -7.161384499418152
+          },
+          "aqua_top_weeks": [
+            6,
+            4,
+            5,
+            27,
+            25
+          ],
+          "viirs_top_weeks": [
+            4,
+            5,
+            6,
+            28,
+            25
+          ]
+        },
+        "2023": {
+          "aqua_cell_days": 418,
+          "viirs_cell_days": 1436,
+          "aqua_points": 482,
+          "viirs_points": 2669,
+          "raw": {
+            "periods": 7,
+            "mae": 145.42857142857142,
+            "bias_pct": 243.54066985645932
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 11.24396478273218,
+            "bias_pct": 18.080247911785005
+          },
+          "aqua_top_weeks": [
+            5,
+            2,
+            3,
+            4,
+            6
+          ],
+          "viirs_top_weeks": [
+            5,
+            2,
+            3,
+            4,
+            6
+          ]
+        },
+        "2024": {
+          "aqua_cell_days": 76,
+          "viirs_cell_days": 331,
+          "aqua_points": 85,
+          "viirs_points": 510,
+          "raw": {
+            "periods": 7,
+            "mae": 36.42857142857143,
+            "bias_pct": 335.5263157894737
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 7.779923632806337,
+            "bias_pct": 49.69713880459932
+          },
+          "aqua_top_weeks": [
+            3,
+            29,
+            4,
+            27,
+            19
+          ],
+          "viirs_top_weeks": [
+            3,
+            4,
+            29,
+            6,
+            27
+          ]
+        },
+        "2025": {
+          "aqua_cell_days": 863,
+          "viirs_cell_days": 2268,
+          "aqua_points": 1005,
+          "viirs_points": 4726,
+          "raw": {
+            "periods": 7,
+            "mae": 200.71428571428572,
+            "bias_pct": 162.80417149478563
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 28.283915554293284,
+            "bias_pct": -9.670136769187879
+          },
+          "aqua_top_weeks": [
+            2,
+            1,
+            3,
+            4,
+            30
+          ],
+          "viirs_top_weeks": [
+            2,
+            1,
+            4,
+            3,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "grid_m": 2000,
+      "light": "N",
+      "platform": "Suomi-NPP",
+      "factor": 0.037604456824512536,
+      "fit_aqua_cell_days": 81,
+      "fit_viirs_cell_days": 2154,
+      "test_monthly_points": {
+        "periods": 14,
+        "mae": 25.214285714285715,
+        "bias_pct": null
+      },
+      "test_monthly_raw": {
+        "periods": 14,
+        "mae": 16.428571428571427,
+        "bias_pct": null
+      },
+      "test_monthly_adjusted": {
+        "periods": 14,
+        "mae": 0.6177875049741345,
+        "bias_pct": null
+      },
+      "factor_without_2022": 0.03137478608100399,
+      "test_monthly_adjusted_without_2022": {
+        "periods": 14,
+        "mae": 0.5154429141879227,
+        "bias_pct": null
+      },
+      "test_weekly_raw": {
+        "periods": 62,
+        "mae": 3.7096774193548385,
+        "bias_pct": null
+      },
+      "test_weekly_adjusted": {
+        "periods": 62,
+        "mae": 0.1395004043489981,
+        "bias_pct": null
+      },
+      "test_intersection": 0,
+      "test_union": 230,
+      "by_year": {
+        "2020": {
+          "aqua_cell_days": 24,
+          "viirs_cell_days": 694,
+          "aqua_points": 29,
+          "viirs_points": 1628,
+          "raw": {
+            "periods": 7,
+            "mae": 95.71428571428571,
+            "bias_pct": 2791.6666666666665
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 2.6661360923199364,
+            "bias_pct": 8.739554317548752
+          },
+          "aqua_top_weeks": [
+            29,
+            11,
+            2,
+            12,
+            3
+          ],
+          "viirs_top_weeks": [
+            29,
+            3,
+            2,
+            1,
+            4
+          ]
+        },
+        "2021": {
+          "aqua_cell_days": 21,
+          "viirs_cell_days": 672,
+          "aqua_points": 25,
+          "viirs_points": 1512,
+          "raw": {
+            "periods": 7,
+            "mae": 93,
+            "bias_pct": 3100.0
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 4.440111420612814,
+            "bias_pct": 20.334261838440117
+          },
+          "aqua_top_weeks": [
+            14,
+            4,
+            8,
+            12,
+            23
+          ],
+          "viirs_top_weeks": [
+            4,
+            3,
+            5,
+            29,
+            14
+          ]
+        },
+        "2022": {
+          "aqua_cell_days": 26,
+          "viirs_cell_days": 401,
+          "aqua_points": 28,
+          "viirs_points": 897,
+          "raw": {
+            "periods": 7,
+            "mae": 53.57142857142857,
+            "bias_pct": 1442.3076923076924
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 2.3296856346995622,
+            "bias_pct": -42.00235697450182
+          },
+          "aqua_top_weeks": [
+            4,
+            5,
+            10,
+            6,
+            8
+          ],
+          "viirs_top_weeks": [
+            4,
+            5,
+            6,
+            28,
+            25
+          ]
+        },
+        "2023": {
+          "aqua_cell_days": 10,
+          "viirs_cell_days": 387,
+          "aqua_points": 13,
+          "viirs_points": 774,
+          "raw": {
+            "periods": 7,
+            "mae": 53.857142857142854,
+            "bias_pct": 3770.0
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 1.4685634699562276,
+            "bias_pct": 45.52924791086351
+          },
+          "aqua_top_weeks": [
+            6,
+            9,
+            18,
+            19,
+            21
+          ],
+          "viirs_top_weeks": [
+            5,
+            4,
+            6,
+            10,
+            15
+          ]
+        },
+        "2024": {
+          "aqua_cell_days": 0,
+          "viirs_cell_days": 25,
+          "aqua_points": 0,
+          "viirs_points": 31,
+          "raw": {
+            "periods": 7,
+            "mae": 3.5714285714285716,
+            "bias_pct": null
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 0.1343016315161162,
+            "bias_pct": null
+          },
+          "aqua_top_weeks": [],
+          "viirs_top_weeks": [
+            11,
+            4,
+            7,
+            12,
+            27
+          ]
+        },
+        "2025": {
+          "aqua_cell_days": 0,
+          "viirs_cell_days": 205,
+          "aqua_points": 0,
+          "viirs_points": 322,
+          "raw": {
+            "periods": 7,
+            "mae": 29.285714285714285,
+            "bias_pct": null
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 1.101273378432153,
+            "bias_pct": null
+          },
+          "aqua_top_weeks": [],
+          "viirs_top_weeks": [
+            1,
+            31,
+            2,
+            4,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "grid_m": 2000,
+      "light": "N",
+      "platform": "NOAA-20",
+      "factor": 0.03642086330935252,
+      "fit_aqua_cell_days": 81,
+      "fit_viirs_cell_days": 2224,
+      "test_monthly_points": {
+        "periods": 14,
+        "mae": 25.571428571428573,
+        "bias_pct": null
+      },
+      "test_monthly_raw": {
+        "periods": 14,
+        "mae": 16.142857142857142,
+        "bias_pct": null
+      },
+      "test_monthly_adjusted": {
+        "periods": 14,
+        "mae": 0.587936793422405,
+        "bias_pct": null
+      },
+      "factor_without_2022": 0.030369961347321922,
+      "test_monthly_adjusted_without_2022": {
+        "periods": 14,
+        "mae": 0.490257947463911,
+        "bias_pct": null
+      },
+      "test_weekly_raw": {
+        "periods": 62,
+        "mae": 3.6451612903225805,
+        "bias_pct": null
+      },
+      "test_weekly_adjusted": {
+        "periods": 62,
+        "mae": 0.13275992109538176,
+        "bias_pct": null
+      },
+      "test_intersection": 0,
+      "test_union": 226,
+      "by_year": {
+        "2020": {
+          "aqua_cell_days": 24,
+          "viirs_cell_days": 715,
+          "aqua_points": 29,
+          "viirs_points": 1668,
+          "raw": {
+            "periods": 7,
+            "mae": 98.71428571428571,
+            "bias_pct": 2879.1666666666665
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 2.5255010277492294,
+            "bias_pct": 8.503821942446047
+          },
+          "aqua_top_weeks": [
+            29,
+            11,
+            2,
+            12,
+            3
+          ],
+          "viirs_top_weeks": [
+            29,
+            2,
+            3,
+            1,
+            6
+          ]
+        },
+        "2021": {
+          "aqua_cell_days": 21,
+          "viirs_cell_days": 701,
+          "aqua_points": 25,
+          "viirs_points": 1467,
+          "raw": {
+            "periods": 7,
+            "mae": 97.14285714285714,
+            "bias_pct": 3238.095238095238
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 4.479894655704008,
+            "bias_pct": 21.576310380267223
+          },
+          "aqua_top_weeks": [
+            14,
+            4,
+            8,
+            12,
+            23
+          ],
+          "viirs_top_weeks": [
+            4,
+            3,
+            5,
+            29,
+            14
+          ]
+        },
+        "2022": {
+          "aqua_cell_days": 26,
+          "viirs_cell_days": 413,
+          "aqua_points": 28,
+          "viirs_points": 836,
+          "raw": {
+            "periods": 7,
+            "mae": 55.285714285714285,
+            "bias_pct": 1488.4615384615386
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 2.3789182939362794,
+            "bias_pct": -42.146859435528505
+          },
+          "aqua_top_weeks": [
+            4,
+            5,
+            10,
+            6,
+            8
+          ],
+          "viirs_top_weeks": [
+            4,
+            6,
+            5,
+            28,
+            3
+          ]
+        },
+        "2023": {
+          "aqua_cell_days": 10,
+          "viirs_cell_days": 395,
+          "aqua_points": 13,
+          "viirs_points": 757,
+          "raw": {
+            "periods": 7,
+            "mae": 55,
+            "bias_pct": 3850.0
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 1.6068216855087358,
+            "bias_pct": 43.86241007194245
+          },
+          "aqua_top_weeks": [
+            6,
+            9,
+            18,
+            19,
+            21
+          ],
+          "viirs_top_weeks": [
+            4,
+            5,
+            6,
+            2,
+            3
+          ]
+        },
+        "2024": {
+          "aqua_cell_days": 0,
+          "viirs_cell_days": 27,
+          "aqua_points": 0,
+          "viirs_points": 31,
+          "raw": {
+            "periods": 7,
+            "mae": 3.857142857142857,
+            "bias_pct": null
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 0.14048047276464543,
+            "bias_pct": null
+          },
+          "aqua_top_weeks": [],
+          "viirs_top_weeks": [
+            11,
+            8,
+            27,
+            3,
+            12
+          ]
+        },
+        "2025": {
+          "aqua_cell_days": 0,
+          "viirs_cell_days": 199,
+          "aqua_points": 0,
+          "viirs_points": 327,
+          "raw": {
+            "periods": 7,
+            "mae": 28.428571428571427,
+            "bias_pct": null
+          },
+          "adjusted": {
+            "periods": 7,
+            "mae": 1.0353931140801644,
+            "bias_pct": null
+          },
+          "aqua_top_weeks": [],
+          "viirs_top_weeks": [
+            1,
+            31,
+            2,
+            4,
+            5
+          ]
+        }
+      }
+    }
+  ],
+  "coincident_detections": {
+    "grid_m": 2000,
+    "time_window_minutes": 60,
+    "platforms": {
+      "Suomi-NPP": {
+        "shared_cell_days": 368,
+        "within_window_cell_days": 261
+      },
+      "NOAA-20": {
+        "shared_cell_days": 356,
+        "within_window_cell_days": 264
+      }
+    }
+  },
+  "test_monthly_aqua_seasonal_baseline_2km": {
+    "periods": 14,
+    "mae": 74.54225550435228,
+    "bias_pct": 66.07430574090368
+  },
+  "excluded_dates": [
+    "2020-08-16",
+    "2020-08-17",
+    "2020-08-18",
+    "2020-08-19",
+    "2020-08-20",
+    "2020-08-21",
+    "2020-08-22",
+    "2020-08-23",
+    "2020-08-24",
+    "2020-08-25",
+    "2020-08-26",
+    "2020-08-27",
+    "2020-08-28",
+    "2020-08-29",
+    "2020-08-30",
+    "2020-08-31",
+    "2020-09-01",
+    "2020-09-02",
+    "2022-04-01",
+    "2022-04-02",
+    "2022-04-03",
+    "2022-04-04",
+    "2022-04-05",
+    "2022-04-06",
+    "2022-04-07",
+    "2022-04-08",
+    "2022-04-09",
+    "2022-04-10",
+    "2022-04-11",
+    "2022-04-12",
+    "2022-04-13",
+    "2022-04-14",
+    "2022-04-15",
+    "2022-04-16",
+    "2022-04-17",
+    "2022-07-27",
+    "2022-07-28",
+    "2022-07-29",
+    "2022-07-30",
+    "2022-07-31",
+    "2022-08-01",
+    "2022-08-02",
+    "2022-08-03",
+    "2022-08-04",
+    "2022-08-05",
+    "2022-08-06",
+    "2022-08-07",
+    "2022-08-08",
+    "2022-08-09",
+    "2022-08-10",
+    "2023-07-19",
+    "2023-07-20",
+    "2023-07-21",
+    "2023-07-22",
+    "2023-09-30",
+    "2024-05-30",
+    "2024-05-31",
+    "2024-06-01",
+    "2024-06-02",
+    "2024-06-03",
+    "2024-07-10",
+    "2024-07-11",
+    "2024-07-12",
+    "2024-07-13",
+    "2024-07-14",
+    "2024-07-15",
+    "2024-07-25",
+    "2024-07-26",
+    "2024-07-27",
+    "2024-07-28",
+    "2024-09-26"
+  ],
+  "extract_sha256": {
+    "2020": "8f4f4f6f7de755f6b5339dae75f3c36428d94d2a38d3475a211cc8633500ef12",
+    "2021": "029c78a0b4d62877ce2b8bb3f6bf83d8b281caef556debe13373fd59f4e63866",
+    "2022": "df089e96956aaf2fb4996ef3257f79a47bd1f3870a04e6825cc4189118fafbb1",
+    "2023": "5950709b90405267f915c9158616ff5578ade1993af5d9b025d2b05209bf22bd",
+    "2024": "643e8db938a68b526d00e7af63abe1f1fdde57489a98b231cf86442f8e20cb24",
+    "2025": "ba1ffcef83930ac3f38e814721e2a32f618e2e8e0df40c6430735f28348e8e5a"
+  },
+  "input_counts": [
+    {
+      "year": 2020,
+      "platform": "Aqua",
+      "quality": "sp",
+      "version": "6.03",
+      "type": "0",
+      "rows": 1755
+    },
+    {
+      "year": 2020,
+      "platform": "Aqua",
+      "quality": "sp",
+      "version": "6.03",
+      "type": "2",
+      "rows": 1
+    },
+    {
+      "year": 2020,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 10411
+    },
+    {
+      "year": 2020,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 5
+    },
+    {
+      "year": 2020,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 10865
+    },
+    {
+      "year": 2020,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 9
+    },
+    {
+      "year": 2021,
+      "platform": "Aqua",
+      "quality": "sp",
+      "version": "6.03",
+      "type": "0",
+      "rows": 1269
+    },
+    {
+      "year": 2021,
+      "platform": "Aqua",
+      "quality": "sp",
+      "version": "6.03",
+      "type": "2",
+      "rows": 1
+    },
+    {
+      "year": 2021,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 7791
+    },
+    {
+      "year": 2021,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 2
+    },
+    {
+      "year": 2021,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 7629
+    },
+    {
+      "year": 2021,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 3
+    },
+    {
+      "year": 2022,
+      "platform": "Aqua",
+      "quality": "sp",
+      "version": "6.03",
+      "type": "0",
+      "rows": 540
+    },
+    {
+      "year": 2022,
+      "platform": "Aqua",
+      "quality": "sp",
+      "version": "6.03",
+      "type": "2",
+      "rows": 1
+    },
+    {
+      "year": 2022,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 10465
+    },
+    {
+      "year": 2022,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 15
+    },
+    {
+      "year": 2022,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 10381
+    },
+    {
+      "year": 2022,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 11
+    },
+    {
+      "year": 2023,
+      "platform": "Aqua",
+      "quality": "sp",
+      "version": "61.03",
+      "type": "0",
+      "rows": 534
+    },
+    {
+      "year": 2023,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 3703
+    },
+    {
+      "year": 2023,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "2",
+      "rows": 2
+    },
+    {
+      "year": 2023,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 42
+    },
+    {
+      "year": 2023,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 3598
+    },
+    {
+      "year": 2023,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 48
+    },
+    {
+      "year": 2024,
+      "platform": "Aqua",
+      "quality": "sp",
+      "version": "61.03",
+      "type": "0",
+      "rows": 112
+    },
+    {
+      "year": 2024,
+      "platform": "Aqua",
+      "quality": "sp",
+      "version": "61.03",
+      "type": "2",
+      "rows": 1
+    },
+    {
+      "year": 2024,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 576
+    },
+    {
+      "year": 2024,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "2",
+      "rows": 23
+    },
+    {
+      "year": 2024,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 1
+    },
+    {
+      "year": 2024,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 483
+    },
+    {
+      "year": 2024,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "2",
+      "rows": 15
+    },
+    {
+      "year": 2024,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 2
+    },
+    {
+      "year": 2025,
+      "platform": "Aqua",
+      "quality": "sp",
+      "version": "61.03",
+      "type": "0",
+      "rows": 1072
+    },
+    {
+      "year": 2025,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 5306
+    },
+    {
+      "year": 2025,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "2",
+      "rows": 6
+    },
+    {
+      "year": 2025,
+      "platform": "NOAA-20",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 2
+    },
+    {
+      "year": 2025,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "0",
+      "rows": 5345
+    },
+    {
+      "year": 2025,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "2",
+      "rows": 6
+    },
+    {
+      "year": 2025,
+      "platform": "Suomi-NPP",
+      "quality": "sp",
+      "version": "2",
+      "type": "3",
+      "rows": 2
+    }
+  ]
+}

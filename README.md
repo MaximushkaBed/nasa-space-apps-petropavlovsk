@@ -14,6 +14,8 @@ The initial study area is **North Kazakhstan Region (Северо-Казахст
 
 [MODIS and VIIRS harmonization research and findings (RU)](docs/modis-viirs-research.md) covers FIRMS data access, the June 2023 Semey Ormany case study, and a proposed validation and MVP plan for North Kazakhstan Region.
 
+[North Kazakhstan validation, 2020–2025 (RU)](docs/sko-validation/README.md) reports out-of-sample errors for two VIIRS platforms, the effect of documented outages, and how to reproduce the results.
+
 ## Next steps
 
 1. Register each participant on the official Space Apps website and select the local event.
