@@ -127,6 +127,8 @@ python3 -m scripts.package_history
 
 ## Open data
 
+See [Data Usage](DATA_USAGE.md) for the project's generative AI disclosure.
+
 - [NASA FIRMS archive downloads](https://firms.modaps.eosdis.nasa.gov/download/): hotspot observations in CSV, JSON, and Shapefile formats. Archive access requires Earthdata Login or email authentication.
 - [FIRMS API](https://firms.modaps.eosdis.nasa.gov/api/): request hotspot observations by area, date, and sensor.
 - [FIRMS API key](https://firms.modaps.eosdis.nasa.gov/api/map_key/): obtain a MAP_KEY for API access.
