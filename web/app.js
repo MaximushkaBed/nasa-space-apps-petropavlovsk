@@ -250,7 +250,8 @@ function createMap(basemap, boundary, closePanel) {
       bridge.setContext?.({ roi, study:analysisPreferences.study });
       study.setScope(roi);
       scopedLayers(roi);
-      if (roi) showPanel('#selected-area');
+      // A circle remains editable on the map through its radius sheet.
+      if (roi && !roi.circle) showPanel('#selected-area');
     },
   });
   $('world-view').addEventListener('click', () => {
@@ -967,6 +968,34 @@ function setupPanels() {
   const tabs = [...root.querySelectorAll('.tool-nav a')];
   const toggles = [...tabs, layersToggle, areaToggle];
   const toolbar = root.querySelector('.topbar');
+  const touchLayout = matchMedia('(max-width: 820px), (max-height: 520px) and (max-width: 1024px)');
+  const sourceField = $('world-satellite').closest('label');
+  const sourcePlaceholder = document.createComment('Atlas source filter desktop position');
+  sourceField.before(sourcePlaceholder);
+  const compactFilter = root.querySelector('.period-button-summary');
+  function updateCompactFilter() {
+    const frame = $('frame-date').textContent;
+    const select = $('world-satellite');
+    const source = select.selectedOptions[0]?.textContent || '';
+    if ($('period-button-date').textContent !== frame) $('period-button-date').textContent = frame;
+    if ($('period-button-source').textContent !== source) $('period-button-source').textContent = source;
+    const hint = select.disabled ? select.title : '';
+    $('period-source-hint').hidden = !touchLayout.matches || !hint;
+    if ($('period-source-hint').textContent !== hint) $('period-source-hint').textContent = hint;
+  }
+  function arrangeFilters() {
+    if (touchLayout.matches) $('period-source-controls').append(sourceField);
+    else sourcePlaceholder.after(sourceField);
+    $('period-source-controls').hidden = !touchLayout.matches;
+    compactFilter.hidden = !touchLayout.matches;
+    updateCompactFilter();
+  }
+  arrangeFilters();
+  touchLayout.addEventListener('change', arrangeFilters);
+  const filterSummary = new MutationObserver(updateCompactFilter);
+  filterSummary.observe($('frame-date'), { childList: true, characterData: true, subtree: true });
+  filterSummary.observe($('world-satellite'), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'title'] });
+  $('world-satellite').addEventListener('change', updateCompactFilter);
   // Leave the map available on phones; the date summary remains a touch target.
   // This is only the initial state, so later navigation keeps the user's choice.
   if (matchMedia('(max-width: 820px), (max-height: 520px) and (max-width: 1024px)').matches) root.querySelector('.timeline').open = false;
@@ -1062,6 +1091,7 @@ async function start() {
       $('world-satellite').value = dailySatellite;
     }
     setWorldPeriod(span);
+    if (matchMedia('(max-width: 820px), (max-height: 520px) and (max-width: 1024px)').matches) closePanel();
   });
   study.setScope(null);
   const closePanel = setupPanels();
@@ -1257,6 +1287,7 @@ return {
   ready, getState, getAnalysisContext,
   async activate(options = {}) {
     const token=++activation;
+    const activationHash = location.hash;
     active = true;
     await ready;
     if(!active||token!==activation)return;
@@ -1308,11 +1339,16 @@ return {
       $('fire-points').setAttribute('aria-pressed', String(fireDisplay === 'points'));
       $('fire-heat').setAttribute('aria-pressed', String(fireDisplay === 'heat'));
     }
+    const currentHash = location.hash;
+    const changedPanel = options.view === 'atlas' && currentHash !== activationHash
+      && ['#observations', '#selected-area', '#layers', '#activity-calendar', '#external-factors',
+        '#season-calendar', '#correlations', '#kishkenekol-case'].includes(currentHash) ? currentHash : undefined;
     if (demo) {
       $('reset-map').click();
       showPanel?.(demoPanel);
       bridge.setLocalHash?.(demoPanel);
-    } else if (options.caseId || options.view === 'cases') showPanel?.('#kishkenekol-case');
+    } else if (changedPanel) showPanel?.(changedPanel);
+    else if (options.caseId || options.view === 'cases') showPanel?.('#kishkenekol-case');
     else if (state?.localPanel) showPanel?.(state.localPanel);
     else if(options.view==='atlas'&&root.querySelector('#kishkenekol-case')&&!root.querySelector('#kishkenekol-case').hidden)showPanel?.('#observations');
     study.resume();

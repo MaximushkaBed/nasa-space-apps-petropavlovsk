@@ -60,7 +60,7 @@
         </fieldset>
           <p class="hint manual-run-note">Можно самостоятельно выбрать спутник, годы и фильтры. Возможность сравнения будет проверена по результату.</p>
           </details>
-        <div class="submit-area"><p class="study-run-label">Расчёт территории</p><button class="primary full" id="run" type="submit" disabled>Построить анализ <span aria-hidden="true">→</span></button><p id="form-status" role="status">Подключаем сведения об архиве…</p></div>
+        <div class="submit-area"><p class="study-run-label">Расчёт территории</p><button class="primary full" id="run" type="submit" form="analysis-form" disabled>Построить анализ <span aria-hidden="true">→</span></button><p id="form-status" role="status">Подключаем сведения об архиве…</p></div>
         </section>
         <section class="analysis-workflow-result" data-workflow-step="result" hidden><h2>Результат исследования</h2><p>Календарь, карты и проверка результата доступны в рабочей области.</p><button id="analysis-workflow-show-result" class="outline" type="button">Открыть результат</button></section>
       </form>
@@ -81,7 +81,7 @@
         <section class="map-frame" aria-label="Область и активность на карте">
           <div id="analysis-map" tabindex="0" aria-label="Карта выбора территории. Также можно ввести координаты в боковой панели."></div>
           <div class="map-top"><span class="map-chip" id="map-period">Область исследования</span><div class="map-buttons"><button id="fit-area" title="Показать выбранную область" aria-label="Показать выбранную область">↗</button><button id="basemap" aria-pressed="false">Спутник</button></div></div>
-          <label class="map-mode-control">Показать на карте<select id="map-mode"><option value="activity">Активность</option><option value="anomaly">Отклонение от базы</option></select></label>
+          <label class="map-mode-control"><span>Показать на карте</span><select id="map-mode"><option value="activity">Активность</option><option value="anomaly">Отклонение от базы</option></select></label>
           <div id="draw-instruction" class="draw-instruction" hidden>Нажмите на два противоположных угла области. Esc — отмена.</div>
           <div id="selection-actions" class="selection-actions" hidden><span id="selection-measure"></span><button id="selection-undo" type="button" class="outline">Удалить точку</button><button id="selection-finish" type="button" class="outline">Применить полигон</button><button id="selection-cancel" type="button" class="outline">Отмена · Esc</button></div>
           <button id="retry-map" class="map-retry" type="button" hidden>Повторить карту</button>

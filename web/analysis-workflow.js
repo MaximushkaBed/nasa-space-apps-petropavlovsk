@@ -6,10 +6,19 @@ export function mountAnalysisWorkflow(root,{getState,isActive,onLayout,onChange}
  const $=id=>root.querySelector('#'+CSS.escape(id));
  let step='territory',open=true,wasDrawing=false;
  const panel=$('analysis-settings'),scroll=$('analysis-settings-scroll');
+ const compact=matchMedia('(max-width:760px), (max-width:1050px) and (max-height:500px) and (pointer:coarse)');
+ const run=$('run'),runHome=document.createComment('Analysis submit button home');
+ run.before(runHome);
+ function placeRun(){
+  const target=compact.matches&&step==='conditions'&&!runHome.parentElement.hidden?$('analysis-workflow-next').parentElement:runHome.parentElement;
+  if(run.parentElement!==target){if(target===runHome.parentElement)runHome.after(run);else target.append(run);}
+ }
+ new MutationObserver(placeRun).observe(runHome.parentElement,{attributes:true,attributeFilter:['hidden']});
  function refresh(){
   const state=getState(),hasROI=Boolean(state.roi);
   if(!hasROI)step='territory';
   if(step==='result'&&!state.result&&!state.busy)step='conditions';
+  placeRun();
   root.dataset.workflowStep=step;root.dataset.settingsOpen=String(open);panel.hidden=!open;panel.inert=!open;
   $('analysis-settings-backdrop').hidden=!open;$('analysis-settings-toggle').setAttribute('aria-expanded',String(open));
   root.querySelectorAll('[data-workflow-step]').forEach(group=>group.hidden=group.dataset.workflowStep!==step);
@@ -17,7 +26,7 @@ export function mountAnalysisWorkflow(root,{getState,isActive,onLayout,onChange}
   $('analysis-workflow-back').disabled=steps.indexOf(step)===0||state.busy;
   const ready=hasROI&&!state.busy&&!state.drawing;
   $('analysis-workflow-next').disabled=!ready||(step==='conditions'&&!state.result);
-  $('analysis-workflow-next').hidden=step==='conditions'&&!state.result;
+  $('analysis-workflow-next').hidden=step==='conditions'&&(!state.result||compact.matches);
   $('analysis-workflow-next').textContent=step==='conditions'?'К результату':step==='result'?'Открыть результат':'Далее';
   $('analysis-workflow-message').textContent=state.loading?'Подключаем сведения об архиве…':!hasROI?'Найдите территорию или выделите участок на карте.':step==='conditions'&&!state.result?'Проверьте доступные данные или откройте дополнительные настройки.':'';
   $('analysis-workflow-summary').replaceChildren(...(hasROI?[state.roi.name,' · ',state.start+' — '+state.end,' · ',state.platform]:['Территория пока не выбрана']));
@@ -40,6 +49,7 @@ export function mountAnalysisWorkflow(root,{getState,isActive,onLayout,onChange}
  });
  $('analysis-workflow-show-result').addEventListener('click',showResult);
  document.addEventListener('nasa:analysis-settings',event=>{if(!isActive())return;const detail=event.detail||{};if(detail.open===false)close();else change(detail.step||step,{focus:false});});
+ compact.addEventListener('change',()=>{refresh();onLayout?.();});
  root.addEventListener('keydown',event=>{if(!event.defaultPrevented&&event.key==='Escape'&&open&&!getState().drawing){event.preventDefault();close({focus:true});}});
  root.dataset.workflowReady='true';refresh();
  return {refresh,open:next=>change(next,{focus:true}),close,resume(){root.dataset.workflowActive='true';refresh();},pause(){root.dataset.workflowActive='false';},draw(active){if(active&&!wasDrawing){wasDrawing=true;close();}else if(!active&&wasDrawing){wasDrawing=false;change('territory',{focus:false});}},running(){step='result';close();},resultReady(){step='result';close();},getState:()=>({step,open}),restore(value){if(value&&steps.includes(value.step)){step=value.step;open=value.open!==false;}refresh();onLayout?.();}};

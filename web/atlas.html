@@ -9,6 +9,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <link rel="stylesheet" href="styles.css?v=atlas-compact-mobile">
+  <link rel="stylesheet" href="research-mobile.css">
   <script src="vendor/leaflet.js" defer></script>
   <script src="legacy-atlas-entry.js" type="module"></script>
 </head>
@@ -28,7 +29,7 @@
             <span class="sr-only">Дата наблюдений UTC</span>
             <input type="date" id="world-date" disabled>
           </label>
-          <button class="quiet-button" id="open-period" type="button" aria-haspopup="dialog" disabled>Период</button>
+          <button class="quiet-button" id="open-period" type="button" aria-haspopup="dialog" disabled><span class="period-button-label">Период</span><span class="period-button-summary" hidden><span id="period-button-date"></span><span id="period-button-source"></span></span></button>
           <label class="source-field">
             <span class="sr-only">Спутник на карте мира</span>
             <select id="world-satellite" disabled><option value="">Все спутники</option></select>
@@ -92,6 +93,8 @@
             <label id="period-end-field" hidden>По какой день<input type="date" id="period-end"></label>
           </div>
           <p class="layer-caption" id="period-preview" aria-live="polite"></p>
+          <div class="period-source-controls" id="period-source-controls" hidden></div>
+          <p class="layer-caption" id="period-source-hint" hidden></p>
           <button type="submit" class="quiet-button" id="apply-period">Показать на карте</button>
         </form>
       </dialog>
@@ -244,7 +247,8 @@
         <button type="button" class="quiet-button" id="study-retry" hidden>Повторить загрузку</button>
         <button type="button" class="quiet-button" id="study-prepared-sko" hidden>Готовый расчёт СКО · 2022–2025</button>
         <section id="activity-calendar" aria-label="Календарь активности">
-          <div id="study-calendar" class="calendar-scroll"></div>
+          <div id="study-calendar" class="calendar-scroll" role="region" aria-label="Календарь активности" tabindex="0"></div>
+          <p class="calendar-scroll-hint">Прокрутите календарь вправо, чтобы увидеть остальные месяцы →</p>
           <p id="study-calendar-detail" class="layer-caption"></p>
         </section>
         <section id="external-factors" aria-label="Внешние связи" hidden></section>

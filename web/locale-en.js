@@ -1,5 +1,8 @@
 // English UI strings. Numbered placeholders correspond to the runtime values in the Russian message.
 export default {
+  "Прокрутите календарь вправо, чтобы увидеть остальные месяцы →": "Scroll the calendar to the right to see the remaining months →",
+  "Сначала выберите территорию в поиске или на карте.": "First select an area using search or the map.",
+  "Выберите территорию и задачу анализа, чтобы перейти к данным.": "Select an area and an analysis task to continue to the data.",
   "Проверяю готовый расчёт для выбранных параметров…": "Checking for a completed analysis with these settings…",
   "Готовый расчёт открыт из кэша. Параметры и версия данных проверены.": "Opened the cached analysis. Its settings and data version have been checked.",
   "Проверяю готовую матрицу для выбранной территории…": "Checking for a completed matrix for the selected area…",
@@ -1288,7 +1291,7 @@ export default {
   "Прогресс расчёта матрицы": "Progress in matrix calculation",
   "Проекция сетки": "Grid projection",
   "Прозрачность · {0}": "Transparency · {0}",
-  "Прокрутите матрицу вправо, чтобы увидеть остальные показатели →": "Scroll the matrix to the right to see the rest",
+  "Прокрутите матрицу вправо, чтобы увидеть остальные показатели →": "Scroll the matrix to the right to see the remaining factors →",
   "Пропуски исключены отдельно для каждой пары. При большом числе наблюдений график показывает до 1 500 точек, а ρ считается по всем доступным парам.": "With a large number of observations, the graph shows up to 1,500 points, and ρ is counted for all available pairs.",
   "Пропустить · тур останется в «Как пользоваться»": "Skip · find this tour under How to use",
   "Пропущены дни с известными сбоями ({0}). Облачность и покрытие не проверены.": "Missed days with known outages ({0}) Cloud and coverage untested.",

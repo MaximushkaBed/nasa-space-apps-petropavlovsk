@@ -81,6 +81,7 @@ button, a, select, input { font: inherit; }
   left: 50%;
   transform: translateX(-50%);
   max-width: min(90%, 680px);
+  width: max-content;
   background: var(--app-warning-bg);
   border: 1px solid #866644;
   border-radius: 5px;
@@ -160,16 +161,21 @@ button, a, select, input { font: inherit; }
   .app-header #app-language { display:none; }
   .app-header .app-utility-icon { display:inline; font-size:18px; line-height:1; }
   .app-header .app-utility-label { display:none; }
-  .app-header .app-utility { width:40px; height:40px; min-width:40px; padding:0; margin:0; }
-  .app-header .app-language-mobile { display:block; width:60px; min-height:40px; padding:4px 2px 4px 6px; border:1px solid var(--app-control-line); border-radius:4px; background:var(--app-control); color:var(--app-ink); font-size:16px; cursor:pointer; }
+  .app-header .app-utility { width:44px; height:44px; min-width:44px; padding:0; margin:0; }
+  .app-header .app-language-mobile { display:block; width:60px; min-height:44px; padding:4px 2px 4px 6px; border:1px solid var(--app-control-line); border-radius:4px; background:var(--app-control); color:var(--app-ink); font-size:16px; cursor:pointer; }
   .app-header .app-nav { grid-row:2; grid-column:1/-1; order:0; width:100%; gap:0; min-width:0; }
-  .app-header .app-nav a { min-height:42px; padding:9px 12px 7px; font-size:11px; justify-content:center; }
+  .app-header .app-nav a { min-height:44px; padding:9px 12px 7px; font-size:12px; justify-content:center; }
   .app-header .app-context { display:none; }
   body[data-app-view="analysis"]:has(.analysis-workbench[data-draw-mode]:not([data-draw-mode=""])) .shell-status { display:none; }
   .app-dialog { max-height:calc(100dvh - 24px); overscroll-behavior:contain; }
   .app-dialog .app-dialog-heading { position:sticky; top:-18px; z-index:1; background:var(--app-surface); padding-block:10px; }
   .app-dialog .app-dialog-heading button { min-width:40px; min-height:40px; }
   .app-dialog-actions button { min-height:42px; }
+  .app-dialog { font-size:14px; line-height:1.65; padding-inline:16px; }
+  .app-dialog .app-dialog-heading button { min-width:44px; min-height:44px; }
+  .app-dialog-actions { display:grid; grid-template-columns:minmax(0,1fr); }
+  .app-dialog-actions button { min-height:44px; text-align:left; font-size:13px; }
+  .shell-status { max-width:calc(100% - 24px); font-size:12px; line-height:1.45; pointer-events:none; }
 }
 @media (max-width:340px) {
   .app-header .app-brand strong { font-size:13px; }
@@ -178,7 +184,7 @@ button, a, select, input { font: inherit; }
 @media (min-width:560px) and (max-width:1050px) and (max-height:500px) and (pointer:coarse) {
   .app-header { display:flex; flex-wrap:nowrap; min-height:48px; padding-block:4px; gap:12px; }
   .app-header .app-nav { order:0; width:auto; margin-right:auto; }
-  .app-header .app-nav a { min-height:40px; padding-block:8px 5px; }
+  .app-header .app-nav a { min-height:44px; padding-block:8px 5px; }
   .app-header .app-actions { margin:0; }
 }
 @media (min-width:560px) and (max-width:699px) and (max-height:500px) and (pointer:coarse) {

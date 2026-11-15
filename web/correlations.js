@@ -99,6 +99,7 @@ function render() {
   byId('factor-scope').textContent = spatial ? base
     : `${base} NDVI · ${count.format(data.coverage.ndvi)} дат. Наводнения · ${data.coverage.flood} совместимые даты.`;
   table.style.minWidth = spatial ? '' : '790px';
+  table.style.setProperty('--factor-column-count', factors.length);
   table.replaceChildren();
   const headers = table.createTHead().insertRow();
   headers.append(document.createElement('th'));

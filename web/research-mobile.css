@@ -1,0 +1,44 @@
+/* Prepared research remains readable and directly usable on touch screens. */
+@media (max-width:760px), (max-width:1050px) and (max-height:500px) and (pointer:coarse) {
+  :is(#correlations,#kishkenekol-case) { min-width:0;overflow-wrap:anywhere; }
+  :is(#correlations,#kishkenekol-case) .panel-heading { align-items:flex-start;flex-wrap:wrap;gap:12px; }
+  :is(#correlations,#kishkenekol-case) .panel-heading h2 { font-size:22px;line-height:1.25; }
+  :is(#correlations,#kishkenekol-case) .panel-heading p { font-size:13px;line-height:1.5; }
+  :is(#correlations,#kishkenekol-case) :is(button,summary) { min-height:44px; }
+  #correlations .factor-source { width:100%;grid-template-columns:1fr;gap:5px;font-size:13px; }
+  #correlations .factor-source select { width:100%;min-height:44px;font-size:16px; }
+  #correlations .factor-view { display:flex;gap:5px;width:100%; }
+  #correlations .factor-view button { flex:1 1 130px;white-space:normal;padding:9px;font-size:13px;line-height:1.4; }
+  #correlations .factor-layout { grid-template-columns:minmax(0,1fr);gap:12px; }
+  #correlations .factor-result { grid-row:1;padding:13px; }
+  #correlations .factor-result h3 { font-size:16px;line-height:1.4; }
+  #correlations :is(.factor-result p,.factor-scope,.factor-limits,.factor-method) { font-size:14px;line-height:1.6; }
+  #correlations .factor-result .factor-value { font-size:20px; }
+  #correlations .factor-result .factor-check { font-size:13px; }
+  #correlations .factor-scroll { max-height:min(560px,65dvh);overflow:auto;overscroll-behavior-x:contain;overscroll-behavior-y:auto;-webkit-overflow-scrolling:touch; }
+  #correlations .factor-matrix { min-width:calc(112px + var(--factor-column-count,12) * 64px)!important; }
+  #correlations .factor-matrix th { font-size:12px;line-height:1.45;padding:6px 3px; }
+  #correlations .factor-matrix th:first-child { width:112px; }
+  #correlations .factor-matrix thead th { position:sticky;top:0;z-index:2;background:#091938; }
+  #correlations .factor-matrix thead th:first-child { z-index:3; }
+  #correlations .factor-matrix button { min-height:48px;min-width:44px;font-size:13px; }
+  #correlations .factor-scroll-hint { display:block;font-size:13px;line-height:1.5; }
+  #correlations .factor-key { font-size:12px;line-height:1.5; }
+  #correlations .factor-method summary { padding-block:10px; }
+  #kishkenekol-case .case-layout { grid-template-columns:minmax(0,1fr);gap:16px; }
+  #kishkenekol-case :is(.case-result,.case-evidence p,.case-evidence details,.case-controls) { font-size:14px;line-height:1.6; }
+  #kishkenekol-case .case-evidence { padding:12px; }
+  #kishkenekol-case .case-evidence h3 { font-size:17px;line-height:1.4; }
+  #kishkenekol-case .case-evidence summary { padding-block:9px; }
+  #kishkenekol-case .case-map { height:clamp(260px,55svh,430px); }
+  #kishkenekol-case .case-slider { display:grid;grid-template-columns:1fr 1fr;gap:0 8px;font-size:13px;line-height:1.5; }
+  #kishkenekol-case .case-slider span:last-child { text-align:right; }
+  #kishkenekol-case .case-slider input { grid-column:1/-1;grid-row:2;width:100%;height:44px;min-height:44px;margin:0; }
+  #kishkenekol-case .case-controls label { min-height:44px;gap:9px;padding-block:8px;font-size:14px; }
+  #kishkenekol-case .case-controls input { flex:none;width:20px;height:20px; }
+  #kishkenekol-case .case-controls i { flex:none; }
+  #kishkenekol-case .case-credit { font-size:13px; }
+  #kishkenekol-case .leaflet-bar a { width:44px;height:44px;line-height:44px; }
+  #kishkenekol-case .leaflet-popup-close-button { width:44px;height:44px;line-height:44px; }
+  #kishkenekol-case .leaflet-popup-content { margin-top:22px;font-size:14px;line-height:1.5; }
+}

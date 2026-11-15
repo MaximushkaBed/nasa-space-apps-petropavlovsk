@@ -30,8 +30,8 @@ const flows = {
   ],
   setup: [
     {target:'#analysis-territory-search',fallback:'#preset',workflow:'territory',title:'1. Территория',text:'Найдите страну или регион либо выделите свой участок на карте. Расчёт будет относиться к этой границе.'},
-    {target:'#study-question',workflow:'task',title:'2. Результат анализа',text:'Выберите отклонение от сезонной нормы, сравнение лет или сопоставимость данных спутников.'},
-    {target:'#study-plan-request',workflow:'conditions',title:'3. Данные для анализа',text:'Нажмите «Проверить доступные данные», чтобы увидеть доступные спутники и годы. Выберите, какие данные использовать. Расчёт пока не запускается.'},
+    {target:'#study-question',workflow:'task',title:'2. Результат анализа',text:'Выберите отклонение от сезонной нормы, сравнение лет или сопоставимость данных спутников.',wait:'Сначала выберите территорию в поиске или на карте.'},
+    {target:'#study-plan-request',workflow:'conditions',title:'3. Данные для анализа',text:'Нажмите «Проверить доступные данные», чтобы увидеть доступные спутники и годы. Выберите, какие данные использовать. Расчёт пока не запускается.',wait:'Выберите территорию и задачу анализа, чтобы перейти к данным.'},
     {target:'#run',fallback:'#study-applied',workflow:'conditions',title:'4. Расчёт и результат',text:'Проверьте выбранный спутник и годы, затем нажмите «Построить анализ». Готовый результат можно сохранить и сравнить с другой версией.',wait:'Кнопка расчёта появится после выбора данных.'},
   ],
 };
@@ -44,7 +44,7 @@ function place(){
   const step=flows[current.flow][current.index];
   if(workflowPending&&step.workflow){
     const view=document.querySelector('.analysis-workbench[data-workflow-ready="true"][data-workflow-active="true"]');
-    if(view&&visible('#analysis-settings-toggle')){workflowPending=false;document.dispatchEvent(new CustomEvent('nasa:analysis-settings',{detail:{open:true,step:step.workflow}}));}
+    if(view&&visible('#analysis-settings-toggle')&&(step.workflow==='territory'||view.dataset.territorySelected==='true')){workflowPending=false;document.dispatchEvent(new CustomEvent('nasa:analysis-settings',{detail:{open:true,step:step.workflow}}));}
   }
   const target=(!step.ready||visible(step.ready))&&(visible(step.target)||(step.fallback&&visible(step.fallback)));
   if(target!==highlighted){clearTarget();highlighted=target||null;highlighted?.classList.add('onboarding-target');}

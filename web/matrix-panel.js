@@ -75,8 +75,8 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
  <p class="matrix-scope"></p><button class="primary matrix-run" type="button" ${automatic||local?'hidden':''}>Рассчитать матрицу</button>
  <p class="matrix-status" role="status">Сначала постройте временной анализ. Матрица рассчитывается отдельным запросом.</p><progress class="matrix-progress" max="100" value="0" hidden aria-label="Прогресс расчёта матрицы"></progress>
  <div class="matrix-controls" hidden><label>Метод<select class="matrix-mode"><option value="within">По дням · внутри месяцев</option><option value="pooled">По дням · весь период</option><option value="space">По участкам</option></select></label><label>Спутник<select class="matrix-platform"></select></label></div>
- <div class="matrix-grid"></div><p class="matrix-definition" hidden></p>
- <section class="matrix-pair" hidden><h4 class="matrix-pair-title"></h4><p class="matrix-pair-summary"></p><div class="matrix-scatter"></div><p class="matrix-pair-note"></p><button class="outline matrix-on-map" type="button" hidden>Показать участки в атласе</button></section>
+ <div class="matrix-grid" role="region" tabindex="0" aria-label="Матрица ранговых корреляций"></div><p class="matrix-scroll-hint" hidden>Прокрутите матрицу вправо, чтобы увидеть остальные показатели →</p><p class="matrix-definition" hidden></p>
+ <section class="matrix-pair" hidden><h4 class="matrix-pair-title"></h4><p class="matrix-pair-summary" aria-live="polite"></p><div class="matrix-scatter"></div><p class="matrix-pair-note"></p><button class="outline matrix-on-map" type="button" hidden>Показать участки в атласе</button></section>
  <div class="matrix-exports" hidden><button class="outline matrix-export-csv" type="button">Матрица CSV ↓</button><button class="outline matrix-export-json" type="button">Данные JSON ↓</button><button class="outline matrix-export-image" type="button">График SVG ↓</button></div>
  <details class="matrix-warnings" hidden><summary>Ограничения данных и метода</summary><div></div></details>
  <details class="matrix-provenance" hidden><summary>Источники и параметры матрицы</summary><pre></pre></details>`;
@@ -158,9 +158,9 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
   $('.matrix-platform').replaceChildren(...(result.platforms||[]).map(name=>new Option(name,name)));$('.matrix-platform').value=platform||'';
   status('Матрица готова. Выберите пару, чтобы увидеть реальные наблюдения.');showResults();refresh();if(visible)render();
  }
- function hideResults(){for(const selector of ['.matrix-controls','.matrix-warnings','.matrix-definition','.matrix-pair','.matrix-exports','.matrix-provenance'])$(selector).hidden=true;$('.matrix-grid').replaceChildren();scatter=null;scatterHost.replaceChildren();}
+ function hideResults(){for(const selector of ['.matrix-controls','.matrix-warnings','.matrix-scroll-hint','.matrix-definition','.matrix-pair','.matrix-exports','.matrix-provenance'])$(selector).hidden=true;$('.matrix-grid').replaceChildren();scatter=null;scatterHost.replaceChildren();}
  function showResults(){
-  for(const selector of ['.matrix-controls','.matrix-definition','.matrix-exports','.matrix-provenance'])$(selector).hidden=false;
+  for(const selector of ['.matrix-controls','.matrix-scroll-hint','.matrix-definition','.matrix-exports','.matrix-provenance'])$(selector).hidden=false;
   if(local) $('.matrix-controls').hidden=true;
   const warnings=result.warnings||[];const list=$('.matrix-warnings div');list.replaceChildren();$('.matrix-warnings').hidden=!warnings.length;
   for(const warning of warnings){const p=element('p',{},typeof warning==='string'?warning:JSON.stringify(warning));list.append(p);}
@@ -175,7 +175,9 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
  function axisLabel(){return result.imported?.axis||modeLabels[mode];}
  function render(){
   if(!result)return;
+  const grid=$('.matrix-grid'),scrollLeft=grid.scrollLeft,scrollTop=grid.scrollTop;
   const factors=fields(),table=element('table'),caption=element('caption',{},`${axisLabel()} · ${platform||'спутник не выбран'} · ρ Спирмена и число пар`);table.append(caption);
+  table.style.setProperty('--matrix-column-count',factors.length);
   if(local)table.style.minWidth=`${Math.max(340, 95 + factors.length * 53)}px`;
   const head=element('tr');head.append(element('th',{scope:'col'},'Фактор'));factors.forEach(f=>head.append(protectFactors(element('th',{scope:'col',title:`${f.label}${f.unit?` · ${f.unit}`:''}`},f.short||f.label),f)));
   const thead=element('thead');thead.append(head);table.append(thead);const tbody=element('tbody');
@@ -188,9 +190,9 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
     button.append(element('strong',{},finite(cell.rho)?text(cell.rho):'—'),element('small',{},countLabel));
     button.title=`${reasonLabel(detail,cell)||`${factor.label} / ${other.label} · ρ ${text(cell.rho)}`} · ${countDescription}`;
     protectFactors(button,factor,other);
-    button.addEventListener('click',()=>{pair=[i,j];render();});td.append(button);row.append(td);
+    button.addEventListener('click',()=>{pair=[i,j];render();grid.querySelector(`[data-pair="${i},${j}"]`)?.focus({preventScroll:true});});td.append(button);row.append(td);
    });tbody.append(row);
-  });table.append(tbody);$('.matrix-grid').replaceChildren(table);
+  });table.append(tbody);grid.replaceChildren(table);grid.scrollLeft=scrollLeft;grid.scrollTop=scrollTop;
   const definition=local?`Для расчёта ρ нужно не менее ${result.imported.minimum} общих наблюдений.`:mode==='within'?'ρ объединяет связи внутри отдельных месяцев и лет. Сезонность и общий тренд могут отличаться от связи внутри месяцев.':mode==='pooled'?'ρ рассчитана по общим доступным датам всего периода. Общая сезонность может усиливать видимую связь.':'ρ сравнивает участки этой территории. Показатель горения — плотность исходных ячейко-дней; размер участка не равен выгоревшей площади.';
   $('.matrix-definition').replaceChildren(document.createTextNode(definition),document.createTextNode(' n — пары, использованные для оценки ρ; «общ.» — доступные пары до отбора. Обе численности показаны в выбранной паре.'));
   if(pair.some(index=>index>=factors.length))pair=[0,Math.min(1,factors.length-1)];

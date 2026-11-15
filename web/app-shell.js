@@ -154,7 +154,7 @@ function analysisContext() {
   const next={...clone(context),...clone(from)};
   next.history={...context.history};next.baseline={...context.baseline};
   if(next.focus&&(next.focus.end>next.history.end||next.focus.start<next.history.start)){
-    next.focus=null;notice('Дата карты вне выбранной истории. Период исследования сохранён; измените его в условиях сравнения.');
+    next.focus=null;if(next.roi)notice('Дата карты вне выбранной истории. Период исследования сохранён; измените его в условиях сравнения.');
   }
   return next;
 }
@@ -239,7 +239,8 @@ window.addEventListener('popstate',event=>{
     const bootToken=navigation;
     const controller=await ensureView(view);
     if(bootToken!==navigation)return;
-    const saved=state||restored?.states?.[view==='cases'?'atlas':view]||(id?{context:clone(context),analysisId:id}:undefined);
+    let saved=state||restored?.states?.[view==='cases'?'atlas':view]||(id?{context:clone(context),analysisId:id}:undefined);
+    if(!entry&&!state&&view==='atlas'&&['#season-calendar','#correlations','#kishkenekol-case'].includes(url.hash))saved={...saved,localPanel:url.hash};
     if(id&&saved)saved.analysisId=id;
     await controller.activate?.({view,state:saved,context:(state||legacy||id)?context:undefined,run:Boolean(legacy),caseId:view==='cases'?'kishkenekol-2025-04-12':undefined});
     if(bootToken!==navigation)return;

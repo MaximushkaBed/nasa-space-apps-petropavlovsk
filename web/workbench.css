@@ -411,3 +411,86 @@ body[data-app-view="analysis"] .app-outlet { position:fixed; inset:var(--app-hea
   #selection-measure { flex:1 0 100%; font-size:11px; line-height:1.4; }
  }
 }
+
+/* Analysis touch controls override the compact desktop rules by scope, including
+   ID-specific controls. Keep the actual form submit in the visible step footer. */
+@media(max-width:760px), (max-width:1050px) and (max-height:500px) and (pointer:coarse) {
+ .analysis-workbench :is(#analysis-settings,#workbench,#method-dialog) :is(button,summary) {
+  min-height:44px;
+ }
+ .analysis-workbench :is(#analysis-settings,#workbench) :is(input:not([type=checkbox]):not([type=range]),select) {
+  font-size:16px;
+  min-height:44px;
+  max-width:100%;
+ }
+ .analysis-workbench #analysis-settings-close { min-width:44px; min-height:44px; }
+ .analysis-workbench #analysis-settings-toggle { min-height:44px; }
+ .analysis-workbench #analysis-form :is(label,.hint,.study-current-conditions),
+ .analysis-workbench #analysis-form :is(.study-option-description,.study-option-config,.study-option-reason) {
+  font-size:12px;
+  line-height:1.65;
+ }
+ .analysis-workbench #analysis-form :is(legend,.study-conditions h2,.study-run-label) { font-size:13px; }
+ .analysis-workbench #analysis-settings :is(button,summary) { font-size:13px; line-height:1.5; }
+ .analysis-workbench #analysis-settings #analysis-settings-close { font-size:24px; line-height:1; }
+ .analysis-workbench #analysis-form summary { padding-block:10px; }
+ .analysis-workbench .analysis-settings-scroll { padding-bottom:12px; scroll-padding-block:12px; }
+ .analysis-workbench .analysis-workflow-navigation { padding-bottom:max(12px,env(safe-area-inset-bottom)); }
+ .analysis-workbench .analysis-workflow-navigation>div { gap:10px; }
+ .analysis-workbench .analysis-workflow-navigation #analysis-workflow-back { min-width:74px; }
+ .analysis-workbench .analysis-workflow-navigation #run { flex:1; width:auto; min-width:0; font-size:14px; margin:0; gap:8px; justify-content:center; }
+ .analysis-workbench .analysis-workflow-navigation #run>span { display:none; }
+ .analysis-workbench #analysis-workflow-message { font-size:11px; }
+ .analysis-workbench #analysis-form .checkbox,
+ .analysis-workbench #workbench .checkbox { min-height:44px; font-size:12px; padding-block:6px; }
+ .analysis-workbench #analysis-form input[type=checkbox],
+ .analysis-workbench #workbench input[type=checkbox] { width:18px; height:18px; flex:none; }
+ .analysis-workbench #workbench .contextbar h2 { max-width:none; font-size:20px; line-height:1.35; overflow-wrap:anywhere; }
+ .analysis-workbench #workbench .contextbar p { font-size:11px; line-height:1.6; }
+ .analysis-workbench #workbench .context-actions button { font-size:12px; padding:9px 10px; white-space:normal; }
+ .analysis-workbench #workbench .context-actions { gap:7px; }
+ .analysis-workbench #workbench :is(.study-assessment-actions button,.compare-map-actions button,.view-controls button,.segmented button,.quality-bar button,.timeline-bar button) { font-size:12px; padding:8px 10px; white-space:normal; }
+ .analysis-workbench #workbench :is(.analysis-heading p,.chart-toolbar,.chart-caption,.compare-metrics table,.compare-controls label,.validation-summary,.revision-pair p,.revision-pair strong,.revision-table table,.revision-change-group,.revision-change-group ul,.revision-pickers label,#revision-status,#revision-scope,#study-assessment-summary,.study-assessment .hint) { font-size:12px; line-height:1.6; }
+ .analysis-workbench #workbench :is(.analysis-heading h3,.revision-heading h3,.study-assessment-heading h3) { font-size:15px; }
+ .analysis-workbench #workbench :is(.chart-legend,.calendar-season .chart-legend) { flex-wrap:wrap; font-size:11px; line-height:1.6; }
+ .analysis-workbench #workbench .segmented { flex-shrink:0; }
+ .analysis-workbench #workbench .segmented button { min-width:64px; }
+ .analysis-workbench #workbench .analysis-heading .view-controls { gap:8px; flex-wrap:wrap; }
+ .analysis-workbench #workbench .view-controls select { flex:1; width:auto; min-width:150px; }
+ .analysis-workbench #workbench .revision-pair { grid-template-columns:minmax(0,1fr); }
+ .analysis-workbench #workbench .revision-table table { min-width:420px; }
+ .analysis-workbench #workbench .revision-table th { min-width:110px; }
+ .analysis-workbench #workbench .timeline-bar { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:4px 8px; }
+ .analysis-workbench #workbench #day-label { width:auto; text-align:center; white-space:normal; font-size:11px; }
+ .analysis-workbench #workbench #day-range { grid-column:1/-1; grid-row:2; width:100%; min-height:44px; margin:0; }
+ .analysis-workbench #workbench #reset-day { grid-column:3; grid-row:1; }
+ .analysis-workbench #workbench .quality-bar { font-size:11px; line-height:1.6; padding-bottom:max(14px,env(safe-area-inset-bottom)); }
+ .analysis-workbench #workbench .map-top { top:8px; left:8px; right:8px; align-items:flex-start; gap:8px; }
+ .analysis-workbench #workbench .map-chip { flex:1; min-width:0; max-width:none; font-size:11px; line-height:1.5; padding:8px; overflow-wrap:anywhere; }
+ .analysis-workbench #workbench .map-buttons { flex:none; }
+ .analysis-workbench #workbench .map-buttons button { min-width:44px; font-size:12px; }
+ .analysis-workbench #workbench .map-mode-control { top:94px; right:8px; max-width:calc(100% - 76px); padding:0 8px; }
+ .analysis-workbench #workbench .map-mode-control>span { position:absolute; clip:rect(0,0,0,0); width:1px; height:1px; overflow:hidden; }
+ .analysis-workbench #workbench .map-bottom { flex-wrap:wrap; font-size:10px; line-height:1.4; }
+ .analysis-workbench #workbench .map-key { max-width:100%; }
+ .analysis-workbench #workbench .leaflet-control-zoom { margin-top:94px!important; }
+ .analysis-workbench #workbench .leaflet-control-zoom a { width:44px; height:44px; line-height:44px; }
+ .analysis-workbench #method-dialog { max-height:calc(100dvh - 24px); }
+ .analysis-workbench #method-dialog .dialog-heading { position:sticky; top:0; z-index:2; padding:12px 16px; background:var(--app-surface); }
+ .analysis-workbench #method-dialog .dialog-heading h2 { font-size:17px; }
+ .analysis-workbench #method-dialog .dialog-content { padding-inline:16px; font-size:13px; }
+ .analysis-workbench #method-dialog .dialog-content h3 { font-size:14px; }
+ .analysis-workbench #method-dialog #method-close { min-width:44px; }
+ .analysis-workbench #workbench .selection-actions { padding-bottom:max(7px,env(safe-area-inset-bottom)); }
+ .analysis-workbench[data-draw-mode]:not([data-draw-mode=""]) #workbench>:not(.work-panels) { display:none; }
+ .analysis-workbench[data-draw-mode]:not([data-draw-mode=""]) #workbench .leaflet-control-zoom { margin-top:10px!important; }
+}
+@media(max-width:1050px) and (max-height:500px) and (pointer:coarse) {
+ .analysis-workbench #analysis-settings .filter-heading { padding:7px 14px; }
+ .analysis-workbench #analysis-settings .filter-heading .eyebrow { display:none; }
+ .analysis-workbench #analysis-settings .filter-heading h1 { font-size:15px; margin:3px 0; }
+ .analysis-workbench #analysis-settings #analysis-workflow-step { font-size:11px; margin:2px 0; }
+ .analysis-workbench .analysis-workflow-navigation { padding-top:7px; }
+ .analysis-workbench #workbench .selection-actions { bottom:18px; }
+ .analysis-workbench #workbench #selection-measure { flex:1 1 auto; }
+}
