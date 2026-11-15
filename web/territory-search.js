@@ -1,11 +1,60 @@
-import { registerBoundaryNames, translate } from './i18n.js';
-import { inRing } from './area-analysis.js?v=layer-values';
+import { registerBoundaryNames, translate, uiLanguage } from './i18n.js';
+import { circleGeometry } from './analysis-selection.js';
+import { normalizeTerritoryName as normalize, searchMunicipalBoundaries } from './municipal-boundaries.js';
 
-// The atlas boundary catalogue, ranking and boundary sources are shared with
-// area-analysis.js. Loading a result never simplifies or rewrites its geometry.
-const normalize = name => String(name || '').toLocaleLowerCase().replace(/ё/g, 'е').normalize('NFD')
-  .replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const namesFor = ([name, , aliases]) => [name, ...aliases, translate(name)].map(normalize);
+const boundarySource = 'Граница города · Overture Maps · © OpenStreetMap contributors';
+
+export function boundaryLoadMessage(error) {
+  return error.cityBoundaryUnavailable ? error.message
+    : 'Не удалось загрузить границу. Повторите поиск или выделите область на карте.';
+}
+
+export function inRing(ring, lon, lat) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [aLon, aLat] = ring[i], [bLon, bLat] = ring[j];
+    if ((aLat > lat) !== (bLat > lat) && lon < (bLon - aLon) * (lat - aLat) / (bLat - aLat) + aLon) inside = !inside;
+  }
+  return inside;
+}
+
+async function geocodedPlaces(text, getJSON, countryCode) {
+  let language = uiLanguage();
+  const parts = text.split(',').map(part => part.trim());
+  const filter = parts.length === 2 && countryCode;
+  const params = new URLSearchParams({ name: filter ? parts[0] : parts.join(', '), count: 6, language });
+  if (filter) params.set('countryCode', countryCode);
+  const request = () => getJSON(`https://geocoding-api.open-meteo.com/v1/search?${params}`);
+  let { results = [] } = await request();
+  const nameLanguage = /[ӘәҒғҚқҢңӨөҰұҮүҺһІі]/u.test(parts[0]) ? 'kk'
+    : /\p{Script=Cyrillic}/u.test(parts[0]) ? 'ru' : 'en';
+  if (!results.length && nameLanguage !== language) {
+    language = nameLanguage;
+    params.set('language', language);
+    ({ results = [] } = await request());
+  }
+  return results.filter(({name, longitude, latitude, country_code, feature_code}) =>
+    feature_code?.startsWith('PPL') && name && Number.isFinite(longitude) && Number.isFinite(latitude)
+      && latitude > -85 && latitude < 85 && country_code
+  ).map(({name, longitude, latitude, admin1, country, country_code}) => ({
+    name, label: [...new Set([name, admin1, country, 'Населённый пункт'].filter(Boolean))].join(' · '),
+    async load({ radiusKm = 5 } = {}) {
+      const query = new URLSearchParams({ name, country: country_code, lon: longitude, lat: latitude, lang: language });
+      const { geometry } = await getJSON(`/api/v1/place-boundary?${query}`).catch(() => {
+        const error = new Error('Каталог городских границ временно недоступен. Повторите поиск.');
+        error.cityBoundaryUnavailable = true;
+        throw error;
+      });
+      if (geometry !== null) {
+        return {preset: 'custom', name, source: boundarySource, geometry, bbox: geometryBounds(geometry)};
+      }
+      const circle = { center: [longitude, latitude], radius_km: radiusKm };
+      return {preset: 'custom', name, source: 'GeoNames · Точка + радиус',
+        circle, bbox: geometryBounds(circleGeometry(circle))};
+    },
+  }));
+}
 
 function readonlyPreview(geometry) {
   const copy = structuredClone(geometry);
@@ -60,6 +109,7 @@ export function fitTerritory(map, geometry) {
 
 export function createTerritorySearch(getJSON, getSkoGeometry) {
   let indexPromise;
+  let countryCodes;
   const geometryCache = new Map();
   let districtCache;
   async function index() {
@@ -137,11 +187,20 @@ export function createTerritorySearch(getJSON, getSkoGeometry) {
         message: nextLevel === 2 ? 'Районы и города из каталога, чья внутренняя точка находится в выбранной области. При выборе граница точно ограничивается этой областью.'
           : `Регионы страны «${parentName}» из готового каталога. При выборе граница точно ограничивается выбранной территорией.`}};
     },
-    async search(text) {
+    async search(text, { includePlaces = true } = {}) {
       const [query, countryQuery] = text.split(',').map(normalize);
       if (!query) return [];
+      const cities = searchMunicipalBoundaries(text, getJSON);
+      if (cities.length) return cities.map(({name, label, source, loadGeometry}) => ({
+        name, label, source,
+        async load() {
+          const geometry = await loadGeometry();
+          return {preset: 'custom', name, source, geometry, bbox: geometryBounds(geometry)};
+        },
+      }));
       const catalogue = await index();
-      const countryEntry = countryQuery && catalogue.find(entry => !entry[5] && namesFor(entry).includes(countryQuery));
+      const countryEntry = countryQuery && catalogue.find(entry => !entry[5]
+        && (namesFor(entry).includes(countryQuery) || normalize(entry[3]) === countryQuery));
       const candidates = countryEntry ? catalogue.filter(entry => entry[3] === countryEntry[3] && entry[5] > 0) : catalogue;
       const words = query.split(' ');
       const scored = candidates.map(entry => {
@@ -157,18 +216,31 @@ export function createTerritorySearch(getJSON, getSkoGeometry) {
             return {preset: isSko ? 'sko' : 'custom', name, source, geometry, bbox: geometryBounds(geometry), boundary_ref: {code, id, level}};
           }};
       });
-      if (countryEntry && countryEntry[3] !== 'KAZ' && scored[0]?.[0] !== 0 && matches.length < 8) {
+      const exact = scored[0]?.[0] === 0;
+      const exactCountry = exact && scored[0][1][5] === 0;
+      if (countryEntry && !countryCodes) countryCodes = getJSON('data/atlas-boundaries/country-codes.json')
+        .catch(() => { countryCodes = null; });
+      const placeSearch = !exactCountry && (includePlaces || !matches.length)
+        ? Promise.resolve(countryEntry ? countryCodes : undefined)
+          .then(codes => geocodedPlaces(text, getJSON, codes?.[countryEntry?.[3]]))
+          .then(places => ({places}), error => ({error}))
+        : {places: []};
+      let hasDistricts = false;
+      if (countryEntry && countryEntry[3] !== 'KAZ' && !exact && matches.length < 8) {
         try {
           for (const {properties, geometry} of await districts(countryEntry[3])) {
             const name = properties.shapeName;
             if (!name || !geometry || !normalize(name).includes(query)) continue;
+            hasDistricts = true;
             matches.push({name, label: `${name} · ${countryEntry[0]}`, source: 'Границы geoBoundaries',
               load: async () => ({preset: 'custom', name, source: 'Границы geoBoundaries', geometry, bbox: geometryBounds(geometry)})});
             if (matches.length === 8) break;
           }
         } catch { /* Indexed borders remain usable if the optional district source fails. */ }
       }
-      return matches;
+      const { places = [], error } = await placeSearch;
+      if (!matches.length && error) throw error;
+      return (exact || hasDistricts ? [...matches, ...places] : [...places, ...matches]).slice(0, 8);
     }
   };
 }

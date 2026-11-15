@@ -5,6 +5,7 @@ python tests/e2e_language.py --base-url https://nasa.aican.cloud
 """
 import argparse
 import re
+from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import expect, sync_playwright
 
@@ -120,6 +121,82 @@ def atlas_state(browser, base):
     page.close()
 
 
+def municipal_search(browser, base):
+    atlas = browser.new_page(viewport={'width': 1440, 'height': 900})
+    atlas.add_init_script("localStorage.setItem('nasa-space-apps-onboarding-v1', 'true')")
+    atlas.goto(f'{base}/?view=atlas&lang=ru', wait_until='domcontentloaded')
+    atlas.locator('#area-search-mode').click(timeout=25000)
+    query = atlas.locator('#area-query')
+    query.fill('Лосс Анделес')
+    query.press('Enter')
+    atlas.get_by_role('button', name='Лос-Анджелес · Калифорния · США · Граница города').click()
+    expect(atlas.locator('#area-name')).to_have_text('Лос-Анджелес')
+    expect(atlas.locator('#area-radius-label')).to_be_hidden()
+    geometry = atlas.request.get(f'{base}/data/atlas-boundaries/los-angeles.geojson').json()['geometry']
+    selection = "JSON.parse(localStorage.getItem('nasa-space-apps-context-v1')).context.roi"
+    assert atlas.evaluate(selection)['geometry'] == geometry
+    atlas.close()
+
+    workbench = browser.new_page(viewport={'width': 1440, 'height': 900})
+    workbench.add_init_script("localStorage.setItem('nasa-space-apps-onboarding-v1', 'true')")
+    workbench.goto(f'{base}/?view=analysis&lang=en', wait_until='domcontentloaded')
+    expect(workbench.locator('#analysis-view')).to_have_attribute('data-bootstrap-pending', 'false', timeout=25000)
+    query = workbench.locator('#analysis-territory-query')
+    query.fill('Los Angeles, California')
+    workbench.get_by_role('option', name='Los Angeles · California · United States · City boundary').click()
+    expect(query).to_have_value('Los Angeles')
+    assert workbench.evaluate(selection)['geometry'] == geometry
+    workbench.close()
+
+
+def global_city_search(browser, base):
+    page = browser.new_page(viewport={'width': 1440, 'height': 900})
+    page.add_init_script("localStorage.setItem('nasa-space-apps-onboarding-v1', 'true')")
+    shape = {'type': 'Polygon', 'coordinates': [[[2.2, 48.8], [2.4, 48.8], [2.4, 48.9], [2.2, 48.8]]]}
+
+    def requested(route, key):
+        return parse_qs(urlsplit(route.request.url).query)[key][0]
+
+    def geocoding(route):
+        name = requested(route, 'name')
+        if name == 'Atlas Fixture City':
+            assert requested(route, 'countryCode') == 'FR'
+        route.fulfill(json={'results': [{'name': name, 'longitude': 2.34, 'latitude': 48.85,
+                                         'country': 'France', 'country_code': 'FR', 'feature_code': 'PPL'}]})
+
+    def boundary(route):
+        name = requested(route, 'name')
+        if name == 'Atlas Fixture Outage':
+            route.fulfill(status=503, json={'error': 'Unavailable'})
+        else:
+            route.fulfill(json={'geometry': shape if name == 'Atlas Fixture City' else None})
+
+    page.route('https://geocoding-api.open-meteo.com/v1/search?**', geocoding)
+    page.route('https://www.geoboundaries.org/api/current/gbOpen/FRA/ADM2/', lambda route: route.fulfill(status=404))
+    page.route('**/api/v1/place-boundary?**', boundary)
+    page.goto(f'{base}/?view=atlas&lang=en', wait_until='domcontentloaded')
+    selection = "JSON.parse(localStorage.getItem('nasa-space-apps-context-v1')).context.roi"
+    for name in ('Atlas Fixture City', 'Atlas Fixture Hamlet', 'Atlas Fixture Outage'):
+        page.locator('#area-search-mode').click(timeout=25000)
+        query = page.locator('#area-query')
+        query.fill(f'{name}, Франция' if name == 'Atlas Fixture City' else name)
+        query.press('Enter')
+        page.get_by_role('button', name=f'{name} · France · Settlement').click()
+        if name == 'Atlas Fixture Outage':
+            expect(page.locator('#area-results')).to_have_text(
+                'The city boundary catalogue is temporarily unavailable. Try searching again.')
+            assert page.evaluate(selection)['name'] == 'Atlas Fixture Hamlet'
+        else:
+            expect(page.locator('#area-name')).to_have_text(name)
+            roi = page.evaluate(selection)
+            if name == 'Atlas Fixture City':
+                assert roi['geometry'] == shape and 'circle' not in roi
+            else:
+                assert roi['circle'] == {'center': [2.34, 48.85], 'radius_km': 5}
+                expect(page.locator('#area-radius')).to_have_value('5')
+    page.close()
+
+
 def desktop(browser, base):
     page = browser.new_page(viewport={'width': 1440, 'height': 900}, timezone_id='Asia/Qyzylorda')
     errors = []
@@ -201,7 +278,7 @@ def desktop(browser, base):
     page.locator('.app-nav [data-app-view="analysis"]').click()
     expect(page.locator('#analysis-form')).to_be_visible(timeout=25000)
     expect(page.locator('#preset option[value="sko"]')).to_have_text('North Kazakhstan Region')
-    expect(page.locator('#study-next-note')).to_contain_text('Choose the comparison conditions')
+    expect(page.locator('#study-next-note')).to_contain_text('First, check which data are in the archive.')
     query = page.locator('#analysis-territory-query')
     expect(query).to_be_enabled(timeout=25000)
     query.fill('Kazakhstan')
@@ -281,6 +358,8 @@ if __name__ == '__main__':
             browser = playwright.chromium.launch()
             initial_languages(browser, base)
             atlas_state(browser, base)
+            municipal_search(browser, base)
+            global_city_search(browser, base)
             desktop(browser, base)
             mobile(browser, base)
             example(browser, base, 'en', 'Example study', 'Anomaly from the historical baseline')

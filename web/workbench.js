@@ -3,7 +3,7 @@ import { mountMatrixPanel } from './matrix-panel.js?v=dark';
 import { sameScientificConfig, scientificSignature } from './scientific-context.js';
 import { mountStudyPlanner } from './study-planner.js';
 import { mountStudyRevisions } from './study-revisions.js';
-import { createTerritorySearch, fitTerritory } from './territory-search.js';
+import { boundaryLoadMessage, createTerritorySearch, fitTerritory } from './territory-search.js';
 import { createAnalysisSelection, roiGeometry as geometryOfROI } from './analysis-selection.js';
 import { createTerritoryContext } from './territory-context.js';
 import { mountAnalysisWorkflow } from './analysis-workflow.js';
@@ -119,12 +119,12 @@ function useTerritory(roi,{parent=null,resetParents=true,keepDrawing=false}={}){
  showBounds();invalidate();syncTerritoryControls();refreshTerritoryParts();publishContext();
 }
 function cancelTerritorySearch(){++territoryRevision;clearTimeout(territoryTimer);$('analysis-territory-results').replaceChildren();$('analysis-territory-results').hidden=true;$('analysis-territory-query').setAttribute('aria-expanded','false');}
-async function searchTerritory(){
+async function searchTerritory({includePlaces=true}={}){
  clearTimeout(territoryTimer);const text=$('analysis-territory-query').value.trim();cancelTerritorySearch();
  if(text.length<2){$('analysis-territory-status').textContent='Введите хотя бы две буквы названия.';return;}
  const revision=territoryRevision;$('analysis-territory-status').textContent='Поиск границ…';
  try{
-  const matches=await territorySearch.search(text);if(revision!==territoryRevision||!active)return;
+  const matches=await territorySearch.search(text,{includePlaces});if(revision!==territoryRevision||!active)return;
   const results=$('analysis-territory-results');
   for(const match of matches){
    const button=document.createElement('button');button.type='button';button.role='option';button.textContent=match.label;
@@ -133,7 +133,7 @@ async function searchTerritory(){
     try{
      const roi=await match.load();if(revision!==territoryRevision||!active)return;
      useTerritory(roi);
-    }catch(error){if(revision===territoryRevision)$('analysis-territory-status').textContent='Не удалось загрузить границу. Повторите поиск или выделите область на карте.';}
+    }catch(error){if(revision===territoryRevision)$('analysis-territory-status').textContent=boundaryLoadMessage(error);}
    });results.append(button);
   }
   results.hidden=!matches.length;$('analysis-territory-query').setAttribute('aria-expanded',String(Boolean(matches.length)));
@@ -589,7 +589,7 @@ function openMethod(){$('method-dialog').showModal();}
 $('analysis-form').addEventListener('submit',startAnalysis);
 $('preset').addEventListener('change',setPreset);
 $('analysis-territory-find').addEventListener('click',searchTerritory);
-$('analysis-territory-query').addEventListener('input',()=>{cancelTerritorySearch();$('analysis-territory-status').textContent='';if($('analysis-territory-query').value.trim().length>=2)territoryTimer=setTimeout(searchTerritory,260);});
+$('analysis-territory-query').addEventListener('input',()=>{cancelTerritorySearch();$('analysis-territory-status').textContent='';if($('analysis-territory-query').value.trim().length>=2)territoryTimer=setTimeout(()=>searchTerritory({includePlaces:false}),260);});
 $('analysis-territory-query').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();searchTerritory();}else if(event.key==='ArrowDown'){event.preventDefault();$('analysis-territory-results').querySelector('button')?.focus();}else if(event.key==='Escape')cancelTerritorySearch();});
 $('analysis-territory-results').addEventListener('keydown',event=>{const buttons=[...$('analysis-territory-results').querySelectorAll('button')],index=buttons.indexOf(document.activeElement);if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();buttons[(index+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}else if(event.key==='Escape'){cancelTerritorySearch();$('analysis-territory-query').focus();}});
 $('territory-child').addEventListener('change',async()=>{

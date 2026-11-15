@@ -4,7 +4,7 @@ WORKDIR /app
 COPY requirements-global.txt requirements-analysis.txt ./
 RUN pip install --no-cache-dir --disable-pip-version-check -r requirements-analysis.txt \
     && python -c "import rasterio, numpy" \
-    && python -c "import duckdb; c=duckdb.connect(); c.execute(\"SET extension_directory='/opt/duckdb/extensions'\"); c.execute('INSTALL spatial'); c.execute('LOAD spatial')" \
+    && python -c "import duckdb; c=duckdb.connect(); c.execute(\"SET extension_directory='/opt/duckdb/extensions'\"); c.execute('INSTALL spatial; INSTALL httpfs; LOAD spatial; LOAD httpfs')" \
     && chmod -R a+rX /opt/duckdb \
     && pip uninstall -y pip \
     && python -c "import ensurepip, shutil; shutil.rmtree(ensurepip.__path__[0])"

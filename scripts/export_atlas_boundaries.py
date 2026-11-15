@@ -20,6 +20,7 @@ def export(countries_file, regions_file, kazakh_districts_file=None):
     OUTPUT.mkdir(parents=True, exist_ok=True)
     chunks = {}
     index = []
+    country_codes = {}
     for level, file in enumerate(filter(None, (countries_file, regions_file, kazakh_districts_file))):
         features = json.loads(Path(file).read_text(encoding="utf-8"))["features"]
         for feature in features:
@@ -29,6 +30,12 @@ def export(countries_file, regions_file, kazakh_districts_file=None):
             name = values.get("name_ru") or values.get("name_en") or values.get("name") or props.get("shapeName")
             if not code or not re.fullmatch(r"[A-Z0-9]{3}", code) or not name or not feature["geometry"]:
                 continue
+            if level == 0:
+                for key in ("iso_a2", "iso_a2_eh"):
+                    alpha2 = values.get(key)
+                    if alpha2 and re.fullmatch(r"[A-Z]{2}", alpha2):
+                        country_codes[code] = alpha2
+                        break
             country = values.get("admin") or ("Казахстан" if level == 2 else "")
             names = list(dict.fromkeys(value for value in
                          (values.get("name_ru"), values.get("name_en"), values.get("name"),
@@ -48,6 +55,7 @@ def export(countries_file, regions_file, kazakh_districts_file=None):
     for code, geometries in chunks.items():
         write(OUTPUT / f"{code}.json", geometries)
     write(OUTPUT / "index.json", index)
+    write(OUTPUT / "country-codes.json", dict(sorted(country_codes.items())))
 
 
 def round_geometry(geometry):

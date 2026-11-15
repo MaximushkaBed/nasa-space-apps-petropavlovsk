@@ -1,7 +1,7 @@
-import { numberFormat, registerBoundaryNames, translate, uiLanguage } from './i18n.js';
+import { numberFormat } from './i18n.js';
+import { boundaryLoadMessage, createTerritorySearch, inRing } from './territory-search.js';
+export { inRing };
 const number = numberFormat({ maximumFractionDigits: 2 });
-const normalize = (name) => name.toLocaleLowerCase().replace(/ё/g, 'е').normalize('NFD')
-  .replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const earthRadius = 6371.0088;
 const radians = Math.PI / 180;
 const wrapNear = (lon, center) => lon + 360 * Math.round((center - lon) / 360);
@@ -13,15 +13,6 @@ function outline(polygons) {
       [Math.min(w,x), Math.min(s,y), Math.max(e,x), Math.max(n,y)], [Infinity, Infinity, -Infinity, -Infinity]);
     return { rings, center: (west + east) / 2, west, south, east, north };
   });
-}
-
-export function inRing(ring, lon, lat) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [aLon, aLat] = ring[i], [bLon, bLat] = ring[j];
-    if ((aLat > lat) !== (bLat > lat) && lon < (bLon - aLon) * (lat - aLat) / (bLat - aLat) + aLon) inside = !inside;
-  }
-  return inside;
 }
 
 function sphericalArea(ring) {
@@ -63,8 +54,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
   let vertices = [];
   let selection;
   let archiveFrame;
-  let boundaryIndex;
-  let lastDistrictSearch;
+  const territorySearch = createTerritorySearch(getJSON, () => skoGeometry);
   let searchRevision = 0;
   const modes = [['area-circle', 'circle'], ['area-polygon', 'polygon'], ['area-search-mode', 'search']];
   const region = polygonSelection(skoGeometry);
@@ -176,7 +166,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     renderTools();
   }
 
-  function selectCircle(center) {
+  function selectCircle(center, place = null) {
     if (!radius.validity.valid || !radius.valueAsNumber) return;
     const km = radius.valueAsNumber;
     const distance = Math.sin(km / (2 * earthRadius)) ** 2;
@@ -186,8 +176,9 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
       : Math.asin(Math.sin(angularRadius) / Math.cos(latitude)) / radians;
     const dy = angularRadius / radians;
     selection = {
-      name: `Радиус ${number.format(km)} км`, area: 4 * Math.PI * earthRadius ** 2 * distance,
-      details: `${center.lat.toFixed(4)}°, ${L.Util.wrapNum(center.lng, [-180,180]).toFixed(4)}°`,
+      name: place?.name || `Радиус ${number.format(km)} км`, area: 4 * Math.PI * earthRadius ** 2 * distance,
+      details: place?.source || `${center.lat.toFixed(4)}°, ${L.Util.wrapNum(center.lng, [-180,180]).toFixed(4)}°`,
+      place,
       circle: true, center, radius: km,
       extents: [{ west: center.lng - dx, east: center.lng + dx, south: center.lat - dy, north: center.lat + dy }],
       contains: (lon, lat) => Math.sin((lat * radians - latitude) / 2) ** 2
@@ -198,8 +189,8 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     onChange?.(getSelection());
   }
 
-  function selectPolygon(geometry, name, details) {
-    selection = { ...polygonSelection(geometry), name, details, geometry };
+  function selectPolygon(geometry, name, details, boundaryRef) {
+    selection = { ...polygonSelection(geometry), name, details, geometry, boundaryRef };
     vertices = [];
     redraw();
     setMethod('report');
@@ -236,7 +227,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     if (!byId(tool).hidden) byId(tool).focus();
   });
   for (const [id] of modes) byId(id).disabled = false;
-  const changeRadius = () => { if (selection?.circle) selectCircle(selection.center); };
+  const changeRadius = () => { if (selection?.circle) selectCircle(selection.center, selection.place); };
   radius.addEventListener('input', changeRadius);
   for (const button of scope.querySelectorAll('[data-radius]')) button.addEventListener('click', () => {
     radius.value = button.dataset.radius;
@@ -274,107 +265,47 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
   }
   byId('area-clear').addEventListener('click', clearSelection);
 
-  function namesFor([name, , aliases]) {
-    return [name, ...aliases, translate(name)].map(normalize);
-  }
-
-  async function loadDistricts(code) {
-    if (lastDistrictSearch?.code === code) return lastDistrictSearch.features;
-    const metadata = await getJSON(`https://www.geoboundaries.org/api/current/gbOpen/${code}/ADM2/`);
-    const url = new URL(metadata.simplifiedGeometryGeoJSON);
-    const download = url.hostname === 'github.com'
-      ? `https://media.githubusercontent.com/media${url.pathname.replace('/raw/', '/')}` : url.href;
-    const { features } = await getJSON(download);
-    lastDistrictSearch = { code, features };
-    return features;
-  }
-
-  function showBoundaryResult(name, label, revision, loadGeometry, source) {
+  function showSearchResult(match, revision) {
     const button = document.createElement('button');
     button.className = 'quiet-button';
     button.type = 'button';
-    button.textContent = label;
+    button.textContent = match.label;
     button.addEventListener('click', async () => {
       if (revision !== searchRevision) return;
       results.textContent = 'Загрузка границы…';
       try {
-        const geometry = await loadGeometry();
+        const roi = await match.load({ radiusKm: radius.validity.valid && radius.valueAsNumber || 5 });
         if (revision !== searchRevision) return;
-        selectPolygon(geometry, name, source);
-        fitBoundary(geometry);
-        results.replaceChildren();
-      } catch {
-        if (revision === searchRevision) results.textContent = 'Не удалось загрузить границы.';
+        if (roi.circle) {
+          radius.value = roi.circle.radius_km;
+          const [lon, lat] = roi.circle.center;
+          const center = L.latLng(lat, lon);
+          setMethod('report');
+          selectCircle(center, roi);
+          map.setView(center, 11, { animate: false });
+        } else {
+          selectPolygon(roi.geometry, roi.name, roi.source, roi.boundary_ref);
+          fitBoundary(roi.geometry);
+        }
+      } catch (error) {
+        if (revision === searchRevision) results.textContent = boundaryLoadMessage(error);
       }
     });
     return button;
   }
 
-  byId('area-search').addEventListener('submit', async (event) => {
+  byId('area-search').addEventListener('submit', async event => {
     event.preventDefault();
     const text = byId('area-query').value.trim();
-    const [query, countryQuery] = text.split(',').map(normalize);
-    if (!query) return;
+    if (!text) return;
     const revision = ++searchRevision;
     results.textContent = 'Поиск границ…';
     try {
-      boundaryIndex ??= getJSON('data/atlas-boundaries/index.json');
-      const index = await boundaryIndex;
-      registerBoundaryNames(index);
+      const matches = await territorySearch.search(text);
       if (revision !== searchRevision) return;
-      const countryEntry = countryQuery && index.find((entry) => !entry[5] && namesFor(entry).includes(countryQuery));
-      const candidates = countryEntry ? index.filter((entry) => entry[3] === countryEntry[3] && entry[5] > 0) : index;
-      const words = query.split(' ');
-      const scored = candidates.map((entry) => {
-        const names = namesFor(entry);
-        const nameText = [...names, normalize(entry[1])].join(' ');
-        if (names.includes(query)) return [0, entry];
-        if (names.some((value) => value.startsWith(query))) return [1, entry];
-        return [words.every((word) => nameText.includes(word)) ? 2 : 3, entry];
-      }).filter(([rank]) => rank < 3).sort((a, b) => a[0] - b[0] || a[1][5] - b[1][5]).slice(0, 8);
-      const matches = scored.map(([, [name, country, , code, id, level]]) => {
-        const isSKO = code === 'KAZ' && name === 'Северо-Казахстанская область';
-        return showBoundaryResult(name, country ? `${name} · ${country}` : name, revision,
-          async () => isSKO ? skoGeometry : (await getJSON(`data/atlas-boundaries/${code}.json`))[id],
-          level === 2 || isSKO ? 'Границы geoBoundaries' : 'Границы Natural Earth');
-      });
-      if (countryEntry && countryEntry[3] !== 'KAZ' && scored[0]?.[0] !== 0 && matches.length < 8) {
-        try {
-          const districts = await loadDistricts(countryEntry[3]);
-          for (const { properties, geometry } of districts) {
-            const name = properties.shapeName;
-            if (!name || !geometry || !normalize(name).includes(query)) continue;
-            matches.push(showBoundaryResult(name, `${name} · ${countryEntry[0]}`, revision, () => geometry, 'Границы geoBoundaries'));
-            if (matches.length === 8) break;
-          }
-        } catch {
-          if (revision === searchRevision && !matches.length) results.textContent = 'Границы районов этой страны недоступны. Можно нарисовать полигон.';
-          if (!matches.length) return;
-        }
-      }
-      if (revision !== searchRevision) return;
-      results.replaceChildren(...matches);
-      if (!matches.length) {
-        const params = new URLSearchParams({ name: countryEntry ? text.split(',')[0].trim() : text, count: 6, language: uiLanguage() });
-        const places = await getJSON(`https://geocoding-api.open-meteo.com/v1/search?${params}`);
-        if (revision !== searchRevision) return;
-        results.replaceChildren(...(places.results ?? []).filter((place) => !countryEntry || namesFor(countryEntry).includes(normalize(place.country ?? ''))).map((place) => {
-          const button = document.createElement('button');
-          button.className = 'quiet-button';
-          button.type = 'button';
-          button.textContent = [place.name, place.admin1, place.country, 'точка + радиус'].filter(Boolean).join(' · ');
-          button.addEventListener('click', () => {
-            setMethod('report');
-            const center = L.latLng(place.latitude, place.longitude);
-            selectCircle(center);
-            map.setView(center, 11, { animate: false });
-          });
-          return button;
-        }));
-        if (!results.children.length) results.textContent = 'Место не найдено. Уточните название или выделите полигон.';
-      }
+      results.replaceChildren(...matches.map(match => showSearchResult(match, revision)));
+      if (!matches.length) results.textContent = 'Место не найдено. Уточните название или выделите полигон.';
     } catch {
-      boundaryIndex = undefined;
       if (revision === searchRevision) results.textContent = 'Не удалось загрузить поиск.';
     }
   });
@@ -396,14 +327,22 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
       const canonical = longitude >= -180 && longitude <= 180 ? longitude : L.Util.wrapNum(longitude, [-180,180]);
       roi.circle = { center: [canonical, selection.center.lat], radius_km: selection.radius };
     }
-    else roi.geometry = selection.geometry;
+    else {
+      roi.geometry = selection.geometry;
+      if (selection.boundaryRef) roi.boundary_ref = selection.boundaryRef;
+    }
     return roi;
   }
   function setSelection(roi) {
     if (!roi) return;
-    if (roi.circle) { radius.value = roi.circle.radius_km; selectCircle(L.latLng(roi.circle.center[1], roi.circle.center[0])); setMethod('report'); }
-    else if (roi.preset === 'sko') selectPolygon(skoGeometry, roi.name || 'Северо-Казахстанская область', roi.source || 'Граница СКО');
-    else if (roi.geometry) selectPolygon(roi.geometry, roi.name || 'Выбранная территория', roi.source || 'Переданная граница');
+    if (roi.circle) {
+      radius.value = roi.circle.radius_km;
+      const [lon, lat] = roi.circle.center;
+      selectCircle(L.latLng(lat, lon), roi.source?.startsWith('GeoNames ·') ? roi : null);
+      setMethod('report');
+    }
+    else if (roi.preset === 'sko') selectPolygon(skoGeometry, roi.name || 'Северо-Казахстанская область', roi.source || 'Граница СКО', roi.boundary_ref);
+    else if (roi.geometry) selectPolygon(roi.geometry, roi.name || 'Выбранная территория', roi.source || 'Переданная граница', roi.boundary_ref);
     else if (roi.bbox) { const [w,s,e,n] = roi.bbox; selectPolygon({ type: 'Polygon', coordinates: [[[w,s],[e,s],[e,n],[w,n],[w,s]]] }, roi.name || 'Прямоугольник', roi.source || 'Граница окна'); }
   }
   function intersectsRegion() {

@@ -21,6 +21,7 @@ from urllib.parse import urlsplit, parse_qs
 from api.analysis import analyze, PLATFORMS
 from api.geometry import circle_polygon, normalize_geometry
 from api.geometry_clip import clip_geometry
+from api.place_boundaries import BoundaryUnavailable, find_boundary
 from api.study_plan import build_plan, load_calendar, assess as assess_study, validate_choices
 from api.revisions import RevisionStore, RevisionError
 
@@ -625,6 +626,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlsplit(self.path)
         try:
+            if parsed.path == '/api/v1/place-boundary':
+                try:
+                    geometry = find_boundary(parse_qs(parsed.query), connection)
+                except BoundaryUnavailable as error:
+                    print(f'City boundary lookup failed: {error.__cause__ or error}', flush=True)
+                    return self.respond(503, {'error': 'Каталог городских границ временно недоступен. Повторите поиск.'})
+                return self.respond(200, {'geometry': geometry})
             if match := re.fullmatch(r'/api/v1/analyses/([0-9a-f]{32})/(snapshot|changes)', parsed.path):
                 identifier, action = match.groups()
                 query = parse_qs(parsed.query)
