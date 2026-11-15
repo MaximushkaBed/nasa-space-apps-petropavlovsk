@@ -137,7 +137,11 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
         const { x, y, count } = bin;
         const half = overview ? Math.min(2.5, (regional ? 1.8 : 1.1) + Math.log2(count) * .14)
           : Math.min(3.8, (regional ? 2.1 : 1.4) + Math.log2(count) * .37);
-        ctx.fillRect(x - half, y - half, half * 2, half * 2);
+        if (overview) {
+          ctx.beginPath();
+          ctx.arc(x, y, half, 0, 2 * Math.PI);
+          ctx.fill();
+        } else ctx.fillRect(x - half, y - half, half * 2, half * 2);
         hitTargets.push({ ...bin, half });
       }
     }

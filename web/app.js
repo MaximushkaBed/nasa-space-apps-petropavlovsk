@@ -248,6 +248,11 @@ function createMap(basemap, boundary, closePanel) {
     const scopeName = roi?.name || 'Весь мир';
     $('layer-scope').textContent = roi ? `Наложения внутри границы · ${scopeName}` : 'Слои на всей карте';
     $('open-area').textContent = roi ? 'Выбранная область' : 'Обзор мира';
+    for (const id of ['area-open-analysis', 'atlas-open-analysis', 'area-radius-open-analysis']) {
+      const available = id === 'area-radius-open-analysis' ? Boolean(roi?.circle) : Boolean(roi);
+      $(id).hidden = !available;
+      $(id).disabled = !available;
+    }
     const regional = !roi || areaAnalysis.intersectsRegion();
     $('local-layers').hidden = !regional;
     root.querySelector('[data-sko-layer]')?.toggleAttribute('hidden', !regional);
@@ -1029,6 +1034,10 @@ async function start() {
     ]);
     calendar = regionalCalendar;
     const reset = createMap(basemap, boundary, closePanel);
+    const openSelectedAnalysis = () => {
+      if (areaAnalysis.getSelection()) bridge.navigate?.('analysis', { from: 'atlas', run: false });
+    };
+    for (const id of ['area-open-analysis', 'atlas-open-analysis', 'area-radius-open-analysis']) $(id).addEventListener('click', openSelectedAnalysis);
     $('open-area').textContent = 'Обзор мира';
     $('sko-example').addEventListener('click', () => {
       stopPlayback();
@@ -1177,9 +1186,28 @@ function getState() {
 function publishContext() {
   if (active && bridge.isActive?.('atlas') !== false) bridge.setContext?.(getState().context);
 }
+function getAnalysisContext() {
+  const selected = getState().context;
+  if (!selected.roi) return null;
+  const inherited = bridge.getContext?.() || {};
+  const next = { ...inherited, ...selected, history: { ...inherited.history }, baseline: { ...inherited.baseline },
+    grid_km: 10, quality: 'sp', daynight: 'all' };
+  const start = $('study-start').value, end = $('study-end').value;
+  if (start && end) {
+    next.history = { start, end };
+    next.baseline = { start: $('study-baseline-start').valueAsNumber, end: $('study-baseline-end').valueAsNumber };
+  }
+  const platform = $('study-platform').value;
+  if (['Aqua', 'Terra', 'Suomi-NPP', 'NOAA-20', 'NOAA-21'].includes(platform)) next.platform = platform;
+  if (next.focus && (next.focus.start < next.history.start || next.focus.end > next.history.end)) {
+    next.focus = null;
+    bridge.notice?.('Дата карты вне периода исследования; выберите период в анализе.');
+  }
+  return next;
+}
 const ready = start();
 return {
-  ready, getState,
+  ready, getState, getAnalysisContext,
   async activate(options = {}) {
     const token=++activation;
     active = true;

@@ -39,6 +39,7 @@
           <a class="quiet-button" href="#activity-calendar" aria-controls="analysis-panel" aria-expanded="false">Календарь активности</a>
           <a class="quiet-button" href="#external-factors" aria-controls="analysis-panel" aria-expanded="false">Внешние связи</a>
           <button type="button" class="quiet-button" id="open-layers" aria-controls="map-layer-controls" aria-expanded="false">Слои</button>
+          <button type="button" class="quiet-button area-analysis-action" id="atlas-open-analysis" hidden disabled>Анализ территории →</button>
         </nav>
       </header>
 
@@ -46,7 +47,7 @@
         <button type="button" id="zoom-in" aria-label="Приблизить карту">+</button>
         <button type="button" id="zoom-out" aria-label="Отдалить карту">−</button>
         <div class="area-tools" role="group" aria-label="Выделение территории">
-          <button type="button" id="area-circle" aria-label="Точка и радиус" title="Точка и радиус" aria-pressed="false" aria-controls="area-panel" disabled>
+          <button type="button" id="area-circle" aria-label="Круговая область для анализа" title="Круговая область для анализа" aria-pressed="false" aria-controls="area-panel" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M12 4v2m0 12v2m-8-8h2m12 0h2"/></svg>
           </button>
           <button type="button" id="area-polygon" aria-label="Нарисовать полигон" title="Нарисовать полигон" aria-pressed="false" aria-controls="area-panel" disabled>
@@ -108,6 +109,7 @@
         <div class="area-presets" id="area-presets" hidden>
           <button type="button" class="quiet-button" data-radius="1">1</button><button type="button" class="quiet-button" data-radius="2">2</button><button type="button" class="quiet-button" data-radius="3">3</button><button type="button" class="quiet-button" data-radius="5">5</button><button type="button" class="quiet-button" data-radius="10">10</button><button type="button" class="quiet-button" data-radius="15">15 км</button>
         </div>
+        <button type="button" class="quiet-button area-analysis-action" id="area-radius-open-analysis" hidden disabled>Анализ территории →</button>
         <div class="area-presets" id="area-polygon-controls" hidden>
           <button class="quiet-button" id="area-finish" type="button" disabled>Замкнуть</button>
           <button class="quiet-button" id="area-undo" type="button" disabled>Убрать точку</button>
@@ -132,6 +134,7 @@
           <strong class="area-count" id="area-count"></strong>
           <p class="layer-caption" id="area-coverage" hidden></p>
           <ul id="area-platforms" class="area-platforms"></ul>
+          <button type="button" class="quiet-button area-analysis-action" id="area-open-analysis" hidden disabled>Анализ территории →</button>
           <button type="button" class="quiet-button" id="area-clear" hidden>Очистить выделение</button>
         </section>
       </aside>
