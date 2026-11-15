@@ -9,6 +9,7 @@ import { createAreaAnalysis, inRing } from './area-analysis.js?v=layer-values';
 import { createAreaLayerClip } from './area-layer-clip.js';
 import { createAtlasStudy } from './atlas-study.js?v=full-archive';
 import { createLayerReadout } from './layer-values.js?v=archive';
+import { createMapNotice } from './map-notice.js';
 import { addDays, createPeriodPicker, daysBetween } from './period-picker.js?v=atlas-periods';
 
 export function mountAtlas(root, bridge = {}) {
@@ -44,6 +45,8 @@ let areaAnalysis;
 let areaClip;
 let study;
 let clearLayerReadout;
+let detailNoticeRevision = 0;
+const detailNotice = createMapNotice($('fire-detail-notice'));
 let fireDisplay = 'points';
 let worldArchive;
 let worldFrame;
@@ -229,6 +232,7 @@ function createMap(basemap, boundary, closePanel) {
   fireOverlay = createFireOverlay(map, () => worldArchive?.platforms ?? [], number, withinRegion, () => !areaAnalysis.drawing());
   fireViewport = createFireViewport(map, fireDetailZoom, (frame) => {
     if (frame === viewportFrame) return;
+    ++detailNoticeRevision;
     viewportFrame = frame;
     map.closePopup();
     if (!presentFireFrame()) renderFireLayer();
@@ -441,33 +445,40 @@ function renderFireLayer(points = firePoints()) {
   const grouped = Boolean(worldFrame && worldFrame.start !== worldFrame.end);
   const detail = displayedViewport?.status === 'ok' && displayedViewport.coversView() ? displayedViewport.points : undefined;
   const overview = grouped && !detail;
-  $('heat-legend').hidden = !visible || fireDisplay !== 'heat';
+  const waitingForDetail = overview && map.getZoom() >= fireDetailZoom;
+  $('heat-legend').hidden = !visible || fireDisplay !== 'heat' || waitingForDetail;
   $('heat-legend').lastChild.textContent = grouped && !detail ? ' Плотность по сводке' : ' Плотность детекций';
-  $('world-point-legend').hidden = !visible || fireDisplay !== 'points';
+  $('world-point-legend').hidden = !visible || fireDisplay !== 'points' || waitingForDetail;
   $('world-point-legend').classList.toggle('grouped', overview);
-  $('world-point-legend').lastChild.textContent = overview ? ' Число детекций в группе · положение приблизительное' : ' Пиксели MODIS / VIIRS';
+  $('world-point-legend').lastChild.textContent = overview ? ' Группы детекций · число по нажатию' : ' Пиксели MODIS / VIIRS';
   const status = viewportFrame?.status;
   const coverage = viewportFrame?.missing?.length ? ' В архиве есть пропуски дат.' : '';
   const retainingPrevious = worldFrame && (worldFrame.path !== requestedFire?.path || worldFrame.satellite !== requestedFire?.satellite
     || (worldFrame.local && !displayedViewport?.coversView()));
   const detailFailure = ['too_wide', 'too_dense', 'too_slow', 'unavailable', 'error'].includes(status);
-  let message = viewportFrame !== displayedViewport && status === 'ok' ? ''
-    : status === 'ok' ? `${viewportFrame.points.length ? (viewportFrame.method === 'archive' ? 'Исходный архив · без фильтра качества.' : '')
-    : 'В архиве для этого участка нет детекций.'}${coverage}`.trim() : {
+  const provenance = viewportFrame === displayedViewport && status === 'ok'
+    ? `${viewportFrame.points.length ? (viewportFrame.method === 'archive' ? 'Исходный архив · без фильтра качества.' : '')
+      : 'В архиве для этого участка нет детекций.'}${coverage}`.trim() : '';
+  $('fire-detail-provenance').textContent = visible ? provenance : '';
+  $('fire-detail-provenance').hidden = !visible || !provenance;
+  const message = {
     too_wide: 'Приблизьте карту, чтобы увидеть отдельные детекции.',
-    too_dense: 'Слишком много детекций. Приблизьте карту или сократите период.',
+    too_dense: 'Приблизьте карту, чтобы увидеть отдельные детекции, или сократите период.',
     too_slow: viewportFrame?.reason === 'busy' ? 'Сервер ещё загружает предыдущий участок. Повторите запрос.'
       : 'Область загружается долго. Приблизьте карту или сократите период.',
     unavailable: 'Исходные детекции за этот период недоступны.',
     error: 'Детекции на этом участке не загрузились.',
   }[status];
-  if (overview && map.getZoom() >= fireDetailZoom) {
-    message = `${message || (status === 'loading' ? 'Загружаем отдельные детекции.' : '')} Показаны сводные группы с количеством детекций.`.trim();
-  }
-  $('fire-detail-status').textContent = visible && message
-    ? `${message}${retainingPrevious && detailFailure ? ' На карте остаются предыдущие данные.' : ''}` : '';
-  $('fire-detail-status').hidden = !visible || !message;
-  $('fire-detail-retry').hidden = !visible || !['error', 'too_slow'].includes(status);
+  if (visible && detailFailure) detailNotice.show({
+    key: `${requestedFire?.path}/${requestedFire?.start}/${requestedFire?.end}/${requestedFire?.satellite}/${detailNoticeRevision}/${status}/${viewportFrame?.reason || ''}`,
+    message: `${message}${retainingPrevious && !waitingForDetail ? ' На карте остаются предыдущие данные.' : ''}`,
+  });
+  else detailNotice.clear();
+  const retry = $('fire-detail-retry');
+  const retryPending = visible && status === 'loading' && !retry.hidden;
+  retry.hidden = !visible || (!retryPending && !['error', 'too_slow'].includes(status));
+  retry.setAttribute('aria-disabled', String(retryPending));
+  retry.setAttribute('aria-busy', String(retryPending));
   const regionalCount = fireOverlay(points, fireDisplay, visible, grouped, detail);
   updateFireLoading();
   return regionalCount;
@@ -1113,7 +1124,9 @@ async function start() {
     $('world-wind-flow').addEventListener('change', renderLayers);
     $('play-weather').addEventListener('click', toggleWeatherPlayback);
     $('fire-layer').addEventListener('change', loadWorldFrame);
-    $('fire-detail-retry').addEventListener('click', fireViewport.retry);
+    $('fire-detail-retry').addEventListener('click', () => {
+      if ($('fire-detail-retry').getAttribute('aria-disabled') !== 'true') fireViewport.retry();
+    });
     for (const [id, view] of [['fire-points', 'points'], ['fire-heat', 'heat']]) {
       $(id).addEventListener('click', () => {
         fireDisplay = view;
@@ -1226,6 +1239,7 @@ return {
   },
   deactivate() {
     active = false;++activation;
+    detailNotice.clear();
     worldRequest?.controller.abort();
     worldRequest = undefined;
     if (map) savedCamera = { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() };

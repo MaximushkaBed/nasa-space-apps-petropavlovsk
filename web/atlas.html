@@ -59,8 +59,13 @@
         </div>
       </div>
       <p id="area-instruction" class="area-instruction" role="status" hidden></p>
-      <div class="map-message" id="map-message" role="status" hidden></div>
-      <div id="layer-readout" role="status" aria-label="Значения слоёв" hidden></div>
+      <div class="map-notices">
+        <div class="fire-detail-notice" id="fire-detail-notice" role="status" aria-live="polite" aria-atomic="true" hidden>
+          <span id="fire-detail-status" data-notice-text></span>
+        </div>
+        <div class="map-message" id="map-message" role="status" hidden></div>
+        <div id="layer-readout" role="status" aria-label="Значения слоёв" hidden></div>
+      </div>
       <div class="fire-loading" id="fire-loading" role="status" aria-atomic="true">
         <span class="fire-loading-spinner" aria-hidden="true"></span>
         <span id="fire-loading-label">Подключаемся к архиву FIRMS…</span>
@@ -212,8 +217,8 @@
           <span id="archive-caption"></span>
         </div>
         <div class="fire-detail-caption">
-          <span id="fire-detail-status" role="status" hidden></span>
-          <button id="fire-detail-retry" class="quiet-button" type="button" hidden>Повторить</button>
+          <span id="fire-detail-provenance" hidden></span>
+          <button id="fire-detail-retry" class="quiet-button" type="button" hidden>Повторить загрузку</button>
         </div>
         <p id="imagery-status" class="layer-caption" role="status" hidden>Часть снимков Esri недоступна. На этих участках показан Blue Marble.</p>
       </details>
