@@ -5,13 +5,14 @@ const modeLabels={within:'По дням · внутри месяцев',pooled:'
 const format=new Intl.NumberFormat('ru',{maximumFractionDigits:3});
 const finite=Number.isFinite;
 const text=value=>value===null||value===undefined?'—':typeof value==='number'?format.format(value):String(value);
+const safeCell=value=>/^[\r\n\t ]*[=+@-]/.test(value)?`'${value}`:value;
 const element=(tag,attrs={},content)=>{const node=document.createElement(tag);Object.entries(attrs).forEach(([name,value])=>node.setAttribute(name,value));if(content!==undefined)node.textContent=content;return node;};
 const svg=(tag,attrs={},content)=>{const node=document.createElementNS(svgNS,tag);Object.entries(attrs).forEach(([name,value])=>node.setAttribute(name,value));if(content!==undefined)node.textContent=content;return node;};
 
-export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=false}){
+export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=false,local=false,onDataChange}){
  root.classList.add('matrix-tool');
  root.innerHTML=`<div class="matrix-intro"><h4>Связи факторов выбранной территории</h4><p>Корреляция Спирмена показывает совместное изменение величин и не доказывает причину горения.</p></div>
- <p class="matrix-scope"></p><button class="primary matrix-run" type="button" ${automatic?'hidden':''}>Рассчитать матрицу</button>
+ <p class="matrix-scope"></p><button class="primary matrix-run" type="button" ${automatic||local?'hidden':''}>Рассчитать матрицу</button>
  <p class="matrix-status" role="status">Сначала постройте временной анализ. Матрица рассчитывается отдельным запросом.</p><progress class="matrix-progress" max="100" value="0" hidden aria-label="Прогресс расчёта матрицы"></progress>
  <div class="matrix-controls" hidden><label>Метод<select class="matrix-mode"><option value="within">По дням · внутри месяцев</option><option value="pooled">По дням · весь период</option><option value="space">По участкам</option></select></label><label>Спутник<select class="matrix-platform"></select></label></div>
  <div class="matrix-grid"></div><p class="matrix-definition" hidden></p>
@@ -20,6 +21,7 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
  <details class="matrix-warnings" hidden><summary>Ограничения данных и метода</summary><div></div></details>
  <details class="matrix-provenance" hidden><summary>Источники и параметры матрицы</summary><pre></pre></details>`;
  const $=selector=>root.querySelector(selector);
+ if(local)for(const selector of ['.matrix-intro','.matrix-status'])$(selector).hidden=true;
  let id=null,result=null,busy=false,paused=false,visible=false,epoch=0,pollEpoch=0,mode='within',platform=null,pair=[0,1],analysisId=null,lastSource=null,hasError=false,restorePlatform=null;
  function status(message,error=false){hasError=error;$('.matrix-status').textContent=message;$('.matrix-status').classList.toggle('is-error',error);}
  function fields(){return mode==='space'?result?.space_factors||[]:result?.time_factors||[];}
@@ -27,6 +29,7 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
  function detailAt(i,j){return result?.pair_details?.[platform]?.[mode]?.[i]?.[j]||{};}
  function roiName(config){const names={world:'Весь мир',sko:'Северо-Казахстанская область',california:'Калифорния · окно',brazil:'Мату-Гросу · окно',canada:'Альберта · окно'};return config?.roi_name||names[config?.preset]||(Array.isArray(config?.bbox)?`Область ${config.bbox.map(value=>text(value)).join(', ')}`:'Выбранная область');}
  function refresh(){
+  if(local)return;
   const analysis=getAnalysis();
   const config=result?.config||analysis?.result?.config;
   $('.matrix-scope').textContent=config?`${roiName(config)} · ${config.start} — ${config.end} · сетка ${config.grid_km} км · исходные величины · ${config.quality==='all'?'SP + предварительные NRT':'SP'} · локальная видимость неизвестна`:'Матрица относится к территории и истории текущего анализа.';
@@ -35,6 +38,7 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
   $('.matrix-progress').hidden=!busy;
   if(!automatic&&!busy&&!result&&analysis&&!hasError)status('Нажмите «Рассчитать матрицу», чтобы получить факторы для этой территории.');
   if(analysis?.platform!==lastSource){lastSource=analysis?.platform;if(result&&result.platforms?.includes(lastSource)){platform=lastSource;$('.matrix-platform').value=platform;if(visible)render();}}
+  onDataChange?.({id,result,platform});
  }
  async function start(){
   const analysis=getAnalysis();if(!analysis||analysis.platform==='all'){status('Для матрицы нужен готовый анализ и выбранный спутник.',true);return;}
@@ -72,18 +76,22 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
  function hideResults(){for(const selector of ['.matrix-controls','.matrix-warnings','.matrix-definition','.matrix-pair','.matrix-exports','.matrix-provenance'])$(selector).hidden=true;$('.matrix-grid').replaceChildren();}
  function showResults(){
   for(const selector of ['.matrix-controls','.matrix-definition','.matrix-exports','.matrix-provenance'])$(selector).hidden=false;
+  if(local) $('.matrix-controls').hidden=true;
   const warnings=result.warnings||[];const list=$('.matrix-warnings div');list.replaceChildren();$('.matrix-warnings').hidden=!warnings.length;
   for(const warning of warnings){const p=element('p',{},typeof warning==='string'?warning:JSON.stringify(warning));list.append(p);}
-  $('.matrix-provenance pre').textContent=JSON.stringify({analysis_id:analysisId,matrix_id:id,config:result.config,snapshot_at:result.snapshot_at,through:result.through,version:result.version,provenance:result.provenance,warnings:result.warnings},null,2);
+  const { labels, series, ...file } = result.imported || {};
+  $('.matrix-provenance pre').textContent=JSON.stringify({analysis_id:analysisId,matrix_id:id,config:result.config,snapshot_at:result.snapshot_at,through:result.through,version:result.version,provenance:result.provenance,file:local?file:undefined,warnings:result.warnings},null,2);
  }
  function reasonLabel(detail,cell){
   const names={insufficient_pairs:'Недостаточно пар',insufficient_pairs_or_strata:'Недостаточно пар или пригодных временных групп',insufficient_data:'Недостаточно данных',insufficient_overlap:'Недостаточно общих наблюдений',constant:'Постоянная величина',constant_input:'Постоянная величина',no_variation:'Нет вариации',unavailable:'Фактор недоступен',no_data:'Нет данных'};
   return detail.reason?(names[detail.reason]||'Оценка недоступна'):finite(cell.rho)?'':`Корреляция не оценена${finite(cell.n)?` · общих наблюдений ${cell.n}`:''}`;
  }
  function pairCounts(detail,cell){return {overlap:detail.n_overlap??cell.n,used:detail.n_used??(finite(cell.rho)?cell.n:null)};}
+ function axisLabel(){return result.imported?.axis||modeLabels[mode];}
  function render(){
   if(!result)return;
-  const factors=fields(),table=element('table'),caption=element('caption',{},`${modeLabels[mode]} · ${platform||'спутник не выбран'} · ρ Спирмена и число пар`);table.append(caption);
+  const factors=fields(),table=element('table'),caption=element('caption',{},`${axisLabel()} · ${platform||'спутник не выбран'} · ρ Спирмена и число пар`);table.append(caption);
+  if(local)table.style.minWidth=`${Math.max(340, 95 + factors.length * 53)}px`;
   const head=element('tr');head.append(element('th',{scope:'col'},'Фактор'));factors.forEach(f=>head.append(element('th',{scope:'col',title:`${f.label}${f.unit?` · ${f.unit}`:''}`},f.short||f.label)));
   const thead=element('thead');thead.append(head);table.append(thead);const tbody=element('tbody');
   factors.forEach((factor,i)=>{
@@ -97,12 +105,17 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
     button.addEventListener('click',()=>{pair=[i,j];render();});td.append(button);row.append(td);
    });tbody.append(row);
   });table.append(tbody);$('.matrix-grid').replaceChildren(table);
-  $('.matrix-definition').textContent=(mode==='within'?'ρ объединяет связи внутри отдельных месяцев и лет. Сезонность и общий тренд могут отличаться от связи внутри месяцев.':mode==='pooled'?'ρ рассчитана по общим доступным датам всего периода. Общая сезонность может усиливать видимую связь.':'ρ сравнивает участки этой территории. Показатель горения — плотность исходных ячейко-дней; размер участка не равен выгоревшей площади.')+' n — пары, использованные для оценки ρ; «общ.» — доступные пары до отбора. Обе численности показаны в выбранной паре.';
+  $('.matrix-definition').textContent=(local?`Для расчёта ρ нужно не менее ${result.imported.minimum} общих наблюдений.`:mode==='within'?'ρ объединяет связи внутри отдельных месяцев и лет. Сезонность и общий тренд могут отличаться от связи внутри месяцев.':mode==='pooled'?'ρ рассчитана по общим доступным датам всего периода. Общая сезонность может усиливать видимую связь.':'ρ сравнивает участки этой территории. Показатель горения — плотность исходных ячейко-дней; размер участка не равен выгоревшей площади.')+' n — пары, использованные для оценки ρ; «общ.» — доступные пары до отбора. Обе численности показаны в выбранной паре.';
   if(pair.some(index=>index>=factors.length))pair=[0,Math.min(1,factors.length-1)];
   renderPair();
  }
  function pairedValues(){
   const factors=fields(),[i,j]=pair;if(!factors[i]||!factors[j])return [];
+  const imported=result.imported;
+  if(imported)return imported.series.flatMap((row,index)=>{
+   const x=row[i],y=row[j];
+   return finite(x)&&finite(y)?[{x,y,label:imported.labels[index]}]:[];
+  });
   if(mode==='space')return (result.space_units||[]).flatMap(unit=>{
    const value=index=>index===0?unit.fire?.[platform]:unit.values?.[index-1];const x=value(i),y=value(j);
    return finite(x)&&finite(y)?[{x,y,label:String(unit.id),unit}]:[];
@@ -118,10 +131,11 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
   $('.matrix-pair').hidden=false;const cell=cellAt(i,j),detail=detailAt(i,j),points=pairedValues();
   $('.matrix-pair-title').textContent=`${factors[i].label} × ${factors[j].label}`;
   const counts=pairCounts(detail,cell);
-  $('.matrix-pair-summary').textContent=`${platform} · ${modeLabels[mode]} · ${finite(cell.rho)?`ρ ${text(cell.rho)}`:reasonLabel(detail,cell)} · общих пар ${text(counts.overlap)} · использовано ${text(counts.used)} · пар на рисунке ${points.length}`;
-  $('.matrix-pair-note').textContent=mode==='within'?'На рисунке — исходные пары по датам, а ρ выше объединяет внутримесячные связи. Число нарисованных пар может отличаться от n использованных в оценке. Пропуски исключены попарно; они не заменяются нулями.':`Точки показывают реальные ${mode==='space'?'участки':'даты'} с обеими доступными величинами. Пропуски исключены попарно; они не заменяются нулями. Корреляция не устанавливает причину горения.`;
+  const plotPoints=local&&points.length>1500?Array.from({length:1500},(_,i)=>points[Math.floor(i*(points.length-1)/1499)]):points;
+  $('.matrix-pair-summary').textContent=`${platform} · ${axisLabel()} · ${finite(cell.rho)?`ρ ${text(cell.rho)}`:reasonLabel(detail,cell)} · общих пар ${text(counts.overlap)} · использовано ${text(counts.used)} · пар на рисунке ${plotPoints.length}`;
+  $('.matrix-pair-note').textContent=local?'Пропуски исключены отдельно для каждой пары. При большом числе наблюдений график показывает до 1 500 точек, а ρ считается по всем доступным парам.':mode==='within'?'На рисунке — исходные пары по датам, а ρ выше объединяет внутримесячные связи. Число нарисованных пар может отличаться от n использованных в оценке. Пропуски исключены попарно; они не заменяются нулями.':`Точки показывают реальные ${mode==='space'?'участки':'даты'} с обеими доступными величинами. Пропуски исключены попарно; они не заменяются нулями. Корреляция не устанавливает причину горения.`;
   $('.matrix-on-map').hidden=mode!=='space'||!points.length||bridge.matrixMapAvailable!==true;
-  drawScatter(points,factors[i],factors[j]);
+  drawScatter(plotPoints,factors[i],factors[j]);
  }
  function drawScatter(points,xFactor,yFactor){
   const host=$('.matrix-scatter');host.replaceChildren();
@@ -142,9 +156,20 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
   if(!result){status('Сначала рассчитайте матрицу.',true);return;}
   if(type==='json'){save(new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),`nasa-space-apps-matrix-${id}.json`);return;}
   const rows=[['matrix_id','analysis_id','platform','mode','factor_x','factor_y','rho','n','reason','n_overlap','n_used','strata_used','mask_sha256','roi','start','end','quality','snapshot_at']];
+  if(local)rows[0].push('factor_x_label','factor_y_label');
   for(const name of result.platforms||[])for(const method of ['within','pooled','space']){
+   const cells=result.results?.[name]?.[method];
+   if(!cells)continue;
    const fs=method==='space'?result.space_factors||[]:result.time_factors||[];
-   fs.forEach((a,i)=>fs.forEach((b,j)=>{const c=result.results?.[name]?.[method]?.[i]?.[j],d=result.pair_details?.[name]?.[method]?.[i]?.[j]||{};const rho=Array.isArray(c)?c[0]:c?.rho,n=Array.isArray(c)?c[1]:c?.n;rows.push([id,analysisId,name,method,a.id,b.id,rho,n,d.reason,d.n_overlap,d.n_used,d.strata_used,d.mask_sha256,roiName(result.config),result.config?.start,result.config?.end,result.config?.quality,result.snapshot_at]);}));
+   fs.forEach((a,i)=>fs.forEach((b,j)=>{
+    const cell=cells[i]?.[j], detail=result.pair_details?.[name]?.[method]?.[i]?.[j]||{};
+    const [rho,n]=Array.isArray(cell)?cell:[cell?.rho,cell?.n];
+    const row=[id,analysisId,name,method,a.id,b.id,rho,n,detail.reason,detail.n_overlap,detail.n_used,
+     detail.strata_used,detail.mask_sha256,safeCell(roiName(result.config)),result.config?.start,result.config?.end,
+     result.config?.quality,result.snapshot_at];
+    if(local)row.push(safeCell(a.label),safeCell(b.label));
+    rows.push(row);
+   }));
   }
   const csv=rows.map(row=>row.map(value=>`"${String(value??'').replaceAll('"','""')}"`).join(',')).join('\r\n');save(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),`nasa-space-apps-matrix-${id}.csv`);
  }
@@ -160,13 +185,19 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
   reset();analysisId=getAnalysis()?.id;id=matrixId;
   accept(snapshot);
  }
+ function loadFileResult(snapshot){
+  id='file';analysisId=snapshot.analysis_id;result=snapshot;mode='pooled';platform=result.platforms[0];
+  pair=result.imported.initialPair;
+  $('.matrix-scope').textContent=result.imported.fileName+(result.imported.sheet?` · ${result.imported.sheet}`:'');
+  showResults();render();
+ }
  function pause(){paused=true;++pollEpoch;}
  function resume(){paused=false;if(busy&&id&&!result)poll();}
  async function restore(matrixId,state={}){const analysis=getAnalysis();if(!analysis)return;reset();analysisId=analysis.id;id=String(matrixId);busy=true;restorePlatform=state?.platform||null;if(state&&['within','pooled','space'].includes(state.mode)){mode=state.mode;$('.matrix-mode').value=mode;}if(Array.isArray(state?.pair)&&state.pair.length===2&&state.pair.every(index=>Number.isInteger(index)&&index>=0))pair=[...state.pair];refresh();status('Восстанавливаю сохранённую матрицу…');if(!paused)await poll();}
  $('.matrix-run').addEventListener('click',start);
  $('.matrix-mode').addEventListener('change',()=>{mode=$('.matrix-mode').value;render();});
- $('.matrix-platform').addEventListener('change',()=>{platform=$('.matrix-platform').value;render();});
+ $('.matrix-platform').addEventListener('change',()=>{platform=$('.matrix-platform').value;render();onDataChange?.({id,result,platform});});
  $('.matrix-export-csv').addEventListener('click',()=>exportData('csv'));$('.matrix-export-json').addEventListener('click',()=>exportData('json'));$('.matrix-export-image').addEventListener('click',exportImage);
  $('.matrix-on-map').addEventListener('click',()=>{const factors=fields();bridge.navigate?.('atlas',{context:getAnalysis()?.context,from:'matrix',matrixPair:{matrixId:id,platform,mode,factor_x:factors[pair[0]]?.id,factor_y:factors[pair[1]]?.id,unitIds:pairedValues().map(point=>point.unit.id)}});});
- refresh();return {refresh,reset,pause,resume,restore,start,loadSnapshot,setVisible(value){visible=value;if(visible&&result)render();},getState:()=>({id,result,busy,platform,mode,pair:[...pair]}),exportData,exportImage};
+ refresh();return {refresh,reset,pause,resume,restore,start,loadSnapshot,loadFileResult,setVisible(value){visible=value;if(visible&&result)render();},getState:()=>({id,result,busy,platform,mode,pair:[...pair]}),exportData,exportImage};
 }

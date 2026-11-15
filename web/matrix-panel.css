@@ -27,3 +27,25 @@
 :where(.analysis-workbench) .matrix-tool .matrix-warnings{border-left:2px solid var(--app-warning);padding:1px 9px;background:var(--app-warning-bg);margin:10px 0}
 :where(.analysis-workbench) .matrix-tool .matrix-warnings p{color:var(--app-warning)}
 @media(max-width:620px){:where(.analysis-workbench) .matrix-tool table{font-size:8px}:where(.analysis-workbench) .matrix-tool th:first-child{width:72px}:where(.analysis-workbench) .matrix-tool .matrix-controls{grid-template-columns:1fr}:where(.analysis-workbench) .matrix-tool .matrix-cell{font-size:8px}}
+.matrix-import {
+  margin-bottom: 16px;
+  border: 1px solid var(--app-line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--app-control);
+  color: var(--app-ink);
+}
+.matrix-import summary { cursor: pointer; font-weight: 650; }
+.matrix-import summary span { margin-inline-start: 6px; font-size: 11px; font-weight: 400; color: var(--app-muted); }
+.matrix-import p { margin: 8px 0; font-size: 12px; line-height: 1.5; color: var(--app-muted); }
+.matrix-import-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 8px; margin: 8px 0; }
+.matrix-import-fields label { min-width: 0; font-size: 12px; }
+.matrix-import-fields :is(select, input) { display: block; width: 100%; min-width: 0; margin: 5px 0 0; }
+.matrix-file { font: inherit; }
+.matrix-file::file-selector-button { margin-inline-end: 7px; padding: 4px 6px; font: inherit; }
+.matrix-file-columns { min-width: 0; margin: 10px 0; padding: 7px; border: 1px solid var(--app-line); border-radius: 5px; }
+.matrix-file-columns div { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(135px, 100%), 1fr)); gap: 3px 8px; max-height: 155px; overflow: auto; }
+.matrix-file-columns label { display: flex; align-items: center; gap: 6px; padding: 3px; font-size: 12px; overflow-wrap: anywhere; }
+.matrix-file-columns input { flex: none; margin: 0; }
+.matrix-file-status.is-error { color: var(--app-warning); }
+.matrix-file-result .matrix-scope { overflow-wrap: anywhere; }

@@ -1,4 +1,5 @@
-import { mountMatrixPanel } from './matrix-panel.js?v=archive';
+import { mountMatrixPanel } from './matrix-panel.js?v=file-matrix';
+import { mountFileMatrix } from './matrix-file-panel.js?v=file-matrix';
 import { sameScientificConfig } from './scientific-context.js';
 
 const sources = ['Aqua', 'Terra', 'Suomi-NPP', 'NOAA-20', 'NOAA-21'];
@@ -47,11 +48,17 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     const selected = getPlatform();
     return (available(selected) ? selected : preferred.find(available)) || 'NOAA-20';
   }
-  const matrix = mountMatrixPanel($('external-factors'), {
+  const factorsPanel = $('external-factors');
+  const importRoot = document.createElement('section');
+  const atlasMatrixRoot = document.createElement('div');
+  factorsPanel.append(importRoot, atlasMatrixRoot);
+  const importedMatrix = mountFileMatrix(importRoot);
+  const matrix = mountMatrixPanel(atlasMatrixRoot, {
     request, automatic: true, getAnalysis: () => {
       const analysis = allWorld && !roi ? worldSnapshot?.analysis : job;
       return analysis && { ...analysis, platform: matrixSource() };
     },
+    onDataChange: importedMatrix.setAtlas,
   });
 
   function setScope(next) {
