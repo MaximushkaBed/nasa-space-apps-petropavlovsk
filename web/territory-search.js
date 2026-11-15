@@ -2,9 +2,38 @@ import { registerBoundaryNames } from './i18n.js';
 
 // The atlas boundary catalogue, ranking and boundary sources are shared with
 // area-analysis.js. Loading a result never simplifies or rewrites its geometry.
+import { inRing } from './area-analysis.js?v=layer-values';
 const normalize = name => String(name || '').toLocaleLowerCase().replace(/ё/g, 'е').normalize('NFD')
   .replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const namesFor = ([name, , aliases]) => [name, ...aliases].map(normalize);
+
+function contains(geometry, [lon, lat]) {
+  const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+  return polygons.some(rings => inRing(rings[0], lon, lat) && !rings.slice(1).some(ring => inRing(ring, lon, lat)));
+}
+
+// An interior point, rather than a bounding-box centre that may fall outside a
+// concave district or in a hole. Exact clipping is still required on selection.
+function interiorPoint(geometry) {
+  const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+  const candidates = [];
+  for (const rings of polygons) {
+    const box = geometryBounds({type: 'Polygon', coordinates: rings});
+    for (const fraction of [.5, .25, .75]) {
+      const y = box[1] + (box[3] - box[1]) * fraction, intersections = [];
+      for (const ring of rings) for (let i = 1; i < ring.length; i++) {
+        const [a, b] = [ring[i - 1], ring[i]];
+        if ((a[1] > y) !== (b[1] > y)) intersections.push(a[0] + (y - a[1]) * (b[0] - a[0]) / (b[1] - a[1]));
+      }
+      intersections.sort((a, b) => a - b);
+      for (let i = 1; i < intersections.length; i++) {
+        const point = [(intersections[i - 1] + intersections[i]) / 2, y];
+        if (contains({type: 'Polygon', coordinates: rings}, point)) candidates.push({point, width: intersections[i] - intersections[i - 1]});
+      }
+    }
+  }
+  return candidates.sort((a, b) => b.width - a.width)[0]?.point;
+}
 
 export function geometryBounds(geometry) {
   if (!['Polygon', 'MultiPolygon'].includes(geometry?.type)) throw new Error('Граница территории недоступна.');
@@ -27,6 +56,12 @@ export function createTerritorySearch(getJSON, getSkoGeometry) {
   let indexPromise;
   const geometryCache = new Map();
   let districtCache;
+  async function index() {
+    indexPromise ??= getJSON('data/atlas-boundaries/index.json').catch(error => {indexPromise = null;throw error;});
+    const catalogue = await indexPromise;
+    registerBoundaryNames(catalogue);
+    return catalogue;
+  }
   async function boundaries(code) {
     if (!geometryCache.has(code)) {
       const promise = getJSON(`data/atlas-boundaries/${code}.json`).catch(error => {geometryCache.delete(code);throw error;});
@@ -45,14 +80,62 @@ export function createTerritorySearch(getJSON, getSkoGeometry) {
     return features;
   }
   return {
+    async children(parentROI, {signal} = {}) {
+      const catalogue = await index();
+      const reference = parentROI?.boundary_ref;
+      let parent = reference && catalogue.find(entry => entry[3] === reference.code && entry[4] === reference.id && entry[5] === reference.level);
+      if (!parent && parentROI?.preset === 'sko') parent = catalogue.find(entry => entry[3] === 'KAZ' && entry[5] === 1 && entry[0] === 'Северо-Казахстанская область');
+      if (!parent && parentROI?.name) {
+        const name = normalize(parentROI.name);
+        const exact = catalogue.filter(entry => normalize(entry[0]) === name);
+        const aliases = catalogue.filter(entry => [entry[0], ...entry[2].filter(alias => normalize(alias) !== normalize(entry[1]))].map(normalize).includes(name));
+        const matches = exact.length ? exact : aliases;
+        if (matches.length === 1) parent = matches[0];
+        else if (parentROI.bbox) for (const entry of matches) {
+          const bbox = geometryBounds((await boundaries(entry[3]))[entry[4]]);
+          if (bbox.every((value, i) => Math.abs(value - parentROI.bbox[i]) < .0001)) {parent = entry;break;}
+        }
+      }
+      if (!parent) return {items: [], parent_ref: null, coverage: {status: 'unknown', message: 'Для этой границы нет подтверждённого уровня в каталоге. Можно выделить её часть на карте.'}};
+      const [parentName, , , code, id, level] = parent;
+      const parent_ref = {code, id, level};
+      const nextLevel = level === 0 ? 1 : code === 'KAZ' && level === 1 ? 2 : null;
+      if (nextLevel === null) return {items: [], parent_ref, coverage: {status: 'unavailable', message: code === 'USA' && level === 1 ? 'Границы округов и городов этого штата в каталоге отсутствуют. Можно выделить часть области на карте.' : 'Более подробных границ для этой территории в каталоге нет. Можно выделить часть на карте.'}};
+      const shapes = await boundaries(code);
+      const parentGeometry = parentROI.geometry?.type === 'Feature' ? parentROI.geometry.geometry : parentROI.geometry || (parentROI.preset === 'sko' ? await getSkoGeometry() : shapes[id]);
+      const parentBox = geometryBounds(parentGeometry);
+      const entries = catalogue.filter(entry => entry[3] === code && entry[5] === nextLevel);
+      const items = [];
+      for (const [name, country, , , childId, childLevel] of entries) {
+        const geometry = shapes[childId], box = geometryBounds(geometry);
+        if (box[0] > parentBox[2] || box[2] < parentBox[0] || box[1] > parentBox[3] || box[3] < parentBox[1]) continue;
+        // ADM1 has a catalogue country identity; KAZ ADM2 has no explicit ADM1
+        // field, so use a true interior point for spatial membership, then
+        // intersect the full geometry when the user chooses it.
+        const point = interiorPoint(geometry);
+        if (nextLevel === 2 && (!point || !contains(parentGeometry, point))) continue;
+        const displayName = name === 'Petropavlovsk' ? 'Петропавловск' : name;
+        const boundary_ref = {code, id: childId, level: childLevel};
+        items.push({id: `${code}:${childId}:${childLevel}`, name: displayName, label: displayName, level: childLevel,
+          source: childLevel === 2 ? 'Границы geoBoundaries' : 'Границы Natural Earth',
+          async load(options = {}) {
+            const clipped = await getJSON('/api/v1/geometry/clip', {method: 'POST', headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({parent: parentGeometry, geometry}), signal: options.signal || signal});
+            return {preset: 'custom', name: displayName, source: childLevel === 2 ? 'Границы geoBoundaries' : 'Границы Natural Earth',
+              geometry: clipped.geometry, bbox: clipped.bbox, clipped: clipped.clipped, boundary_ref, parent_ref};
+          }});
+      }
+      items.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+      return {items, parent_ref, coverage: {status: items.length ? 'available' : 'unavailable',
+        message: nextLevel === 2 ? 'Районы и города из каталога, чья внутренняя точка находится в выбранной области. При выборе граница точно ограничивается этой областью.'
+          : `Регионы страны «${parentName}» из готового каталога. При выборе граница точно ограничивается выбранной территорией.`}};
+    },
     async search(text) {
       const [query, countryQuery] = text.split(',').map(normalize);
       if (!query) return [];
-      indexPromise ??= getJSON('data/atlas-boundaries/index.json').catch(error => {indexPromise = null;throw error;});
-      const index = await indexPromise;
-      registerBoundaryNames(index);
-      const countryEntry = countryQuery && index.find(entry => !entry[5] && namesFor(entry).includes(countryQuery));
-      const candidates = countryEntry ? index.filter(entry => entry[3] === countryEntry[3] && entry[5] > 0) : index;
+      const catalogue = await index();
+      const countryEntry = countryQuery && catalogue.find(entry => !entry[5] && namesFor(entry).includes(countryQuery));
+      const candidates = countryEntry ? catalogue.filter(entry => entry[3] === countryEntry[3] && entry[5] > 0) : catalogue;
       const words = query.split(' ');
       const scored = candidates.map(entry => {
         const names = namesFor(entry), nameText = [...names, normalize(entry[1])].join(' ');
@@ -64,7 +147,7 @@ export function createTerritorySearch(getJSON, getSkoGeometry) {
         return {name, label: country ? `${name} · ${country}` : name, source,
           async load() {
             const geometry = isSko ? await getSkoGeometry() : (await boundaries(code))[id];
-            return {preset: isSko ? 'sko' : 'custom', name, source, geometry, bbox: geometryBounds(geometry)};
+            return {preset: isSko ? 'sko' : 'custom', name, source, geometry, bbox: geometryBounds(geometry), boundary_ref: {code, id, level}};
           }};
       });
       if (countryEntry && countryEntry[3] !== 'KAZ' && scored[0]?.[0] !== 0 && matches.length < 8) {

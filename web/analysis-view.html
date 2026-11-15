@@ -13,7 +13,12 @@
           </div>
           <select id="preset" hidden aria-hidden="true" tabindex="-1"><option value="custom" selected>Своя область</option><option value="sko">Северо-Казахстанская область</option><option value="california">Калифорния · окно</option><option value="brazil">Мату-Гросу · окно</option><option value="canada">Альберта · окно</option></select>
           <p id="analysis-territory-selected" class="territory-selected">Территория пока не выбрана</p>
-          <button class="outline full" id="draw-area" type="button">Выделить прямоугольник на карте</button>
+          <nav id="territory-breadcrumb" class="territory-breadcrumb" aria-label="Путь выбранной территории" hidden></nav>
+          <div id="territory-parts" hidden><label for="territory-child">Часть территории</label><select id="territory-child" disabled><option value="">Нет выбранной территории</option></select><p id="territory-parts-status" class="hint" role="status"></p></div>
+          <button class="outline full" id="refine-area" type="button" hidden>Уточнить участок</button>
+          <div class="analysis-draw-modes" role="group" aria-label="Форма выделения"><button class="outline" id="draw-area" type="button" data-analysis-shape="rectangle" aria-pressed="false">Прямоугольник</button><button class="outline" id="draw-polygon" type="button" data-analysis-shape="polygon" aria-pressed="false">Полигон</button><button class="outline" id="draw-circle" type="button" data-analysis-shape="circle" aria-pressed="false">Круг</button></div>
+          <p id="selection-state" class="hint" role="status" aria-live="polite">Выберите инструмент. Граница изменится после завершения выделения.</p>
+          <button id="selection-world" class="text-button" type="button" hidden>Новая область в мире</button>
           <details id="coordinate-details"><summary>Координаты области</summary><div class="coordinates">
             <label>Запад<input type="number" id="west" step="any" min="-180" max="180" value="-180" required></label>
             <label>Восток<input type="number" id="east" step="any" min="-180" max="180" value="180" required></label>
@@ -71,6 +76,7 @@
           <div class="map-top"><span class="map-chip" id="map-period">Область исследования</span><div class="map-buttons"><button id="fit-area" title="Показать выбранную область" aria-label="Показать выбранную область">↗</button><button id="basemap" aria-pressed="false">Спутник</button></div></div>
           <label class="map-mode-control">Показать на карте<select id="map-mode"><option value="activity">Активность</option><option value="anomaly">Отклонение от базы</option></select></label>
           <div id="draw-instruction" class="draw-instruction" hidden>Нажмите на два противоположных угла области. Esc — отмена.</div>
+          <div id="selection-actions" class="selection-actions" hidden><span id="selection-measure"></span><button id="selection-undo" type="button" class="outline">Удалить точку</button><button id="selection-finish" type="button" class="outline">Применить полигон</button><button id="selection-cancel" type="button" class="outline">Отмена · Esc</button></div>
           <button id="retry-map" class="map-retry" type="button" hidden>Повторить карту</button>
           <div class="map-bottom"><div class="map-key"><span class="color-ramp"></span><span id="map-key-text">Ячейки с зарегистрированной активностью</span></div><span id="map-count"></span></div>
         </section>

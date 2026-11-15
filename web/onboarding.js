@@ -102,6 +102,7 @@ document.querySelector('#app-tour-open').addEventListener('click',showWelcome);
 document.addEventListener('pointerdown',event=>{if(!welcome.hidden&&!welcome.contains(event.target)&&!event.target.closest('#app-tour-open, #app-language'))finish();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&(!card.hidden||!welcome.hidden))finish();});
 document.addEventListener('click',event=>{if(current&&event.target.closest('#app-header a[data-app-view]'))finish();});
+document.addEventListener('nasa:analysis-drawing',event=>{if(event.detail?.active)finish();});
 addEventListener('resize',place);addEventListener('scroll',place,{capture:true,passive:true});
 
 welcome.querySelector('#onboarding-demo').addEventListener('click', async event => {

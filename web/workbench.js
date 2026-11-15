@@ -4,6 +4,7 @@ import { sameScientificConfig, scientificSignature } from './scientific-context.
 import { mountStudyPlanner } from './study-planner.js';
 import { mountStudyRevisions } from './study-revisions.js';
 import { createTerritorySearch, fitTerritory } from './territory-search.js';
+import { createAnalysisSelection, roiGeometry as geometryOfROI } from './analysis-selection.js';
 
 export function mountWorkbench(root, bridge={}) {
 if (!(root instanceof Element)) throw new TypeError('Workbench root is required');
@@ -22,6 +23,7 @@ let active=false, settingsPromise, pendingAnalysis, activation=0, pendingViewSta
 let analysisAbort=null,pendingQuestionNavigation=false,bootstrapPending=true;
 let roiGeometry=null, roiCircle=null, roiName='', roiSource='', retainedFocus=null, rangeFocus=null;
 let territorySelected=false, territoryRevision=0, territoryTimer;
+let roiBoundaryRef=null,roiParentRef=null,territoryParents=[],territoryChildren=[],hierarchyRevision=0,hierarchyAbort,selection;
 const clone=value=>value==null?value:structuredClone(value);
 const monthFormat = dateFormat({ month: 'long', year: 'numeric', timeZone: 'UTC' });
 const formatMonth = (key) => monthFormat.format(new Date(`${key}-01`));
@@ -44,6 +46,9 @@ const revisions=mountStudyRevisions($('study-revisions'),{request,isActive:()=>a
 showResultSurface(false);
 setBootstrapPending(true);
 const territorySearch=createTerritorySearch(request,()=>settings?.region_geometry||request('data/region.geojson').then(value=>value.features?.[0]?.geometry||value.geometry||value));
+selection=createAnalysisSelection(root,{map,request,getParent:currentTerritory,canDraw:()=>!busy&&!bootstrapPending,isActive:()=>active,
+ onState:state=>{drawing=state.active;stopPlaying();syncTerritoryControls();},
+ onCommit:(roi,{parent,clipped})=>{useTerritory(roi,{parent,resetParents:false,keepDrawing:true});$('area-note').textContent=clipped?'Граница ограничена выбранной областью; расчёт использует точное пересечение.':roi.circle?'Круг сохранён с точным центром и радиусом.':'Для расчёта сохранена точная граница участка.';}});
 for(const id of ['run','study-plan-request'])new MutationObserver(()=>{if(!territorySelected&&!$(id).disabled)$(id).disabled=true;}).observe($(id),{attributes:true,attributeFilter:['disabled']});
 
 function svgElement(tag, attrs={}, text){const node=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,v));if(text!==undefined)node.textContent=text;return node;}
@@ -58,6 +63,7 @@ function formConfig(){return {preset:$('preset').value,bbox:['west','south','eas
 function selectedPreset(){return settings?.presets.find(p=>p.id===$('preset').value);}
 function validateInputs(){
  if(bootstrapPending){$('form-status').textContent='Дождитесь подключения к архиву.';return false;}
+ if(drawing){$('form-status').textContent='Завершите выделение участка или отмените его.';return false;}
  if(!territorySelected){$('form-status').textContent='Сначала найдите территорию или выделите область на карте.';$('analysis-territory-query').focus();return false;}
  const form=$('analysis-form');
  for(const input of form.querySelectorAll('input'))input.setCustomValidity('');
@@ -79,7 +85,31 @@ function areaName(config){if(!territorySelected)return 'Выберите тер�
 function syncTerritoryControls(){
  root.dataset.territorySelected=String(territorySelected);
  $('analysis-territory-selected').textContent=territorySelected?areaName(formConfig()):'Территория пока не выбрана';
- $('run').disabled=$('study-plan-request').disabled=bootstrapPending||busy||!territorySelected;
+ $('run').disabled=$('study-plan-request').disabled=bootstrapPending||busy||drawing||!territorySelected;
+ $('refine-area').hidden=$('selection-world').hidden=!territorySelected;
+}
+function currentTerritory(){if(!territorySelected)return null;return {preset:$('preset').value,name:areaName(formConfig()),bbox:clone(formConfig().bbox),source:roiSource||($('preset').value==='sko'?'Граница СКО':'Выбранная территория'),...(roiCircle?{circle:clone(roiCircle)}:{geometry:clone(roiGeometry||($('preset').value==='sko'?settings?.region_geometry:null))}),...(roiBoundaryRef?{boundary_ref:clone(roiBoundaryRef)}:{}),...(roiParentRef?{parent_ref:clone(roiParentRef)}:{})};}
+function cancelHierarchy(){++hierarchyRevision;hierarchyAbort?.abort();hierarchyAbort=null;}
+function renderBreadcrumb(){
+ const nav=$('territory-breadcrumb');nav.replaceChildren();nav.hidden=!territoryParents.length;
+ territoryParents.forEach((parent,index)=>{const button=document.createElement('button');button.type='button';button.className='text-button';button.textContent='← '+parent.name;button.title='Вернуться к территории «'+parent.name+'»';button.addEventListener('click',()=>{territoryParents=territoryParents.slice(0,index);useTerritory(parent,{resetParents:false});});nav.append(button);});
+ if(territoryParents.length){const current=document.createElement('span');current.textContent=areaName(formConfig());nav.append(current);}
+ selection?.setContextParent(territoryParents.at(-1)||null);
+}
+async function refreshTerritoryParts(){
+ cancelHierarchy();renderBreadcrumb();const parent=currentTerritory(),select=$('territory-child');$('territory-parts').hidden=!parent;territoryChildren=[];select.disabled=true;
+ if(!parent){select.replaceChildren(new Option('Нет выбранной территории',''));return;}
+ select.replaceChildren(new Option('Загружаем части территории…',''));$('territory-parts-status').textContent='';
+ if(!territorySearch.children){select.replaceChildren(new Option('Подтерритории недоступны',''));return;}
+ const revision=hierarchyRevision;hierarchyAbort=new AbortController();
+ try{const response=await territorySearch.children(parent,{signal:hierarchyAbort.signal});if(revision!==hierarchyRevision||!active)return;territoryChildren=response.items||[];if(response.parent_ref)roiBoundaryRef=clone(response.parent_ref);select.replaceChildren(new Option(territoryChildren.length?'Выберите часть территории':'Подтерриторий в каталоге нет',''),...territoryChildren.map((item,index)=>new Option(item.label||item.name,String(index))));select.disabled=!territoryChildren.length;$('territory-parts-status').textContent=response.coverage?.message||'Уточните участок на карте.';}
+ catch(error){if(revision!==hierarchyRevision||error.name==='AbortError')return;select.replaceChildren(new Option('Не удалось загрузить список',''));$('territory-parts-status').textContent='Список недоступен. Можно уточнить участок на карте.';}
+}
+function useTerritory(roi,{parent=null,resetParents=true,keepDrawing=false}={}){
+ if(!keepDrawing)selection?.cancel();cancelTerritorySearch();if(resetParents)territoryParents=[];if(parent)territoryParents.push(clone(parent));
+ territorySelected=true;clearShape();$('preset').value=roi.preset&&[...$('preset').options].some(option=>option.value===roi.preset)?roi.preset:'custom';roiCircle=clone(roi.circle)||null;roiGeometry=roiCircle?null:clone(roi.geometry?.type==='Feature'?roi.geometry.geometry:roi.geometry)||null;roiName=roi.name||'';roiSource=roi.source||'';roiBoundaryRef=clone(roi.boundary_ref)||null;roiParentRef=clone(roi.parent_ref||parent?.boundary_ref)||null;
+ ['west','south','east','north'].forEach((key,index)=>$(key).value=roi.bbox[index]);setLocalizedInputValue($('analysis-territory-query'),roi.name||'');$('analysis-territory-status').textContent=roi.source||'';
+ showBounds();invalidate();syncTerritoryControls();refreshTerritoryParts();publishContext();
 }
 function cancelTerritorySearch(){++territoryRevision;clearTimeout(territoryTimer);$('analysis-territory-results').replaceChildren();$('analysis-territory-results').hidden=true;$('analysis-territory-query').setAttribute('aria-expanded','false');}
 async function searchTerritory(){
@@ -95,10 +125,7 @@ async function searchTerritory(){
     if(revision!==territoryRevision)return;$('analysis-territory-status').textContent='Загружаем точную границу…';
     try{
      const roi=await match.load();if(revision!==territoryRevision||!active)return;
-     territorySelected=true;clearShape();$('preset').value=roi.preset||'custom';roiGeometry=clone(roi.geometry)||null;roiCircle=clone(roi.circle)||null;roiName=roi.name;roiSource=roi.source;
-     ['west','south','east','north'].forEach((key,i)=>$(key).value=roi.bbox[i]);
-     cancelTerritorySearch();setLocalizedInputValue($('analysis-territory-query'),roi.name);$('analysis-territory-status').textContent=roi.source;
-     drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';showBounds(false);if(roiGeometry)fitTerritory(map,roiGeometry);else showBounds();invalidate();publishContext();
+     useTerritory(roi);
     }catch(error){if(revision===territoryRevision)$('analysis-territory-status').textContent='Не удалось загрузить границу. Повторите поиск или выделите область на карте.';}
    });results.append(button);
   }
@@ -117,9 +144,9 @@ function showBounds(fit=true){
   if(fit){if(roiGeometry)fitTerritory(map,roiGeometry);else map.fitBounds(roiLayer.getBounds(),{padding:[35,35],maxZoom:8});}
   $('area-note').textContent=$('preset').value==='sko'?'Анализ по исходной границе СКО, не по прямоугольнику.':roiGeometry?'Анализ по переданной геометрии территории; прямоугольник показывает только её охват.':roiCircle?`Анализ по окружности радиусом ${n(roiCircle.radius_km)} км.`:'Анализ по выделенному прямоугольнику; административные границы могут отличаться.';
 }
-function clearShape(){roiGeometry=roiCircle=null;roiName=roiSource='';}
+function clearShape(){roiGeometry=roiCircle=null;roiName=roiSource='';roiBoundaryRef=roiParentRef=null;}
 function publishContext(){if(active)bridge.setContext?.(getState().context);}
-function setPreset(){cancelTerritorySearch();territorySelected=true;clearShape();const p=selectedPreset();if(p)['west','south','east','north'].forEach((k,i)=>$(k).value=p.bbox[i]);showBounds();invalidate();publishContext();}
+function setPreset(){selection?.cancel();territoryParents=[];cancelTerritorySearch();territorySelected=true;clearShape();const p=selectedPreset();if(p)['west','south','east','north'].forEach((k,i)=>$(k).value=p.bbox[i]);showBounds();invalidate();refreshTerritoryParts();publishContext();}
 function showResultSurface(value){root.dataset.hasResult=String(value);$('study-results').hidden=!value;$('study-next-step').hidden=value;root.querySelector('.insights').hidden=!value;root.querySelector('.timeline-bar').hidden=!value;$('study-revisions').hidden=!value;}
 function invalidate({keepStudy=false}={}){
   ++generation;analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);
@@ -552,9 +579,16 @@ $('analysis-territory-find').addEventListener('click',searchTerritory);
 $('analysis-territory-query').addEventListener('input',()=>{cancelTerritorySearch();$('analysis-territory-status').textContent='';if($('analysis-territory-query').value.trim().length>=2)territoryTimer=setTimeout(searchTerritory,260);});
 $('analysis-territory-query').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();searchTerritory();}else if(event.key==='ArrowDown'){event.preventDefault();$('analysis-territory-results').querySelector('button')?.focus();}else if(event.key==='Escape')cancelTerritorySearch();});
 $('analysis-territory-results').addEventListener('keydown',event=>{const buttons=[...$('analysis-territory-results').querySelectorAll('button')],index=buttons.indexOf(document.activeElement);if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();buttons[(index+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}else if(event.key==='Escape'){cancelTerritorySearch();$('analysis-territory-query').focus();}});
+$('territory-child').addEventListener('change',async()=>{
+ const item=territoryChildren[Number($('territory-child').value)],parent=currentTerritory();if(!item||!parent||$('territory-child').value==='')return;
+ selection.cancel();cancelHierarchy();const revision=hierarchyRevision;hierarchyAbort=new AbortController();$('territory-child').disabled=true;$('territory-parts-status').textContent='Загружаем и ограничиваем границу выбранной территорией…';
+ try{const roi=await item.load({signal:hierarchyAbort.signal});if(revision!==hierarchyRevision||!active)return;useTerritory(roi,{parent,resetParents:false});if(roi.clipped)$('area-note').textContent='Граница ограничена выбранной областью; для расчёта используется точное пересечение.';}
+ catch(error){if(revision!==hierarchyRevision||error.name==='AbortError')return;$('territory-parts-status').textContent='Не удалось выбрать часть территории: '+error.message;$('territory-child').disabled=false;}
+});
+$('selection-world').addEventListener('click',()=>{selection.clearContext();territoryParents=[];applyContext({roi:null});map.setView([18,0],1,{animate:false});publishContext();});
 ['start','end','baseline-start','baseline-end','grid','daynight','include-nrt'].forEach(id=>{const events=['grid','daynight','include-nrt'].includes(id)?['change']:['input','change'];for(const event of events)$(id).addEventListener(event,()=>{for(const input of $('analysis-form').querySelectorAll('input'))input.setCustomValidity('');invalidate();publishContext();});});
-$('analysis-form').addEventListener('input',event=>{if(['west','south','east','north'].includes(event.target.id)){event.target.setCustomValidity('');cancelTerritorySearch();territorySelected=true;clearShape();$('preset').value='custom';invalidate();publishContext();}});
-$('apply-bounds').addEventListener('click',()=>{cancelTerritorySearch();territorySelected=true;clearShape();$('preset').value='custom';showBounds();invalidate();publishContext();});
+$('analysis-form').addEventListener('input',event=>{if(['west','south','east','north'].includes(event.target.id)){event.target.setCustomValidity('');selection.clearContext();territoryParents=[];cancelHierarchy();renderBreadcrumb();cancelTerritorySearch();territorySelected=true;clearShape();$('preset').value='custom';invalidate();publishContext();}});
+$('apply-bounds').addEventListener('click',()=>{selection.clearContext();territoryParents=[];cancelTerritorySearch();territorySelected=true;clearShape();$('preset').value='custom';showBounds();invalidate();refreshTerritoryParts();publishContext();});
 $('platform').addEventListener('change',()=>{
  source=$('platform').value;stopPlaying();frame=0;mapYear=null;planner.invalidate();++mapGeneration;cellsLayer.clearLayers();$('error-banner').hidden=true;
  if(result&&sameScientificConfig(result.config,formConfig())){
@@ -586,9 +620,6 @@ $('export-csv').addEventListener('click',()=>{if(view==='matrix')matrixPanel.exp
 $('share').addEventListener('click',async()=>{try{await bridge.navigate?.('analysis',{share:true,state:getState()});}catch(error){$('error-banner').hidden=false;$('error-banner').textContent=error.message;}});
 $('study-config-retry').addEventListener('click',async()=>{const snapshot=getState();$('study-config-retry').disabled=true;try{await activate({state:snapshot,context:snapshot.context,run:false});}finally{$('study-config-retry').disabled=false;}});
 $('show-atlas').addEventListener('click',()=>bridge.navigate?.('atlas',{context:getState().context,from:'analysis',analysisState:getState()}));
-$('draw-area').addEventListener('click',()=>{if(busy)return;drawing=!drawing;drawStart=null;$('draw-instruction').hidden=!drawing;map.getContainer().style.cursor=drawing?'crosshair':'';if(drawing){$('analysis-map').focus({preventScroll:true});$('analysis-map').scrollIntoView({block:'center'});}});
-map.on('click',event=>{if(!active||busy||!drawing)return;const point=event.latlng;if(!drawStart){drawStart=point;return;}const a=drawStart,b=point;const bbox=[Math.min(a.lng,b.lng),Math.min(a.lat,b.lat),Math.max(a.lng,b.lng),Math.max(a.lat,b.lat)];['west','south','east','north'].forEach((k,i)=>$(k).value=bbox[i].toFixed(5));cancelTerritorySearch();territorySelected=true;clearShape();$('preset').value='custom';drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';showBounds(false);invalidate();publishContext();});
-root.addEventListener('keydown',event=>{if(event.key==='Escape'){drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';}});
 let resizeTimer;new ResizeObserver(()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(active&&result)renderAll();},120);}).observe($('workbench'));
 
 async function initialize(){
@@ -606,6 +637,7 @@ function displayBounds(roi){
 }
 function applyContext(context){
  if(!context)return;
+ const previous=territorySelected?JSON.stringify(geometryOfROI(currentTerritory())):null;selection?.cancel();
  if(busy){++generation;setBusy(false);pendingAnalysis=null;}
  const roi=context.roi;
  if(roi){
@@ -613,6 +645,8 @@ function applyContext(context){
   const bbox=preset==='sko'?settings?.presets.find(item=>item.id==='sko')?.bbox:displayBounds(roi);
   if(Array.isArray(bbox)&&bbox.length===4)['west','south','east','north'].forEach((key,i)=>$(key).value=bbox[i]);
   if(preset!=='sko'){roiGeometry=clone(roi.geometry?.type==='Feature'?roi.geometry.geometry:roi.geometry)||null;roiCircle=roiGeometry?null:clone(roi.circle)||null;roiName=String(roi.name||'');roiSource=String(roi.source||'');}
+  roiBoundaryRef=clone(roi.boundary_ref)||null;
+  roiParentRef=clone(roi.parent_ref)||null;
  }else if(Object.hasOwn(context,'roi')){cancelTerritorySearch();territorySelected=false;clearShape();$('preset').value='custom';['west','south','east','north'].forEach((key,i)=>$(key).value=[-180,-85,180,85][i]);$('analysis-territory-query').value='';$('analysis-territory-status').textContent='';}
  if(context.history){if(context.history.start)$('start').value=context.history.start;if(context.history.end)$('end').value=context.history.end;}
  if(context.baseline){if(context.baseline.start!==undefined)$('baseline-start').value=context.baseline.start;if(context.baseline.end!==undefined)$('baseline-end').value=context.baseline.end;}
@@ -620,7 +654,8 @@ function applyContext(context){
  if(context.quality)$('include-nrt').checked=context.quality==='all';
  if(['all','D','N'].includes(context.daynight))$('daynight').value=context.daynight;
  if(context.platform==='all'||labels[context.platform]){source=context.platform;$('platform').value=source;}
- retainedFocus=clone(context.focus)||null;rangeFocus=isRangeFocus(retainedFocus)?clone(retainedFocus):null;showBounds();invalidate();
+ if(previous!==(territorySelected?JSON.stringify(geometryOfROI(currentTerritory())):null)){territoryParents=[];selection?.setContextParent(null);}
+ retainedFocus=clone(context.focus)||null;rangeFocus=isRangeFocus(retainedFocus)?clone(retainedFocus):null;showBounds();invalidate();refreshTerritoryParts();
  if(source==='all')$('form-status').textContent='Передано «все спутники». План предложит отдельный ряд; для ручного расчёта выберите один спутник.';
 }
 function applyFocus(focus){
@@ -642,7 +677,7 @@ function getState(){
  const config=result?.config||formConfig(),geometry=config.circle?null:config.geometry||(config.preset==='sko'?(roiGeometry||settings?.region_geometry):roiGeometry),circle=config.circle||roiCircle;
  const matrix=matrixPanel.getState();
  const study=planner.getState();
- return {context:{roi:territorySelected?{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')}:null,history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km,study},study,revisions:revisions.getState(),tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
+ return {context:{roi:territorySelected?{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),...(roiBoundaryRef?{boundary_ref:clone(roiBoundaryRef)}:{}),...(roiParentRef?{parent_ref:clone(roiParentRef)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')}:null,history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km,study},territoryParents:clone(territoryParents),study,revisions:revisions.getState(),tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
 }
 async function activate(options={}){
  const current=++activation;active=true;
@@ -660,6 +695,7 @@ async function activate(options={}){
   const incoming=options.context||saved.context;
   if(incoming){applyContext(incoming);contextApplied=true;}
   else if(matching&&saved.context){if(labels[saved.context.platform]){source=saved.context.platform;$('platform').value=source;}retainedFocus=clone(saved.context.focus);applyFocus(retainedFocus);}
+  if(Array.isArray(saved.territoryParents)){territoryParents=clone(saved.territoryParents).filter(parent=>parent&&Array.isArray(parent.bbox)&&parent.name);refreshTerritoryParts();}
   planner.restore(incoming?.study||saved.study||saved.context?.study||planner.getState());planner.resume();revisions.resume();matrixPanel.resume();
   pendingViewState=incoming||options.run?saved:null;
   if(result)restoreView(saved);
@@ -700,7 +736,7 @@ function restoreView(state){
  if(['raw','calibrated'].includes(state.seriesMode))$('series-mode').value=state.seriesMode;
 }
 function deactivate(){
- active=false;++activation;++generation;cancelTerritorySearch();analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);planner.pause();revisions.pause();stopPlaying();++mapGeneration;drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';$('method-dialog').close();matrixPanel.pause();
+ active=false;++activation;++generation;selection.cancel();cancelHierarchy();cancelTerritorySearch();analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);planner.pause();revisions.pause();stopPlaying();++mapGeneration;drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';$('method-dialog').close();matrixPanel.pause();
 }
 
 /* Lifecycle is owned by the application shell; importing this module is inert. */

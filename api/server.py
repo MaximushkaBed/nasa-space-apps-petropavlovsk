@@ -20,6 +20,7 @@ from urllib.parse import urlsplit, parse_qs
 
 from api.analysis import analyze, PLATFORMS
 from api.geometry import circle_polygon, normalize_geometry
+from api.geometry_clip import clip_geometry
 from api.study_plan import build_plan, load_calendar, assess as assess_study, validate_choices
 from api.revisions import RevisionStore, RevisionError
 
@@ -545,6 +546,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
+            if self.path == '/api/v1/geometry/clip':
+                size = int(self.headers.get('Content-Length', 0))
+                if not 0 < size <= 1048576:
+                    return self.respond(413, {'error': 'Передайте две геометрии общим размером не более 1 MiB.'})
+                value = json.loads(self.rfile.read(size))
+                if not isinstance(value, dict):
+                    raise ValueError('Передайте parent и geometry как GeoJSON Polygon или MultiPolygon.')
+                with GEOMETRY_LIMIT:
+                    clipped = clip_geometry(value.get('parent'), value.get('geometry'), connection)
+                return self.respond(200, clipped)
             if match := re.fullmatch(r'/api/v1/analyses/([0-9a-f]{32})/save', self.path):
                 size = int(self.headers.get('Content-Length', 0))
                 if not 0 <= size <= 1024:
