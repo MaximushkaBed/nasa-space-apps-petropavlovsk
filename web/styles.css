@@ -459,5 +459,8 @@ dialog strong { color: var(--text); }
   .calendar th:first-child { width: 33px; }
   .calendar button { font-size: 9px; }
   .timeline .fire-key { display: none; }
+  .timeline-heading { flex-wrap: nowrap; gap: 4px; }
+  .timeline .view-switch { gap: 2px; }
+  .timeline-heading :is(.view-switch button, .quiet-button) { padding-inline: 4px; font-size: 10px; }
 }
 .temperature-background { position: absolute; left: 0; top: 0; pointer-events: none; }
