@@ -13,6 +13,59 @@ const protectFactors=(node,...factors)=>protectLocaleText(node,factors
  .filter(factor=>factor.id.startsWith('file_'))
  .flatMap(factor=>[factor.label,factor.short].filter(Boolean)));
 
+function scatterAxis(points,key,intervals){
+ let min=Infinity,max=-Infinity;
+ for(const point of points){min=Math.min(min,point[key]);max=Math.max(max,point[key]);}
+ const largest=Math.max(Math.abs(min),Math.abs(max));
+ const scale=largest>1e150||(largest>0&&largest<1e-150)?largest:1;
+ min/=scale;max/=scale;
+ if(min===max){const padding=Math.abs(min)*.05||1;min-=padding;max+=padding;}
+ const target=Math.max((max-min)/intervals,Number.EPSILON*Math.max(Math.abs(min),Math.abs(max)));
+ const exponent=Math.floor(Math.log10(target));
+ const unit=10**exponent;
+ const multiple=[1,2,2.5,5,10].find(value=>value*unit>=target)||10;
+ const step=unit*multiple;
+ const first=Math.floor(min/step),last=Math.ceil(max/step);
+ const decimals=Math.max(0,-exponent+(multiple===2.5?1:0));
+ const precision=Math.max(3,1+Math.floor(Math.log10(largest/scale))-exponent);
+ const formatter=largest>=1e9||decimals>8||scale!==1
+  ?numberFormat({notation:'scientific',maximumSignificantDigits:Math.min(17,precision)})
+  :numberFormat({maximumFractionDigits:decimals});
+ const ticks=[];
+ for(let index=first;index<=last;index++){
+  const value=index*step*scale;
+  if(finite(value))ticks.push({fraction:(index-first)/(last-first),label:formatter.format(value)});
+ }
+ return {ticks,fraction:value=>(value/scale/step-first)/(last-first)};
+}
+
+function scatterPlot({points,xFactor,yFactor},width,height){
+ const xAxis=scatterAxis(points,'x',Math.max(2,Math.min(6,Math.floor((width-60)/100))));
+ const yAxis=scatterAxis(points,'y',height<240?4:5);
+ const left=Math.max(41,xAxis.ticks[0].label.length*3.5+8,Math.max(...yAxis.ticks.map(({label})=>label.length))*7+11);
+ const right=width-Math.max(18,xAxis.ticks.at(-1).label.length*3.5+8);
+ const top=27,bottom=height-44;
+ const x=fraction=>left+fraction*(right-left),y=fraction=>bottom-fraction*(bottom-top);
+ const plot=protectFactors(svg('svg',{width,height,viewBox:`0 0 ${width} ${height}`,role:'img',
+  'aria-label':`${xFactor.label} и ${yFactor.label}: ${points.length} фактических пар`}),xFactor,yFactor);
+ for(const {fraction,label} of yAxis.ticks){
+  const row=y(fraction);
+  plot.append(svg('line',{x1:left,x2:right,y1:row,y2:row,stroke:'#2a4072'}),
+   svg('text',{x:left-8,y:row+4,'text-anchor':'end'},label));
+ }
+ for(const {fraction,label} of xAxis.ticks)plot.append(svg('text',{x:x(fraction),y:bottom+16,'text-anchor':'middle'},label));
+ const radius=points.length>400?1.8:points.length>100?2.3:2.8;
+ for(const point of points){
+  const dot=svg('circle',{cx:x(xAxis.fraction(point.x)),cy:y(yAxis.fraction(point.y)),r:radius,fill:'#ffa46e','fill-opacity':points.length>400?.52:.72});
+  dot.append(protectFactors(svg('title',{},`${point.label} · ${xFactor.label}: ${text(point.x)}; ${yFactor.label}: ${text(point.y)}`),xFactor,yFactor));
+  plot.append(dot);
+ }
+ const title=factor=>`${factor.short||factor.label}${factor.unit?` (${factor.unit})`:''}`;
+ plot.append(protectFactors(svg('text',{x:(left+right)/2,y:height-8,'text-anchor':'middle'},title(xFactor)),xFactor),
+  protectFactors(svg('text',{x:left,y:14},title(yFactor)),yFactor));
+ return plot;
+}
+
 export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=false,local=false,onDataChange}){
  root.classList.add('matrix-tool');
  root.innerHTML=`<div class="matrix-intro"><h4>Связи факторов выбранной территории</h4><p>Корреляция Спирмена показывает совместное изменение величин и не доказывает причину горения.</p></div>
@@ -25,6 +78,9 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
  <details class="matrix-warnings" hidden><summary>Ограничения данных и метода</summary><div></div></details>
  <details class="matrix-provenance" hidden><summary>Источники и параметры матрицы</summary><pre></pre></details>`;
  const $=selector=>root.querySelector(selector);
+ const scatterHost=$('.matrix-scatter');
+ let scatter,scatterWidth=0;
+ new ResizeObserver(layoutScatter).observe(scatterHost);
  if(local)for(const selector of ['.matrix-intro','.matrix-status'])$(selector).hidden=true;
  let id=null,result=null,busy=false,paused=false,visible=false,epoch=0,pollEpoch=0,mode='within',platform=null,pair=[0,1],analysisId=null,lastSource=null,hasError=false,restorePlatform=null;
  function status(message,error=false){hasError=error;$('.matrix-status').textContent=message;$('.matrix-status').classList.toggle('is-error',error);}
@@ -77,7 +133,7 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
   $('.matrix-platform').replaceChildren(...(result.platforms||[]).map(name=>new Option(name,name)));$('.matrix-platform').value=platform||'';
   status('Матрица готова. Выберите пару, чтобы увидеть реальные наблюдения.');showResults();refresh();if(visible)render();
  }
- function hideResults(){for(const selector of ['.matrix-controls','.matrix-warnings','.matrix-definition','.matrix-pair','.matrix-exports','.matrix-provenance'])$(selector).hidden=true;$('.matrix-grid').replaceChildren();}
+ function hideResults(){for(const selector of ['.matrix-controls','.matrix-warnings','.matrix-definition','.matrix-pair','.matrix-exports','.matrix-provenance'])$(selector).hidden=true;$('.matrix-grid').replaceChildren();scatter=null;scatterHost.replaceChildren();}
  function showResults(){
   for(const selector of ['.matrix-controls','.matrix-definition','.matrix-exports','.matrix-provenance'])$(selector).hidden=false;
   if(local) $('.matrix-controls').hidden=true;
@@ -133,7 +189,7 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
   });
  }
  function renderPair(){
-  const factors=fields(),[i,j]=pair;if(!factors[i]||!factors[j]){$('.matrix-pair').hidden=true;return;}
+  const factors=fields(),[i,j]=pair;if(!factors[i]||!factors[j]){$('.matrix-pair').hidden=true;scatter=null;scatterHost.replaceChildren();return;}
   $('.matrix-pair').hidden=false;const cell=cellAt(i,j),detail=detailAt(i,j),points=pairedValues();
   const pairTitle=$('.matrix-pair-title');
   protectFactors(pairTitle,factors[i],factors[j]).textContent=`${factors[i].label} × ${factors[j].label}`;
@@ -145,18 +201,19 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
   drawScatter(plotPoints,factors[i],factors[j]);
  }
  function drawScatter(points,xFactor,yFactor){
-  const host=$('.matrix-scatter');host.replaceChildren();
-  if(!points.length){host.append(element('p',{class:'matrix-empty'},'Нет общих числовых наблюдений для выбранной пары.'));return;}
-  const width=Math.max(300,host.clientWidth),height=265,left=58,right=16,top=20,bottom=53;
-  const xs=points.map(p=>p.x),ys=points.map(p=>p.y),xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);
-  const x=v=>left+(v-xmin)/(xmax-xmin||1)*(width-left-right),y=v=>height-bottom-(v-ymin)/(ymax-ymin||1)*(height-top-bottom);
-  const plot=protectFactors(svg('svg',{viewBox:`0 0 ${width} ${height}`,role:'img','aria-label':`${xFactor.label} и ${yFactor.label}: ${points.length} фактических пар`}),xFactor,yFactor);
-  for(let index=0;index<=3;index++){
-   const xv=xmin+(xmax-xmin)*index/3,yv=ymin+(ymax-ymin)*index/3;
-   plot.append(svg('line',{x1:left,x2:width-right,y1:y(yv),y2:y(yv),stroke:'#2a4072'}),svg('text',{x:left-7,y:y(yv)+4,'text-anchor':'end'},text(yv)),svg('text',{x:x(xv),y:height-bottom+18,'text-anchor':'middle'},text(xv)));
+  scatter=points.length?{points,xFactor,yFactor}:null;
+  scatterWidth=0;
+  if(!scatter){
+   scatterHost.replaceChildren(element('p',{class:'matrix-empty'},'Нет общих числовых наблюдений для выбранной пары.'));
+   return;
   }
-  for(const point of points){const dot=svg('circle',{cx:x(point.x),cy:y(point.y),r:2.8,fill:'#ffa46e','fill-opacity':.7});dot.append(protectFactors(svg('title',{},`${point.label} · ${xFactor.label}: ${text(point.x)}; ${yFactor.label}: ${text(point.y)}`),xFactor,yFactor));plot.append(dot);}
-  plot.append(protectFactors(svg('text',{x:(left+width-right)/2,y:height-5,'text-anchor':'middle'},`${xFactor.short||xFactor.label}${xFactor.unit?` (${xFactor.unit})`:''}`),xFactor),protectFactors(svg('text',{x:left,y:12},`${yFactor.short||yFactor.label}${yFactor.unit?` (${yFactor.unit})`:''}`),yFactor));host.append(plot);
+  layoutScatter();
+ }
+ function layoutScatter(){
+  const width=scatterHost.clientWidth;
+  if(!scatter||!width||width===scatterWidth)return;
+  scatterWidth=width;
+  scatterHost.replaceChildren(scatterPlot(scatter,width,width<460?220:260));
  }
  function save(blob,name){const url=URL.createObjectURL(blob),link=element('a',{href:url,download:name});root.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
  function exportData(type){
@@ -181,10 +238,10 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
   const csv=rows.map(row=>row.map(value=>`"${String(value??'').replaceAll('"','""')}"`).join(',')).join('\r\n');save(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),`nasa-space-apps-matrix-${id}.csv`);
  }
  function exportImage(){
-  const plot=$('.matrix-scatter svg');if(!result||!plot){status('Выберите пару с числовыми наблюдениями для изображения.',true);return;}
+  if(!result||!scatter){status('Выберите пару с числовыми наблюдениями для изображения.',true);return;}
   const width=1120,height=490,doc=svg('svg',{xmlns:svgNS,width,height,viewBox:`0 0 ${width} ${height}`});
   doc.append(svg('rect',{width:'100%',height:'100%',fill:'#07132d'}),svg('style',{},'text{font-family:Arial,sans-serif;fill:#f5f8ff;font-size:12px}'),svg('text',{x:28,y:31,style:'font-size:19px;font-weight:700'},'NASA Space Apps · Связи факторов'),svg('text',{x:28,y:56},$('.matrix-scope').textContent),svg('text',{x:28,y:80},$('.matrix-pair-title').textContent),svg('text',{x:28,y:102},$('.matrix-pair-summary').textContent));
-  const copy=plot.cloneNode(true);copy.setAttribute('x',24);copy.setAttribute('y',118);copy.setAttribute('width',width-48);copy.setAttribute('height',270);copy.setAttribute('translate','no');doc.append(copy,svg('text',{x:28,y:414},`Снимок архива ${result.snapshot_at||'не указан'} · матрица ${id}`),svg('text',{x:28,y:437},'Показаны исходные парные наблюдения. Пропуски не заменены нулями. Локальная видимость неизвестна.'),svg('text',{x:28,y:460},'Корреляция не доказывает причину. Для режима внутри месяцев итоговая ρ объединяет отдельные внутримесячные связи.'));
+  const plot=scatterPlot(scatter,width-48,270);plot.setAttribute('x',24);plot.setAttribute('y',118);doc.append(plot,svg('text',{x:28,y:414},`Снимок архива ${result.snapshot_at||'не указан'} · матрица ${id}`),svg('text',{x:28,y:437},'Показаны исходные парные наблюдения. Пропуски не заменены нулями. Локальная видимость неизвестна.'),svg('text',{x:28,y:460},'Корреляция не доказывает причину. Для режима внутри месяцев итоговая ρ объединяет отдельные внутримесячные связи.'));
   if(local)for(const label of [doc.children[3],doc.children[4]]) label.setAttribute('translate','no');
   localizeTree(doc);
   save(new Blob([new XMLSerializer().serializeToString(doc)],{type:'image/svg+xml;charset=utf-8'}),`nasa-space-apps-matrix-${platform}-${mode}.svg`);

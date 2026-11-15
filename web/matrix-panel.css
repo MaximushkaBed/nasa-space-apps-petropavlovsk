@@ -19,8 +19,8 @@
 :where(.analysis-workbench) .matrix-tool .matrix-cell.missing{background:repeating-linear-gradient(135deg,#102144 0 3px,#162a51 3px 6px);color:var(--app-muted)}
 :where(.analysis-workbench) .matrix-tool .matrix-pair{border-top:1px solid var(--app-line);margin-top:13px;padding-top:11px}
 :where(.analysis-workbench) .matrix-tool .matrix-scatter{width:100%;min-height:110px}
-:where(.analysis-workbench) .matrix-tool .matrix-scatter svg{display:block;width:100%;height:auto;min-height:230px}
-:where(.analysis-workbench) .matrix-tool .matrix-scatter text{font-family:Inter,Arial,sans-serif;font-size:10px;fill:var(--app-muted)}
+:where(.analysis-workbench) .matrix-tool .matrix-scatter svg{display:block;width:100%;height:auto}
+:where(.analysis-workbench) .matrix-tool .matrix-scatter text{font-family:Inter,Arial,sans-serif;font-size:11px;fill:var(--app-muted)}
 :where(.analysis-workbench) .matrix-tool .matrix-exports{display:flex;gap:6px;flex-wrap:wrap;margin-top:13px}
 :where(.analysis-workbench) .matrix-tool .matrix-exports button,:where(.analysis-workbench) .matrix-tool .matrix-on-map{font-size:9px;padding:6px 8px}
 :where(.analysis-workbench) .matrix-tool .matrix-provenance pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:9px;padding:10px;background:var(--app-control);max-height:230px;overflow:auto}
