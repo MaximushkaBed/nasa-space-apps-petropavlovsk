@@ -60,6 +60,66 @@ def initial_languages(browser, base):
     page.close()
 
 
+def atlas_state(browser, base):
+    page = browser.new_page(viewport={'width': 1440, 'height': 900})
+    page.add_init_script("localStorage.setItem('nasa-space-apps-onboarding-v1', 'true')")
+    page.goto(f'{base}/?view=atlas&lang=ru', wait_until='domcontentloaded')
+
+    page.locator('#reset-map').click(timeout=25000)
+    expect(page.locator('#selected-area-panel')).to_be_visible()
+    date = page.locator('#world-date')
+    day = '2025-04-12'
+    assert date.input_value() != day
+    date.fill(day)
+    expect(page.locator('#fire-frame-date')).to_have_class('same-frame', timeout=25000)
+
+    layers = page.locator('#map-layer-controls')
+    open_layers = page.locator('#open-layers')
+    open_layers.click()
+    page.locator('#terrain-layer').check()
+    page.locator('#terrain-opacity').fill('65')
+    page.locator('#overlay-world-clouds').check()
+
+    boundary = page.locator('#atlas-selection-clip path')
+    expect(boundary).to_have_attribute('d', re.compile('^M.+Z$'))
+    shape = boundary.get_attribute('d')
+    terrain = page.locator('.leaflet-terrain-shading-pane > .leaflet-layer')
+    calendar = page.locator('a[href="#activity-calendar"]')
+
+    def expect_atlas_state(area):
+        expect(page.locator('.app-nav [data-app-view="atlas"]')).to_have_attribute('aria-current', 'page')
+        expect(date).to_have_value(day)
+        expect(page.locator('#fire-frame-date')).to_have_class('same-frame')
+        expect(page.locator('#area-name')).to_have_text(area)
+        expect(boundary).to_have_attribute('d', shape)
+        expect(page.locator('#terrain-layer')).to_be_checked()
+        expect(page.locator('#terrain-opacity')).to_have_value('65')
+        expect(terrain).to_have_css('opacity', '0.65')
+        expect(page.locator('#overlay-world-clouds')).to_be_checked()
+
+    languages = (
+        ('en', 'North Kazakhstan Region', 'Activity calendar'),
+        ('kk', 'Солтүстік Қазақстан облысы', 'Белсенділік күнтізбесі'),
+        ('ru', 'Северо-Казахстанская область', 'Календарь активности'),
+    )
+    for code, area, _ in languages:
+        language(page, code)
+        expect(layers).to_be_visible()
+        expect(open_layers).to_have_attribute('aria-expanded', 'true')
+        expect_atlas_state(area)
+
+    calendar.click()
+    expect(page.locator('#study-calendar table')).to_be_visible(timeout=25000)
+    for code, area, calendar_title in languages:
+        language(page, code)
+        expect(calendar).to_have_attribute('aria-expanded', 'true')
+        expect(page.locator('#analysis-heading')).to_have_text(calendar_title)
+        expect(page.locator('#study-calendar table')).to_be_visible()
+        expect(page).to_have_url(re.compile(r'#activity-calendar$'))
+        expect_atlas_state(area)
+    page.close()
+
+
 def desktop(browser, base):
     page = browser.new_page(viewport={'width': 1440, 'height': 900}, timezone_id='Asia/Qyzylorda')
     errors = []
@@ -220,12 +280,13 @@ if __name__ == '__main__':
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             initial_languages(browser, base)
+            atlas_state(browser, base)
             desktop(browser, base)
             mobile(browser, base)
             example(browser, base, 'en', 'Example study', 'Anomaly from the historical baseline')
             example(browser, base, 'kk', 'Дайын мысал', 'Тарихи деңгейден ауытқу')
             browser.close()
-        print('PASS browser language and persistence, RU / EN / KK in onboarding, atlas, calendar, matrix and file import, case study and area analysis')
+        print('PASS browser language and persistence, RU / EN / KK in onboarding, atlas state, calendar, matrix and file import, case study and area analysis')
     finally:
         if server:
             server.shutdown()
