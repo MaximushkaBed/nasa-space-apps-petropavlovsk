@@ -8,7 +8,7 @@ import { createFireViewport } from './fire-viewport.js?v=paired-days';
 import { createAreaAnalysis, inRing } from './area-analysis.js?v=atlas-polish';
 import { createMapNotice } from './map-notice.js';
 import { createAreaLayerClip } from './area-layer-clip.js?v=atlas-polish';
-import { createAtlasStudy } from './atlas-study.js?v=atlas-polish';
+import { createAtlasStudy } from './atlas-study.js?v=prepared-sko';
 import { createLayerReadout } from './layer-values.js?v=atlas-polish';
 import { addTerrainControl } from './terrain-layer.js';
 import { createTemperatureBackground } from './surface-temperature.js';

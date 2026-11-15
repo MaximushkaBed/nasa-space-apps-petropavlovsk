@@ -1,4 +1,5 @@
 import { mountMatrixPanel } from './matrix-panel.js?v=archive';
+import { sameScientificConfig } from './scientific-context.js';
 
 const sources = ['Aqua', 'Terra', 'Suomi-NPP', 'NOAA-20', 'NOAA-21'];
 const preferred = ['NOAA-20', 'NOAA-21', 'Suomi-NPP', 'Aqua', 'Terra'];
@@ -14,6 +15,12 @@ async function request(path, options) {
   return data;
 }
 
+async function requestCompressedSnapshot(name) {
+  const response = await fetch(`data/${name}.json.gz`);
+  if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+  return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
+}
+
 export function createAtlasStudy(root, getPlatform, selectMonth) {
   const $ = (id) => root.querySelector('#' + id);
   const panel = $('atlas-study');
@@ -24,6 +31,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   platform.add(new Option('Авто · доступный спутник', 'auto'));
   for (const source of sources) platform.add(new Option(source, source));
   let roi, scopeKey, archive, job, timer, controller, worldSnapshot, worldDownload, worldCalendar, calendarTimer;
+  let skoDownload;
   let allWorld = true;
   let explicitDates = false;
   let suspended = false;
@@ -56,6 +64,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     if (!roi && worldCalendar && !explicitDates) setWorldDates();
     else if (roi && archive && !explicitDates) setArchiveDates();
     $('study-default-period').hidden = Boolean(roi);
+    if (roi?.preset === 'sko') loadSkoSnapshot();
     schedule();
   }
 
@@ -161,12 +170,13 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     };
   }
 
-  function showJob(analysis, snapshot = false) {
+  function showJob(analysis, snapshotLabel) {
     job = analysis;
     $('study-spinner').hidden = true;
     const { start, end, grid_km: grid } = job.result.config;
     const snapshotDate = job.result.snapshot_at?.slice(0, 10);
-    status.textContent = `${start} — ${end} UTC · SP · сетка ${grid} км · локальная видимость неизвестна.${snapshot ? ` Готовый мировой обзор · 85° ю. ш. — 85° с. ш.${snapshotDate ? ` · снимок архива ${snapshotDate}` : ''}` : ''}`;
+    const prepared = snapshotLabel ? ` ${snapshotLabel} · снимок архива ${snapshotDate}.` : '';
+    status.textContent = `${start} — ${end} UTC · SP · сетка ${grid} км · локальная видимость неизвестна.${prepared}`;
     renderCalendar();
     matrix.refresh();
   }
@@ -232,10 +242,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     const download = async () => {
       if ('DecompressionStream' in window) {
         try {
-          const response = await fetch('data/world-atlas.json.gz');
-          if (response.ok && response.body) {
-            return await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
-          }
+          return await requestCompressedSnapshot('world-atlas');
         } catch { /* Older deployments and browsers can use the JSON copy. */ }
       }
       return request('data/world-atlas.json');
@@ -251,6 +258,24 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
       throw error;
     });
     return worldDownload;
+  }
+
+  function loadSkoSnapshot() {
+    if (!('DecompressionStream' in window)) return null;
+    skoDownload ??= requestCompressedSnapshot('sko-study').then(snapshot => {
+      const analysis = snapshot.analysis?.result;
+      const factors = snapshot.matrix?.result;
+      if (analysis?.config?.preset !== 'sko' || !analysis.monthly?.length || !factors
+          || factors.analysis_id !== snapshot.analysis.id || factors.extract_id !== analysis.extract_id
+          || factors.snapshot_at !== analysis.snapshot_at || !sameScientificConfig(analysis.config, factors.config)) {
+        throw new Error('Готовый снимок СКО не совпадает с параметрами матрицы.');
+      }
+      return snapshot;
+    }).catch(() => {
+      skoDownload = undefined;
+      return null;
+    });
+    return skoDownload;
   }
 
   async function load() {
@@ -273,7 +298,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
         if (signal.aborted) return;
         if (!job) {
           setDates(snapshot.analysis.result.config);
-          showJob(snapshot.analysis, true);
+          showJob(snapshot.analysis, 'Готовый мировой обзор · 85° ю. ш. — 85° с. ш.');
           status.textContent = '2022–2025 · загружается полный архив…';
           $('study-spinner').hidden = false;
         }
@@ -294,6 +319,17 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
       if (!start.value) setDates(defaults);
       if (!archive) return;
       const body = config();
+      if (body.preset === 'sko') {
+        const prepared = await loadSkoSnapshot();
+        if (signal.aborted) return;
+        const savedConfig = prepared?.analysis.result.config;
+        // The API always uses the canonical SKO boundary; the map has a simplified copy.
+        if (savedConfig && sameScientificConfig({ ...body, bbox: savedConfig.bbox }, savedConfig)) {
+          showJob(prepared.analysis, 'Готовый расчёт СКО');
+          matrix.loadSnapshot(prepared.matrix.id, prepared.matrix.result);
+          return;
+        }
+      }
       key = JSON.stringify(body);
       if (!analyses.has(key)) {
         const created = request('/api/v1/analyses', {
