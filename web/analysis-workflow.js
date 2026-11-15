@@ -1,6 +1,6 @@
 import {localizeTree} from './i18n.js';
 const steps=['territory','task','conditions','result'];
-const titles={territory:'Территория',task:'Задача и период',conditions:'Условия',result:'Результат'};
+const titles={territory:'Территория',task:'Задача и период',conditions:'Данные для анализа',result:'Результат'};
 
 export function mountAnalysisWorkflow(root,{getState,isActive,onLayout,onChange}){
  const $=id=>root.querySelector('#'+CSS.escape(id));
@@ -17,8 +17,9 @@ export function mountAnalysisWorkflow(root,{getState,isActive,onLayout,onChange}
   $('analysis-workflow-back').disabled=steps.indexOf(step)===0||state.busy;
   const ready=hasROI&&!state.busy&&!state.drawing;
   $('analysis-workflow-next').disabled=!ready||(step==='conditions'&&!state.result);
+  $('analysis-workflow-next').hidden=step==='conditions'&&!state.result;
   $('analysis-workflow-next').textContent=step==='conditions'?'К результату':step==='result'?'Открыть результат':'Далее';
-  $('analysis-workflow-message').textContent=state.loading?'Подключаем сведения об архиве…':!hasROI?'Найдите территорию или выделите участок на карте.':step==='conditions'&&!state.result?'Подберите условия или откройте дополнительные настройки. Расчёт запускается отдельной кнопкой.':'';
+  $('analysis-workflow-message').textContent=state.loading?'Подключаем сведения об архиве…':!hasROI?'Найдите территорию или выделите участок на карте.':step==='conditions'&&!state.result?'Проверьте доступные данные или откройте дополнительные настройки.':'';
   $('analysis-workflow-summary').replaceChildren(...(hasROI?[state.roi.name,' · ',state.start+' — '+state.end,' · ',state.platform]:['Территория пока не выбрана']));
   localizeTree(panel);localizeTree($('analysis-settings-bar'));
  }

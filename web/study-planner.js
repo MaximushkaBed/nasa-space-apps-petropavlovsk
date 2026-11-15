@@ -11,13 +11,27 @@ const textValue = value => value==null?'не задано':value==='auto'?'ав�
 const conditionText = (config, platform) => `${platform==='all'?'Все спутники':platform} · ${config.start} — ${config.end} · база ${config.baseline_start}–${config.baseline_end} · ${config.grid_km} км · ${config.quality==='all'?'SP + NRT':'SP'}${config.daynight==='D'?' · день':config.daynight==='N'?' · ночь':''}`;
 const changeText = change => `${fieldNames[change.field]||change.field}: ${textValue(change.from)} → ${textValue(change.to)}.${change.reason?' '+change.reason:''}`;
 const availabilityNames = {'published-world-calendar':'Обновляемый мировой архив FIRMS','seed-world-calendar':'Сохранённый снимок мирового архива FIRMS',unknown:'Сведения об архиве пока недоступны'};
+const dataPurposes = {
+  anomaly:'Покажем, когда спутник обнаруживал больше или меньше активности, чем обычно для этой территории и времени года.',
+  'compare-years':'Покажем активность одного спутника за разные годы. Два года для сравнения можно выбрать в готовом результате.',
+  'sensor-transition':'Проверим, насколько данные выбранного спутника согласуются с Aqua на этой территории. Допуск будет известен после расчёта.',
+};
+
+function dataSummary(config,platform,question){
+  const list=make('dl','study-data-summary');
+  const rows=[['Спутник',platform==='all'?'Пока не выбран':platform],['Период анализа',`${config.start} — ${config.end}`]];
+  if(question==='anomaly')rows.push(['С чем сравниваем',`Те же календарные дни в ${config.baseline_start}–${config.baseline_end}`]);
+  else if(question==='sensor-transition')rows.push(['Годы обучения',`${config.baseline_start}–${config.baseline_end}`]);
+  for(const [label,value] of rows){const row=make('div');row.append(make('dt','',label),make('dd','',value));list.append(row);}
+  return list;
+}
 
 // This controller retains only portable intent. Metadata options and assessment
 // responses are always requested again; they are never restored as evidence.
 export function mountStudyPlanner(root, {request,getInput,validate,applyOption,onQuestion,onChange,onPlanning,onExistingResult,openSettings,isActive}) {
   const $ = id => root.querySelector('#'+CSS.escape(id));
   let state={question:'anomaly',optionId:null,stage:'question',appliedSignature:null};
-  let plan=null,planSignature=null,sequence=0,planAbort=null,assessmentAbort=null,resultRef=null,assessmentKey=null,loading=false,suspended=false,appliedTitle='Условия выбраны',appliedChanges=[];
+  let plan=null,planSignature=null,sequence=0,planAbort=null,assessmentAbort=null,resultRef=null,assessmentKey=null,loading=false,suspended=false,appliedChanges=[];
   $('study-options-home').append($('study-plan-display'));
   const signature = () => {const input=getInput();return scientificSignature(input.config)+'|'+input.platform+'|'+state.question;};
   const safeSignature = () => {try{return signature();}catch{return null;}};
@@ -29,25 +43,26 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
     const {config,platform}=getInput();
     $('study-question').value=state.question;
     $('study-question-note').textContent=questions[state.question].note;
-    $('study-current-conditions').textContent=conditionText(config,platform);
+    $('study-current-conditions').replaceChildren(dataSummary(config,platform,state.question));
     $('study-plan-request').disabled=loading||state.stage==='running'||root.dataset.bootstrapPending==='true';
-    $('study-plan-request').textContent=loading?'Подбираю условия…':'Подобрать условия';
+    $('study-plan-request').textContent=loading?'Проверяем доступные данные…':'Проверить доступные данные';
     $('study-plan-options').setAttribute('aria-busy',String(loading));
     const applied=Boolean(state.appliedSignature&&state.appliedSignature===safeSignature());
     $('study-applied').hidden=!applied;
-    $('study-applied-title').textContent=state.optionId==='manual'?'Ручные условия':appliedTitle;
-    $('study-applied-summary').textContent=conditionText(config,platform);
+    $('study-applied-title').textContent=state.optionId==='manual'?'Ваши настройки анализа':'Данные выбраны';
+    $('study-applied-summary').replaceChildren(dataSummary(config,platform,state.question));
     $('study-applied-changes').replaceChildren(...appliedChanges.map(change=>make('li','',changeText(change))));
     $('study-applied-changes').hidden=!appliedChanges.length;
     const running=state.stage==='running';
+    $('study-current-conditions').hidden=Boolean(plan||applied||running||state.stage==='result');
     root.querySelector('.submit-area').hidden=!(applied||running||state.stage==='result'||$('manual-conditions').open);
-    $('study-applied').querySelector('.hint').textContent=running?'Расчёт выполняется с этими условиями.':state.stage==='result'?'Условия этого расчёта. Изменение научных параметров потребует нового расчёта.':'Проверьте условия и запустите расчёт ниже.';
-    if(running)$('study-plan-status').textContent='Расчёт запущен с выбранными условиями.';
-    else if(state.stage==='result')$('study-plan-status').textContent='Условия использованы в расчёте. Пригодность сравнения показана рядом с результатом.';
-    $('study-next-title').textContent=running?'Рассчитываем активность территории':applied?'Условия готовы к расчёту':plan?'Выберите условия расчёта':questions[state.question].title;
-    const nextNote=running?'Прогресс показан над картой. Расчёт использует выбранную границу, историю, сетку и фильтры.':applied?'Проверьте историю, базовые годы и спутник в выбранных условиях. Кнопка «Построить анализ» запустит расчёт.':plan?'Варианты показывают доступную историю, спутник и базу сравнения. Примените подходящие условия, затем запустите расчёт.':null;
-    $('study-next-note').replaceChildren(...(nextNote?[nextNote]:[questions[state.question].note,' ','Подберите условия по доступному архиву, затем запустите расчёт.']));
-    $('study-next-action').textContent=running?'К прогрессу расчёта ↑':applied?'К запуску расчёта ↑':plan?'К вариантам условий ↑':'Подобрать условия ↑';
+    $('study-applied').querySelector('.hint').textContent=running?'Считаем по этим данным.':state.stage==='result'?'Эти данные использованы в расчёте. Изменение параметров потребует нового расчёта.':'Всё готово к запуску. Нажмите «Построить анализ».';
+    if(running)$('study-plan-status').textContent='Расчёт запущен по выбранным данным.';
+    else if(state.stage==='result')$('study-plan-status').textContent='Данные использованы в расчёте. Возможность сравнения показана рядом с результатом.';
+    $('study-next-title').textContent=running?'Рассчитываем активность территории':applied?'Можно строить анализ':plan?'Выберите данные для анализа':'Проверим данные для вашей задачи';
+    const nextNote=running?'Прогресс показан над картой. Расчёт использует выбранную границу, историю, сетку и фильтры.':applied?'Спутник и годы указаны в панели «Параметры». Нажмите «Построить анализ», чтобы получить результат.':plan?'Предлагаемый вариант показывает спутник, доступный период и годы для сравнения. Изменения дат указаны до выбора.':null;
+    $('study-next-note').replaceChildren(...(nextNote?[nextNote]:[dataPurposes[state.question],' ','Сначала проверим, какие данные есть в архиве.']));
+    $('study-next-action').textContent=running?'К прогрессу расчёта ↑':applied?'К запуску расчёта ↑':plan?'Выбрать данные ↑':'Проверить данные ↑';
     $('study-next-action').hidden=false;
     $('study-existing-result').hidden=!resultRef||state.stage==='result'||running;
     root.dataset.studyStage=state.stage;
@@ -56,28 +71,35 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
     cancelPlan();cancelAssessment();resultRef=null;plan=null;planSignature=null;
     state={...state,optionId:null,stage:'question',appliedSignature:null};appliedChanges=[];
     $('study-plan-options').replaceChildren();$('study-assessment').hidden=true;
-    $('study-plan-status').textContent='Условия изменены. Подберите их заново или используйте ручные настройки.';
+    $('study-plan-status').textContent='Параметры изменились. Проверьте доступные данные заново или используйте дополнительные настройки.';
     render();
   }
   function renderPlan(){
     const content=document.createDocumentFragment();
-    for(const option of plan.options||[]){
+    const options=plan.options||[];
+    const primary=options.find(option=>option.id===plan.recommended_option_id&&option.status==='proposed')||options.find(option=>option.status==='proposed')||options[0];
+    const alternatives=make('details','study-other-data');alternatives.append(make('summary','','Другие варианты данных'));
+    for(const option of primary?[primary,...options.filter(option=>option!==primary)]:[]){
       const article=make('article','study-option');article.dataset.optionId=option.id;
-      const title=make('h3','',option.title||option.platform);article.append(title);
-      if(option.id===plan.recommended_option_id)article.append(make('span','study-option-label','Предложение по архиву'));
-      article.append(make('p','study-option-description',option.description||''));
-      if(option.config)article.append(make('p','study-option-config',conditionText(option.config,option.platform)));
+      article.append(make('h3','',option.id==='current-request'?'Оставить мои настройки':option.platform||option.title));
+      if(option.id===plan.recommended_option_id&&option.id!=='current-request'&&option.status==='proposed')article.append(make('span','study-option-label','Подходит по наличию архива'));
+      article.append(make('p','study-option-description',option.id==='current-request'?'Сохраним указанные даты и настройки. Если данных для сравнения не хватит, покажем исходную активность и объясним ограничения.':dataPurposes[state.question]));
+      if(option.config)article.append(dataSummary(option.config,option.platform,state.question));
       const changes=[...(option.changes||[]),focusChange(option.config)].filter(Boolean);
-      if(changes.length){const list=make('ul','study-option-changes');changes.forEach(change=>list.append(make('li','',changeText(change))));article.append(list);}
-      else article.append(make('p','hint','Текущие условия сохраняются.'));
+      if(changes.length){article.append(make('strong','study-data-changes-label','Что изменится при выборе'));const list=make('ul','study-option-changes');changes.forEach(change=>list.append(make('li','',changeText(change))));article.append(list);}
+      else article.append(make('p','hint','Выбранные даты и настройки сохраняются.'));
       if(option.reason)article.append(make('p','study-option-reason',option.reason));
-      if(option.limitations?.length){const details=make('details','study-option-limitations');details.append(make('summary','',`Ограничения · ${option.limitations.length}`));const list=make('ul');option.limitations.forEach(value=>list.append(make('li','',value)));details.append(list);article.append(details);}
-      const button=make('button','outline full',option.status==='unavailable'?'Вариант недоступен':'Использовать эти условия');button.type='button';button.dataset.studyApply=option.id;
-      button.setAttribute('aria-label',`${option.status==='unavailable'?'Недоступные условия':'Использовать условия'}: ${option.title||option.platform}`);
+      const details=make('details','study-option-limitations');details.append(make('summary','','Параметры и ограничения'));
+      if(option.description)details.append(make('p','',option.description));
+      if(option.config)details.append(make('p','study-option-config',conditionText(option.config,option.platform)));
+      if(option.limitations?.length){const list=make('ul');option.limitations.forEach(value=>list.append(make('li','',value)));details.append(list);}article.append(details);
+      const button=make('button','outline full',option.status==='unavailable'?'Данных для сравнения не хватает':'Выбрать эти данные');button.type='button';button.dataset.studyApply=option.id;
+      button.setAttribute('aria-label',`${option.status==='unavailable'?'Данных для сравнения не хватает':'Выбрать эти данные'}: ${option.title||option.platform}`);
       button.disabled=option.status!=='proposed'||!option.config||!option.platform||option.platform==='auto'||option.platform==='all';
-      button.addEventListener('click',()=>choose(option));article.append(button);content.append(article);
+      button.addEventListener('click',()=>choose(option));article.append(button);(option===primary?content:alternatives).append(article);
     }
-    const availability=plan.availability||{},details=make('details','study-plan-evidence');details.append(make('summary','','На чём основан план'));
+    if(options.length>1)content.append(alternatives);
+    const availability=plan.availability||{},details=make('details','study-plan-evidence');details.append(make('summary','','Источник и дата проверки'));
     details.append(make('p','',`${availabilityNames[availability.source]||availabilityNames.unknown}${availability.snapshot_at?' · снимок '+availability.snapshot_at:''}. Учитывается наличие глобального продукта. Локальная видимость неизвестна.`));
     if(plan.warnings?.length){const list=make('ul');plan.warnings.forEach(value=>list.append(make('li','',value)));details.append(list);}
     content.append(details);$('study-plan-options').replaceChildren(content);
@@ -88,15 +110,15 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
     onPlanning?.();$('study-assessment').hidden=true;
     const current=sequence,input=getInput(),intended=signature();
     planAbort=new AbortController();loading=true;state={...state,optionId:null,stage:'question',appliedSignature:null};appliedChanges=[];
-    $('study-plan-options').replaceChildren();$('study-plan-status').textContent='Проверяю наличие истории в архиве. Территория и даты пока не меняются.';render();changed();
+    $('study-plan-options').replaceChildren();$('study-plan-status').textContent='Проверяем наличие данных в архиве. Территория и даты пока не меняются.';render();changed();
     try{
       const response=await request('/api/v1/study-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:state.question,platform:input.platform==='all'?'auto':input.platform,config:input.config}),signal:planAbort.signal});
       if(current!==sequence||suspended||!isActive()||safeSignature()!==intended)return;
       plan=response;planSignature=intended;state.stage='proposed';$('manual-conditions').open=false;renderPlan();
       const count=(plan.options||[]).filter(option=>option.status==='proposed'&&!['auto','all'].includes(option.platform)).length;
-      $('study-plan-status').textContent=count?'Предварительный план. Выберите вариант; локальная пригодность и согласование ещё не проверены.':'Подходящего варианта пока нет. Проверьте ограничения или измените ручные условия.';
+      $('study-plan-status').textContent=count?'Выберите данные ниже. Возможность сравнения для вашей территории проверим после расчёта.':'Данных для сравнения пока не хватает. Откройте ограничения или измените дополнительные настройки.';
       render();changed();
-    }catch(error){if(current!==sequence||error.name==='AbortError'||suspended||!isActive())return;$('study-plan-status').textContent='Не удалось получить план: '+error.message+' Параметры сохранены; повторите подбор или используйте ручные условия.';}
+    }catch(error){if(current!==sequence||error.name==='AbortError'||suspended||!isActive())return;$('study-plan-status').textContent='Не удалось проверить данные: '+error.message+' Параметры сохранены; повторите проверку или откройте дополнительные настройки.';}
     finally{if(current===sequence){loading=false;planAbort=null;if(!suspended&&isActive())render();}}
   }
   function choose(option){
@@ -104,21 +126,21 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
     cancelAssessment();resultRef=null;
     const extraChange=focusChange(option.config);
     try{applyOption(option);}catch(error){$('study-plan-status').textContent=error.message;return;}
-    appliedTitle=option.title||'Условия выбраны';appliedChanges=[...(option.changes||[]),extraChange].filter(Boolean);
+    appliedChanges=[...(option.changes||[]),extraChange].filter(Boolean);
     state={...state,optionId:option.id,stage:'applied',appliedSignature:signature()};
     $('manual-conditions').open=false;
     // The cards describe the old request. Keep the chosen explanation, not stale actions.
     plan=null;planSignature=null;$('study-plan-options').replaceChildren();
-    $('study-plan-status').textContent='Условия применены по вашему выбору. Расчёт ещё не запускался.';render();changed();
+    $('study-plan-status').textContent='Данные выбраны. Нажмите «Построить анализ», чтобы запустить расчёт.';render();changed();
     $('study-applied').tabIndex=-1;$('study-applied').focus({preventScroll:true});$('run').scrollIntoView({block:'nearest'});
   }
   function prepareRun(){
     cancelPlan();cancelAssessment();resultRef=null;
-    if(state.appliedSignature!==safeSignature()||!state.optionId){state.optionId='manual';appliedChanges=[];appliedTitle='Ручные условия';}
+    if(state.appliedSignature!==safeSignature()||!state.optionId){state.optionId='manual';appliedChanges=[];}
     state.appliedSignature=signature();state.stage='running';
     plan=null;planSignature=null;$('study-plan-options').replaceChildren();$('study-assessment').hidden=true;render();changed();
   }
-  function runFailed(){if(state.stage==='running'){state.stage='applied';$('study-plan-status').textContent='Расчёт не завершён. Условия сохранены; можно повторить запуск.';render();changed();}}
+  function runFailed(){if(state.stage==='running'){state.stage='applied';$('study-plan-status').textContent='Расчёт не завершён. Выбранные данные сохранены; можно повторить запуск.';render();changed();}}
   function resultReady(value,{navigate=false}={}){
     resultRef=value;state.stage='result';state.optionId=state.optionId||'manual';state.appliedSignature=safeSignature();
     $('study-assessment').hidden=false;render();if(navigate)onQuestion?.(questions[state.question].tab,{result:true});changed();assess();
@@ -156,7 +178,7 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
     state={question,optionId:saved?.optionId||null,stage:'question',appliedSignature:saved?.appliedSignature||null};
     if(state.appliedSignature===safeSignature()&&state.optionId)state.stage='applied';
     else{state.optionId=null;state.appliedSignature=null;}
-    $('study-plan-status').textContent=state.stage==='applied'?'Выбранные условия восстановлены. Проверка будет выполнена по результату расчёта.':saved?.stage==='proposed'?'Режим и условия восстановлены. Подберите варианты заново по текущему архиву.':'Подберите условия по архиву либо используйте ручные настройки.';render();
+    $('study-plan-status').textContent=state.stage==='applied'?'Выбранные данные восстановлены. Возможность сравнения проверим после расчёта.':saved?.stage==='proposed'?'Задача и параметры восстановлены. Проверьте доступные данные заново.':'Проверьте доступные данные или откройте дополнительные настройки.';render();
   }
   $('study-question').addEventListener('change',()=>{state.question=$('study-question').value;invalidate();onQuestion?.(null,{invalidate:true});changed();});
   $('study-plan-request').addEventListener('click',requestPlan);

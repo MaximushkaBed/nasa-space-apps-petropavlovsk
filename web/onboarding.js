@@ -31,8 +31,8 @@ const flows = {
   setup: [
     {target:'#analysis-territory-search',fallback:'#preset',workflow:'territory',title:'1. Территория',text:'Найдите страну или регион либо выделите свой участок на карте. Расчёт будет относиться к этой границе.'},
     {target:'#study-question',workflow:'task',title:'2. Результат анализа',text:'Выберите отклонение от сезонной нормы, сравнение лет или сопоставимость данных спутников.'},
-    {target:'#study-plan-request',workflow:'conditions',title:'3. Условия сравнения',text:'Нажмите «Подобрать условия», затем выберите подходящий вариант. Расчёт пока не запускается.'},
-    {target:'#run',fallback:'#study-applied',workflow:'conditions',title:'4. Расчёт и результат',text:'После выбора условий нажмите «Построить анализ». Готовый результат можно сохранить и сравнить с другой версией.',wait:'Кнопка расчёта появится после выбора условий.'},
+    {target:'#study-plan-request',workflow:'conditions',title:'3. Данные для анализа',text:'Нажмите «Проверить доступные данные», чтобы увидеть доступные спутники и годы. Выберите, какие данные использовать. Расчёт пока не запускается.'},
+    {target:'#run',fallback:'#study-applied',workflow:'conditions',title:'4. Расчёт и результат',text:'Проверьте выбранный спутник и годы, затем нажмите «Построить анализ». Готовый результат можно сохранить и сравнить с другой версией.',wait:'Кнопка расчёта появится после выбора данных.'},
   ],
 };
 let current = null, highlighted, observed, raf, returnFocus, demoRequest, revealPending = false, workflowPending = false;
