@@ -587,13 +587,19 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         try:
             if parsed.path == '/api/v1/world-calendar':
+                from api.world_calendar import VERSION as calendar_version
                 saved = CACHE / 'world-calendar' / 'published.json'
                 try:
                     with saved.open('rb') as stream:
-                        return self.respond(200, stream.read())
+                        content=stream.read()
+                    if json.loads(content).get('method_version')==calendar_version:
+                        return self.respond(200, content)
                 except FileNotFoundError:
-                    seed = ROOT / 'web/data/world-calendar.json'
-                    return self.respond(200, seed.read_bytes()) if seed.is_file() else self.respond(202, {'status': 'preparing'})
+                    pass
+                seed = ROOT / 'web/data/world-calendar.json'
+                if seed.is_file() and json.loads(seed.read_bytes()).get('method_version')==calendar_version:
+                    return self.respond(200,seed.read_bytes())
+                return self.respond(202, {'status': 'preparing'})
             if parsed.path == '/api/v1/health':
                 return self.respond(200, {'status':'ok','data_available':(DATA/'manifest.json').exists()})
             if parsed.path == '/api/v1/config':

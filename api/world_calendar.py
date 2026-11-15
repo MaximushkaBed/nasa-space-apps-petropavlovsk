@@ -12,7 +12,8 @@ import duckdb
 
 from api.analysis import PLATFORMS, month_keys
 
-VERSION = 1
+VERSION = 2
+DAY_CACHE_VERSION = 1  # Aggregation changes must not rescan the source Parquets.
 CHECK_SECONDS = 60
 
 
@@ -44,13 +45,13 @@ def monthly_rows(datasets, first, through):
             old_points, old_nrt, old_standard = days.get((day, platform), (0, 0, False))
             days[day, platform] = (old_points + detections, old_nrt + nrt, old_standard or standard)
     last = through[:10]
-    month_days = defaultdict(list)
+    month_days = defaultdict(dict)
     for (day, platform), counts in days.items():
         if first <= day <= last:
-            month_days[day[:7], platform].append(counts)
+            month_days[day[:7], platform][int(day[8:])] = counts
 
     rows = []
-    reference = defaultdict(list)
+    indexed = {}
     for month in month_keys(date.fromisoformat(first), date.fromisoformat(last)):
         year, number = map(int, month.split("-"))
         expected = calendar.monthrange(year, number)[1]
@@ -58,21 +59,42 @@ def monthly_rows(datasets, first, through):
         for platform in PLATFORMS:
             observed = month_days[month, platform]
             n = len(observed)
-            count = sum(obs[0] for obs in observed)
-            nrt = sum(obs[1] for obs in observed)
-            provisional = nrt > 0 or any(not standard for _, _, standard in observed)
+            count = sum(obs[0] for obs in observed.values())
+            nrt = sum(obs[1] for obs in observed.values())
+            provisional = nrt > 0 or any(not standard for _, _, standard in observed.values())
             row = dict(month=month, platform=platform, points=count if n else None, eligible_days=n,
-                       nrt_points=nrt, preliminary=provisional, partial=partial, anomaly_pct=None)
+                       nrt_points=nrt, preliminary=provisional, partial=partial, anomaly_pct=None,
+                       comparison_day_numbers=sorted(observed), baseline_year_ids=[], baseline_years=0,
+                       comparison_status='insufficient_target_days')
             rows.append(row)
-            if 2022 <= year <= 2024 and not (partial or provisional) and n >= expected * .9:
-                reference[number, platform].append((year, count / n))
+            indexed[year, number, platform] = observed
     for row in rows:
         year, month = map(int, row["month"].split("-"))
-        if row["partial"] or row["preliminary"] or row["eligible_days"] < calendar.monthrange(year, month)[1] * .9:
+        if row['partial']:
+            row['comparison_status']='partial_period'
             continue
-        comparable = [rate for ref_year, rate in reference[month, row["platform"]] if ref_year != year]
-        if len(comparable) >= 3 and (usual := median(comparable)) > 0:
-            row["anomaly_pct"] = 100 * (row["points"] / row["eligible_days"] / usual - 1)
+        if row['preliminary']:
+            row['comparison_status']='preliminary_data'
+            continue
+        if row["eligible_days"] < calendar.monthrange(year, month)[1] * .9:
+            continue
+        mask=row['comparison_day_numbers']
+        comparable=[]
+        for ref_year in range(2022,2025):
+            if ref_year==year:continue
+            reference=indexed.get((ref_year,month,row['platform']),{})
+            # Missing reference dates are unknown, never implicit zeroes. Extra
+            # historical dates (including Feb29) are outside the target mask.
+            if not all(day in reference and reference[day][2] and reference[day][1]==0
+                       and f'{ref_year}-{month:02}-{day:02}' < last for day in mask):continue
+            comparable.append(sum(reference[day][0] for day in mask)/len(mask))
+            row['baseline_year_ids'].append(ref_year)
+        row['baseline_years']=len(comparable)
+        row['comparison_status']='insufficient_baseline'
+        if len(comparable)>=3:
+            usual=median(comparable)
+            row['comparison_status']='ok' if usual>0 else 'zero_baseline'
+            if usual>0:row['anomaly_pct']=100*(row['points']/len(mask)/usual-1)
     return rows
 
 
@@ -95,14 +117,14 @@ def refresh(data, cache, pin, write, *, incremental=False):
         if not sources:
             return
         keys = sorted({asset["sha256"] for asset in sources})
-        fingerprint = hashlib.sha256(f"{VERSION}:{','.join(keys)}".encode()).hexdigest()
+        fingerprint = hashlib.sha256(f"{VERSION}:{DAY_CACHE_VERSION}:{','.join(keys)}".encode()).hexdigest()
         if destination.exists() and json.loads(destination.read_bytes()).get("revision") == fingerprint:
             return
         used = set()
         datasets = []
         built = False
         for asset in sources:
-            entry = directory / f"days-{VERSION}-{asset['sha256']}.json"
+            entry = directory / f"days-{DAY_CACHE_VERSION}-{asset['sha256']}.json"
             if entry not in used:
                 if not entry.exists():
                     if incremental and built:
@@ -115,7 +137,7 @@ def refresh(data, cache, pin, write, *, incremental=False):
         first = min(asset["start"][:10] for asset in sources)
         through = max(asset["end"] for asset in sources)
         write(destination, {
-            "revision": fingerprint, "start": first, "end": through[:10], "through": through,
+            "revision": fingerprint, "method_version": VERSION, "start": first, "end": through[:10], "through": through,
             "snapshot_at": state["updated_at"], "monthly": monthly_rows(datasets, first, through),
         })
         print(f"World FIRMS calendar published {first} .. {through}", flush=True)

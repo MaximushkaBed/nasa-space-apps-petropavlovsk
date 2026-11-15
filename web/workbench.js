@@ -529,7 +529,7 @@ function applyFocus(focus){
 }
 function focusState(){
  if(rangeFocus)return clone(rangeFocus);
- if(!result||!month)return clone(retainedFocus)||{start:$('start').value,end:$('end').value,basis:'UTC',grain:'month'};
+ if(!result||!month)return clone(retainedFocus)||null;
  if(mapYear){const metrics=result.weekly_profiles?.[source]?.year_metrics?.[mapYear];return {start:metrics?.start_date||`${mapYear}-01-01`,end:metrics?.end_date||`${mapYear}-12-31`,basis:'ISO',grain:'year'};}
  const dates=frameDates();return frame?{start:dates[frame-1],end:dates[frame-1],basis:'UTC',grain:'day'}:{start:dates[0],end:dates.at(-1),basis:'UTC',grain:'month'};
 }

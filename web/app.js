@@ -244,6 +244,10 @@ function createMap(basemap, boundary, closePanel) {
     const scopeName = roi?.name || 'Весь мир';
     $('layer-scope').textContent = roi ? `Наложения внутри границы · ${scopeName}` : 'Слои на всей карте';
     $('open-area').textContent = roi ? 'Выбранная область' : 'Обзор мира';
+    for (const id of ['area-open-analysis', 'atlas-open-analysis']) {
+      $(id).hidden = !roi;
+      $(id).disabled = !roi;
+    }
     const regional = !roi || areaAnalysis.intersectsRegion();
     $('local-layers').hidden = !regional;
     root.querySelector('[data-sko-layer]')?.toggleAttribute('hidden', !regional);
@@ -435,19 +439,19 @@ function firePoints() {
 function renderFireLayer(points = firePoints()) {
   const visible = $('fire-layer').checked;
   const grouped = Boolean(worldFrame && worldFrame.start !== worldFrame.end);
-  const detail = displayedViewport?.status === 'ok' ? displayedViewport.points : undefined;
-  const waitingForDetail = grouped && !detail && map.getZoom() >= fireDetailZoom;
-  $('heat-legend').hidden = !visible || fireDisplay !== 'heat' || waitingForDetail;
+  const detail = displayedViewport?.status === 'ok' && displayedViewport.coversView() ? displayedViewport.points : undefined;
+  const overview = grouped && !detail;
+  $('heat-legend').hidden = !visible || fireDisplay !== 'heat';
   $('heat-legend').lastChild.textContent = grouped && !detail ? ' Плотность по сводке' : ' Плотность детекций';
-  $('world-point-legend').hidden = !visible || fireDisplay !== 'points' || waitingForDetail;
-  $('world-point-legend').classList.toggle('grouped', grouped && !detail);
-  $('world-point-legend').lastChild.textContent = grouped && !detail ? ' Группы детекций' : ' Пиксели MODIS / VIIRS';
+  $('world-point-legend').hidden = !visible || fireDisplay !== 'points';
+  $('world-point-legend').classList.toggle('grouped', overview);
+  $('world-point-legend').lastChild.textContent = overview ? ' Число детекций в группе · положение приблизительное' : ' Пиксели MODIS / VIIRS';
   const status = viewportFrame?.status;
   const coverage = viewportFrame?.missing?.length ? ' В архиве есть пропуски дат.' : '';
   const retainingPrevious = worldFrame && (worldFrame.path !== requestedFire?.path || worldFrame.satellite !== requestedFire?.satellite
     || (worldFrame.local && !displayedViewport?.coversView()));
   const detailFailure = ['too_wide', 'too_dense', 'too_slow', 'unavailable', 'error'].includes(status);
-  const message = viewportFrame !== displayedViewport && status === 'ok' ? ''
+  let message = viewportFrame !== displayedViewport && status === 'ok' ? ''
     : status === 'ok' ? `${viewportFrame.points.length ? (viewportFrame.method === 'archive' ? 'Исходный архив · без фильтра качества.' : '')
     : 'В архиве для этого участка нет детекций.'}${coverage}`.trim() : {
     too_wide: 'Приблизьте карту, чтобы увидеть отдельные детекции.',
@@ -457,6 +461,9 @@ function renderFireLayer(points = firePoints()) {
     unavailable: 'Исходные детекции за этот период недоступны.',
     error: 'Детекции на этом участке не загрузились.',
   }[status];
+  if (overview && map.getZoom() >= fireDetailZoom) {
+    message = `${message || (status === 'loading' ? 'Загружаем отдельные детекции.' : '')} Показаны сводные группы с количеством детекций.`.trim();
+  }
   $('fire-detail-status').textContent = visible && message
     ? `${message}${retainingPrevious && detailFailure ? ' На карте остаются предыдущие данные.' : ''}` : '';
   $('fire-detail-status').hidden = !visible || !message;
@@ -1007,6 +1014,8 @@ async function start() {
       $('world-satellite').value = dailySatellite;
     }
     setWorldPeriod(span);
+  }, () => {
+    if (active && bridge.isActive?.('atlas') !== false) bridge.setContext?.({});
   });
   study.setScope(null);
   const closePanel = setupPanels();
@@ -1016,6 +1025,10 @@ async function start() {
     ]);
     calendar = regionalCalendar;
     const reset = createMap(basemap, boundary, closePanel);
+    const openSelectedAnalysis = () => {
+      if (areaAnalysis.getSelection()) bridge.navigate?.('analysis', { from: 'atlas', run: false });
+    };
+    for (const id of ['area-open-analysis', 'atlas-open-analysis']) $(id).addEventListener('click', openSelectedAnalysis);
     $('open-area').textContent = 'Обзор мира';
     $('sko-example').addEventListener('click', () => {
       stopPlayback();
@@ -1156,7 +1169,7 @@ function getState() {
       platform, atlasQuality: worldFrame?.method === 'publisher' || viewportFrame?.method === 'archive' ? 'publisher_all' : 'atlas_filtered',
     },
     camera: map ? { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() } : null,
-    fireDisplay, localPanel: currentPanel,
+    fireDisplay, localPanel: currentPanel, study: study?.getState(),
   };
 }
 function publishContext() {
@@ -1177,6 +1190,7 @@ return {
       if (context.roi) areaAnalysis?.setSelection(context.roi);
       else if (areaAnalysis?.getSelection()) areaAnalysis.clearSelection();
     }
+    if (state?.study) study.restore(state.study);
     if (context?.platform && worldArchive) {
       const id = context.platform === 'all' ? -1 : worldArchive.platforms.findIndex(p => normalizePlatform(p) === context.platform);
       if (context.platform !== 'all' && id < 0) bridge.notice?.('Эта платформа недоступна в текущем архиве атласа. Фильтр не изменён.');
@@ -1204,7 +1218,7 @@ return {
       $('fire-heat').setAttribute('aria-pressed', String(fireDisplay === 'heat'));
     }
     if (options.caseId || options.view === 'cases') showPanel?.('#kishkenekol-case');
-    else if (state?.localPanel) showPanel?.(state.localPanel);
+    else if (state?.localPanel || state?.study?.openTab) showPanel?.(state.localPanel || state.study.openTab);
     else if(options.view==='atlas'&&root.querySelector('#kishkenekol-case')&&!root.querySelector('#kishkenekol-case').hidden)showPanel?.('#observations');
     weatherOverlay?.resume?.();
     if(worldArchive)renderLayers();

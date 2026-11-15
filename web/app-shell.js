@@ -99,6 +99,9 @@ function urlFor(view) {const url=new URL(location.href);url.search='';url.search
 async function navigate(view,payload={}) {
   if(!viewNames.has(view))return;
   if(payload.share)return share(view,payload.state);
+  if(view==='analysis'&&currentView==='atlas'&&!payload.context&&!payload.state&&!payload.snapshot&&!payload.fromHistory&&controllers.get('atlas')?.getState?.().context?.roi){
+    payload={...payload,context:analysisContext(),run:false,from:payload.from||'atlas'};
+  }
   const before=persist();
   const oldKey=currentView==='cases'?'atlas':currentView;
   controllers.get(oldKey)?.deactivate?.();
@@ -124,21 +127,30 @@ async function navigate(view,payload={}) {
   }catch(error){if(token===navigation){notice(error.message);$('shell-loading').textContent='Инструмент не загрузился. Выберите другой раздел или обновите страницу.';$('shell-loading').hidden=false;}}
 }
 function analysisContext() {
-  const from=controllers.get('atlas')?.getState?.().context || {};
+  const atlas=controllers.get('atlas')?.getState?.(),from=atlas?.context||{},study=atlas?.study;
   const next={...clone(context),...clone(from)};
   next.history={...context.history};next.baseline={...context.baseline};
-  if(next.focus?.end>next.history.end)next.history.end=next.focus.end;
-  if(next.focus?.start<next.history.start)next.history.start=next.focus.start;
+  if(study?.start&&study?.end){
+    next.history={start:study.start,end:study.end};
+    next.baseline={start:study.baseline_start,end:study.baseline_end};
+    if(platformNames.has(study.platform)&&study.platform!=='all')next.platform=study.platform;
+    next.grid_km=10;next.quality='sp';next.daynight='all';
+  }
+  if(next.focus&&(next.focus.start<next.history.start||next.focus.end>next.history.end)){
+    next.focus=null;
+    notice('Дата карты вне периода исследования; выберите период в анализе.');
+  }
   return next;
 }
 async function share(view,state) {
   try{
     const selected=state||controllers.get(view==='cases'?'atlas':view)?.getState?.();
-    const portable={version:1,context:selected?.context||context,tab:selected?.tab,step:selected?.step,month:selected?.month,mapMode:selected?.mapMode,mapYear:selected?.mapYear,compareYearA:selected?.compareYearA,compareYearB:selected?.compareYearB,seriesMode:selected?.seriesMode,analysisId:selected?.analysisId,matrixId:selected?.matrixId,matrixState:selected?.matrixState};
+    const portable={version:1,context:selected?.context||context,tab:selected?.tab,step:selected?.step,month:selected?.month,mapMode:selected?.mapMode,mapYear:selected?.mapYear,compareYearA:selected?.compareYearA,compareYearB:selected?.compareYearB,seriesMode:selected?.seriesMode,analysisId:selected?.analysisId,matrixId:selected?.matrixId,matrixState:selected?.matrixState,study:selected?.study,camera:selected?.camera,localPanel:selected?.localPanel,fireDisplay:selected?.fireDisplay};
     let encoded=JSON.stringify(portable);const url=urlFor(view);
     if(encodeURIComponent(encoded).length>6000){
-      if(!selected?.analysisId)throw new Error('Для ссылки с подробной границей сначала завершите расчёт территории.');
-      url.searchParams.set('analysis_id',selected.analysisId);encoded=JSON.stringify({...portable,context:{...portable.context,roi:null}});
+      const analysisId=selected?.analysisId||selected?.study?.analysisId;
+      if(!analysisId)throw new Error('Для ссылки с подробной границей сначала завершите расчёт территории.');
+      url.searchParams.set('analysis_id',analysisId);encoded=JSON.stringify({...portable,context:{...portable.context,roi:null},...(portable.study?{study:{...portable.study,config:null}}:{})});
     }
     url.searchParams.set('state',encoded);history.replaceState({...history.state,app:true,view},'',url);
     try{await navigator.clipboard.writeText(url.href);notice('Ссылка на выбранный контекст скопирована.');}catch{notice('Ссылка с выбранным контекстом находится в адресной строке.');}

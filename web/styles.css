@@ -69,6 +69,8 @@ body { overflow: hidden; }
 .tool-nav { margin-inline-start: auto; }
 .tool-nav .quiet-button { background: #07132df2; text-decoration: none; white-space: nowrap; }
 .tool-nav .quiet-button[aria-expanded=true] { border-color: var(--sky); color: var(--sky); }
+.tool-nav .area-analysis-action, .area-summary .area-analysis-action { border-color: var(--sky); background: #163c63; color: #f5f8ff; }
+.area-summary .area-analysis-action { width: 100%; margin: 8px 0; }
 .atlas-panel { position: absolute; z-index: 650; top: var(--panel-top, 62px); right: 12px; max-height: calc(100dvh - var(--panel-top, 62px) - 14px); overflow: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid #45638d; border-radius: 6px; background: #091a35f7; }
 .analysis-panel { width: min(1080px, calc(100% - 82px)); }
 .area-panel { left: 55px; right: auto; width: min(305px, calc(100% - 67px)); }

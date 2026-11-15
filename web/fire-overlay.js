@@ -5,6 +5,7 @@ export const fireDetailZoom = 7;
 const projectedPixelWidth = (meters, latitude) => 256 * meters
   / (mercatorCircumference * Math.cos(latitude * Math.PI / 180));
 const maxPixelWidth = projectedPixelWidth(1000, mercatorLimit);
+const groupNumber = new Intl.NumberFormat('ru', { notation: 'compact', maximumFractionDigits: 1 });
 
 function createPalette(stops) {
   const ramp = document.createElement('canvas');
@@ -46,6 +47,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
   let hitTargets = [];
   let input;
   let detailInput;
+  let drawingOverview = false;
 
   function drawHeat(ctx, width, height, ratio, bins, radius) {
     const scale = Math.min(ratio, 1, 1400 / Math.max(width, height));
@@ -75,7 +77,10 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
   function draw() {
     const zoom = map.getZoom();
     const detailZoom = zoom >= fireDetailZoom;
-    const frame = aggregated && detailZoom ? detail : points;
+    const hasDetail = aggregated && detailZoom && Array.isArray(detail);
+    const overview = aggregated && !hasDetail;
+    const frame = hasDetail ? detail : points;
+    drawingOverview = overview;
     canvas.hidden = !visible || !frame?.length;
     hitTargets = [];
     if (canvas.hidden) return;
@@ -89,15 +94,14 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     canvas.height = Math.round(height * ratio);
     const ctx = canvas.getContext('2d');
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    const step = zoom < 6 ? 9 : 6;
+    const step = overview && mode === 'points' ? 48 : zoom < 6 ? 9 : 6;
     const bins = new Map();
     const scale = map.getZoomScale(zoom, 0);
     const origin = map.getPixelBounds().min;
     const worldWidth = 256 * scale;
-    const overview = aggregated && !detailZoom;
-    const detailed = mode === 'points' && detailZoom;
+    const detailed = mode === 'points' && detailZoom && !overview;
     const heatRadius = overview ? Math.min(34, Math.max(13, worldWidth / 460)) : zoom < 6 ? 17 : 23;
-    const margin = detailed ? Math.max(4, maxPixelWidth * scale / 2) : mode === 'heat' ? heatRadius : 8;
+    const margin = detailed ? Math.max(4, maxPixelWidth * scale / 2) : mode === 'heat' ? heatRadius : overview ? 24 : 8;
     const firstCopy = Math.floor((origin.x - margin) / worldWidth);
     const lastCopy = Math.floor((origin.x + width + margin) / worldWidth);
     const stride = Math.ceil((width + 2 * margin) / step) + 1;
@@ -135,12 +139,21 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
       for (const bin of bins.values()) {
         if (bin.regional !== regional) continue;
         const { x, y, count } = bin;
-        const half = overview ? Math.min(2.5, (regional ? 1.8 : 1.1) + Math.log2(count) * .14)
+        const half = overview ? Math.min(22, 12 + Math.log10(Math.max(1, count)) * 2)
           : Math.min(3.8, (regional ? 2.1 : 1.4) + Math.log2(count) * .37);
         if (overview) {
+          ctx.fillStyle = '#e44332';
           ctx.beginPath();
           ctx.arc(x, y, half, 0, 2 * Math.PI);
           ctx.fill();
+          ctx.strokeStyle = '#ffb596';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.fillStyle = '#fff';
+          ctx.font = '600 11px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(groupNumber.format(count), x, y);
         } else ctx.fillRect(x - half, y - half, half * 2, half * 2);
         hitTargets.push({ ...bin, half });
       }
@@ -178,7 +191,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     if (!selected) return;
     const content = document.createElement('div');
     const title = document.createElement('strong');
-    const isGroup = aggregated && map.getZoom() < fireDetailZoom;
+    const isGroup = drawingOverview;
     const isPixel = !isGroup && selected.count === 1;
     const samePosition = isPixel ? hitTargets.filter(({ x, y }) => x === selected.x && y === selected.y) : [];
     title.textContent = isGroup ? `Детекций в группе — ${number.format(selected.count)}`
@@ -190,7 +203,9 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
       for (const observation of samePosition.slice(0, 6)) appendObservation(content, observation);
       if (samePosition.length > 6) content.append(document.createElement('br'), `Ещё ${number.format(samePosition.length - 6)} детекций`);
     } else {
-      content.append(document.createElement('br'), 'Приблизьте карту для отдельных детекций.');
+      content.append(document.createElement('br'), isGroup
+        ? 'Сводная группа; положение приблизительное. Приблизьте карту для отдельных детекций.'
+        : 'Приблизьте карту для отдельных детекций.');
     }
     L.popup().setLatLng(latlng).setContent(content).openOn(map);
   });

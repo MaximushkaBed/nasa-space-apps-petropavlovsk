@@ -1,4 +1,5 @@
 import { mountMatrixPanel } from './matrix-panel.js?v=archive';
+import { sameScientificConfig } from './scientific-context.js';
 
 const sources = ['Aqua', 'Terra', 'Suomi-NPP', 'NOAA-20', 'NOAA-21'];
 const preferred = ['NOAA-20', 'NOAA-21', 'Suomi-NPP', 'Aqua', 'Terra'];
@@ -13,7 +14,7 @@ async function request(path, options) {
   return data;
 }
 
-export function createAtlasStudy(root, getPlatform, selectMonth) {
+export function createAtlasStudy(root, getPlatform, selectMonth, onChange = () => {}) {
   const $ = (id) => root.querySelector('#' + id);
   const panel = $('atlas-study');
   const status = $('study-status');
@@ -23,12 +24,34 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   platform.add(new Option('Авто · доступный спутник', 'auto'));
   for (const source of sources) platform.add(new Option(source, source));
   let roi, scopeKey, archive, job, timer, controller, worldSnapshot, worldDownload, worldCalendar, calendarTimer;
+  let customDates = false, pendingId, pendingConfig, restoreState;
   let allWorld = true;
   let openTab;
   const analyses = new Map();
   const matrices = new Map();
   const dates = { start, end, baseline_start: baselineStart, baseline_end: baselineEnd };
   for (const input of Object.values(dates)) input.disabled = true;
+
+  function matchingConfig(a, b) {
+    // The server owns the SKO boundary and derives a circle's bounding box.
+    const canonical = value => {
+      if (value?.preset === 'sko') return { ...value, bbox: [-180, -85, 180, 85], geometry: undefined };
+      if (value?.circle) return { ...value, bbox: [-180, -85, 180, 85] };
+      const geometry = value?.geometry?.type === 'Feature' ? value.geometry.geometry : value?.geometry;
+      if (!geometry) return value;
+      const positions = [];
+      const visit = node => {
+        if (!Array.isArray(node)) return;
+        if (node.length === 2 && node.every(Number.isFinite)) positions.push(node);
+        else node.forEach(visit);
+      };
+      visit(geometry.coordinates);
+      if (!positions.length) return value;
+      return { ...value, bbox: [Math.min(...positions.map(p => p[0])), Math.min(...positions.map(p => p[1])),
+        Math.max(...positions.map(p => p[0])), Math.max(...positions.map(p => p[1]))] };
+    };
+    return sameScientificConfig(canonical(a), canonical(b));
+  }
 
   function matrixSource() {
     if (platform.value !== 'auto') return platform.value;
@@ -48,19 +71,21 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     if (key === scopeKey) return;
     roi = next;
     scopeKey = key;
-    allWorld = !roi;
+    allWorld = !roi && !customDates;
     $('study-area').textContent = roi?.name || 'Весь мир';
-    if (!roi && worldCalendar) setWorldDates();
-    else if (roi && archive) setArchiveDates();
+    if (!roi && allWorld && worldCalendar) setWorldDates();
+    else if (roi && archive && !customDates) setArchiveDates();
     $('study-default-period').hidden = Boolean(roi);
     schedule();
   }
 
-  function schedule(delay = roi ? 650 : 0) {
+  function schedule(delay = roi ? 650 : 0, saved = null) {
     clearTimeout(timer);
     clearTimeout(calendarTimer);
     controller?.abort();
     job = undefined;
+    pendingId = pendingConfig = undefined;
+    restoreState = saved;
     retry.hidden = true;
     $('study-calendar').replaceChildren();
     $('study-calendar-detail').textContent = '';
@@ -68,6 +93,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     $('study-spinner').hidden = false;
     status.textContent = roi ? 'Готовим календарь и связи для выбранной области…' : 'Загружаем готовый мировой обзор…';
     timer = setTimeout(load, delay);
+    onChange();
   }
 
   function renderCalendar() {
@@ -149,10 +175,11 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     }
     return {
       preset: roi?.preset === 'sko' ? 'sko' : roi ? 'custom' : 'world',
-      ...(roi && { bbox: roi.bbox, geometry: roi.geometry, circle: roi.circle, roi_name: roi.name.slice(0, 120), roi_source: roi.source?.slice(0, 200) }),
+      ...(roi ? { bbox: roi.bbox, ...(roi.preset !== 'sko' && { geometry: roi.geometry, circle: roi.circle }), roi_name: roi.name.slice(0, 120), roi_source: roi.source?.slice(0, 200) }
+        : { bbox: [-180, -85, 180, 85] }),
       start: start.value, end: end.value,
       baseline_start: Number(baselineStart.value), baseline_end: Number(baselineEnd.value),
-      grid_km: 10, quality: 'sp', daynight: 'all',
+      grid_km: roi ? 10 : 250, quality: 'sp', daynight: 'all',
     };
   }
 
@@ -164,6 +191,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     status.textContent = `${start} — ${end} UTC · SP · сетка ${grid} км · локальная видимость неизвестна.${snapshot ? ` Готовый мировой обзор · 85° ю. ш. — 85° с. ш.${snapshotDate ? ` · снимок архива ${snapshotDate}` : ''}` : ''}`;
     renderCalendar();
     matrix.refresh();
+    onChange();
   }
 
   function setDates(cfg) {
@@ -250,6 +278,8 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
 
   async function load() {
     const signal = (controller = new AbortController()).signal;
+    const saved = restoreState;
+    restoreState = undefined;
     let key;
     if (!roi && allWorld) {
       if (worldCalendar) presentWorld(worldCalendar);
@@ -284,6 +314,12 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
       if (!archive) return;
       const body = config();
       key = JSON.stringify(body);
+      if (saved?.analysisId) {
+        if (!/^[0-9a-f]{32}$/.test(saved.analysisId) || (saved.config && !matchingConfig(saved.config, body))) {
+          throw new Error('Сохранённый календарь относится к другой территории или другим параметрам. Повторите расчёт для выбранной области.');
+        }
+        analyses.set(key, Promise.resolve(saved.analysisId));
+      }
       if (!analyses.has(key)) {
         const created = request('/api/v1/analyses', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: key,
@@ -292,6 +328,10 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
         if (analyses.size > 20) analyses.delete(analyses.keys().next().value);
       }
       const id = await analyses.get(key);
+      if (signal.aborted) return;
+      pendingId = id;
+      pendingConfig = body;
+      onChange();
       let progress;
       while (!signal.aborted) {
         progress = await request(`/api/v1/analyses/${encodeURIComponent(id)}?view=calendar`, { signal });
@@ -301,9 +341,10 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
       }
       if (signal.aborted) return;
       if (progress.status !== 'done' || !progress.result) throw new Error(progress.message || 'Расчёт календаря не завершился.');
+      if (!matchingConfig(progress.result.config, body)) throw new Error('Параметры сохранённого календаря не совпадают с выбранной территорией и периодом. Повторите расчёт.');
       showJob({ id, result: progress.result });
-      const saved = matrices.get(id);
-      if (saved) await matrix.restore(saved);
+      const matrixId = saved?.matrixId || matrices.get(id);
+      if (matrixId) await matrix.restore(matrixId, saved?.matrixState);
       else await matrix.start();
       if (signal.aborted) return;
       const finished = matrix.getState();
@@ -314,21 +355,26 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
         matrices.delete(id);
         retry.hidden = false;
       }
+      onChange();
     } catch (error) {
       if (signal.aborted) return;
       if (key && !job) analyses.delete(key);
+      pendingId = pendingConfig = undefined;
       status.textContent = error.message;
       $('study-spinner').hidden = true;
       retry.hidden = false;
+      onChange();
     }
   }
 
   retry.addEventListener('click', () => schedule(0));
   $('study-default-period').addEventListener('click', () => {
+    customDates = false;
     allWorld = true;
     schedule(0);
   });
   for (const input of [start, end]) input.addEventListener('change', () => {
+    customDates = true;
     allWorld = false;
     if (start.value && end.value && start.value <= end.value) {
       const first = Number(start.value.slice(0, 4));
@@ -341,11 +387,38 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     }
     schedule(750);
   });
-  for (const input of [baselineStart, baselineEnd]) input.addEventListener('change', () => { allWorld = false; schedule(750); });
-  platform.addEventListener('change', () => { renderCalendar(); matrix.refresh(); });
+  for (const input of [baselineStart, baselineEnd]) input.addEventListener('change', () => { customDates = true; allWorld = false; schedule(750); });
+  platform.addEventListener('change', () => { renderCalendar(); matrix.refresh(); onChange(); });
+
+  function getState() {
+    const current = matrix.getState();
+    return {
+      version: 1, start: start.value, end: end.value,
+      baseline_start: baselineStart.valueAsNumber, baseline_end: baselineEnd.valueAsNumber,
+      platform: platform.value, allWorld, customDates, openTab,
+      analysisId: job?.id || pendingId || null,
+      matrixId: current.result || current.busy ? current.id : null,
+      matrixState: { platform: current.platform, mode: current.mode, pair: current.pair },
+      config: job?.result?.config || pendingConfig || null,
+    };
+  }
+
+  function restore(saved) {
+    if (saved?.version !== 1 || !/^\d{4}-\d{2}-\d{2}$/.test(saved.start || '')
+      || !/^\d{4}-\d{2}-\d{2}$/.test(saved.end || '') || saved.start > saved.end
+      || !Number.isInteger(saved.baseline_start) || !Number.isInteger(saved.baseline_end)
+      || saved.baseline_start > saved.baseline_end
+      || !['auto', ...sources].includes(saved.platform)) return;
+    setDates(saved);
+    platform.value = saved.platform;
+    allWorld = Boolean(saved.allWorld) && !roi;
+    customDates = saved.customDates ?? !allWorld;
+    openTab = ['#activity-calendar', '#external-factors'].includes(saved.openTab) ? saved.openTab : undefined;
+    schedule(0, saved);
+  }
 
   return {
-    setScope,
+    setScope, getState, restore,
     setArchive(value) {
       archive = value;
       start.min = end.min = archive.first;
