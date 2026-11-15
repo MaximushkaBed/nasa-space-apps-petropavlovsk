@@ -5,8 +5,8 @@ const radians=Math.PI/180,earthRadius=6371.0088;
 const distanceFormat=numberFormat({maximumFractionDigits:2});
 const canonical=longitude=>longitude>=-180&&longitude<=180?longitude:((longitude+180)%360+360)%360-180;
 const near=(longitude,reference)=>longitude+360*Math.round((reference-longitude)/360);
-const descriptions={rectangle:'Прямоугольник: отметьте два противоположных угла.',polygon:'Полигон: добавьте вершины и нажмите «Применить полигон».',circle:'Круг: отметьте центр, затем точку на окружности.'};
-const mapDescriptions={rectangle:'Прямоугольник · два противоположных угла.',polygon:'Полигон · добавьте вершины, затем «Применить полигон».',circle:'Круг · центр и точка на окружности.'};
+const descriptions={rectangle:'Прямоугольник: отметьте два противоположных угла.',polygon:'Полигон: добавьте вершины. Enter, правый клик или «Применить полигон» — завершить.',circle:'Круг: отметьте центр, затем точку на окружности.'};
+const mapDescriptions={rectangle:'Прямоугольник · два противоположных угла.',polygon:'Полигон · добавьте вершины. Enter или правый клик — завершить, Esc — отмена.',circle:'Круг · центр и точка на окружности.'};
 
 function longitudeParts(ring){
  const clip=(points,edge,greater)=>{const out=[];for(let i=0;i<points.length;i++){const start=points[(i+points.length-1)%points.length],end=points[i],a=greater?start[0]>=edge:start[0]<=edge,b=greater?end[0]>=edge:end[0]<=edge;if(a!==b){const t=(edge-start[0])/(end[0]-start[0]);out.push([edge,start[1]+t*(end[1]-start[1])]);}if(b)out.push(end);}return out;};
@@ -44,6 +44,11 @@ export function selectionBounds(geometry){
 export function createAnalysisSelection(root,{map,request,getParent,onCommit,onState,canDraw=()=>true,isActive=()=>true}){
  const $=id=>root.querySelector('#'+CSS.escape(id));
  const preview=L.layerGroup().addTo(map),parentOutline=L.layerGroup().addTo(map);
+ const interactiveTarget=event=>{
+  const target=(event.originalEvent||event).target;
+  const element=target?.nodeType===3?target.parentElement:target;
+  return Boolean(element?.closest?.('button,input,select,textarea,a,label,summary,[role="button"],[role="option"],[contenteditable="true"],.leaflet-control,#selection-actions,#draw-instruction'));
+ };
  let mode=null,points=[],hover=null,parent=null,contextParent=null,pending=false,epoch=0,controller=null,restoreDoubleClick=true;
  const identity=value=>JSON.stringify(value?{geometry:roiGeometry(value),circle:value.circle||null}:null);
  function renderParent(){parentOutline.clearLayers();const roi=mode?parent:contextParent;if(!roi)return;const geometry=roiGeometry(roi);if(geometry)L.geoJSON(geometry,{interactive:false,style:{color:'#9cbbe1',weight:1.5,fillOpacity:0,dashArray:'7 5',opacity:.7}}).addTo(parentOutline);}
@@ -53,11 +58,11 @@ export function createAnalysisSelection(root,{map,request,getParent,onCommit,onS
   $('selection-actions').hidden=!mode;$('selection-finish').hidden=mode!=='polygon';$('selection-finish').disabled=pending||points.length<3;$('selection-undo').hidden=mode!=='polygon';$('selection-undo').disabled=pending||!points.length;$('selection-cancel').disabled=false;
   $('draw-instruction').hidden=!mode;map.getContainer().style.cursor=mode?'crosshair':'';
   const withinParent=parent?[' ',`Только внутри «${parent.name}».`]:[];
-  $('draw-instruction').replaceChildren(...(mode?[pending?'Применяем точную границу…':mapDescriptions[mode],...withinParent,' ','Esc — отмена.']:[]));
+  $('draw-instruction').replaceChildren(...(mode?[pending?'Применяем точную границу…':mapDescriptions[mode],...withinParent,...(mode==='polygon'?[]:[' ','Esc — отмена.'])]:[]));
   const selectionNote=mode?(pending?['Проверяем пересечение с выбранной территорией…']:[descriptions[mode],...withinParent])
     :['Выберите инструмент. Граница изменится после завершения выделения.'];
   $('selection-state').replaceChildren(...selectionNote);
-  onState?.({active:Boolean(mode),pending,mode});
+  onState?.({active:Boolean(mode),pending,mode,vertices:points.length,canFinish:mode==='polygon'&&points.length>=3&&!pending});
  }
  function draw(){
   preview.clearLayers();if(!mode)return;
@@ -70,6 +75,7 @@ export function createAnalysisSelection(root,{map,request,getParent,onCommit,onS
  function cancel({focus=false}={}){
   ++epoch;controller?.abort();controller=null;mode=null;points=[];hover=null;pending=false;preview.clearLayers();$('selection-measure').textContent='';if(restoreDoubleClick)map.doubleClickZoom.enable();renderParent();update();if(focus)$('draw-area').focus({preventScroll:true});
  }
+ function clearHover(){if(hover!==null){hover=null;draw();}}
  function start(next='polygon'){
   if(!canDraw()||!isActive())return;
   if(mode===next&&!pending){cancel();return;}cancel();mode=next;parent=clone(getParent());restoreDoubleClick=map.doubleClickZoom.enabled();map.doubleClickZoom.disable();document.dispatchEvent(new CustomEvent('nasa:analysis-drawing',{detail:{active:true}}));renderParent();update();map.getContainer().focus({preventScroll:true});map.getContainer().scrollIntoView({block:'center'});
@@ -87,6 +93,7 @@ export function createAnalysisSelection(root,{map,request,getParent,onCommit,onS
  }
  async function finish(){
   if(!mode||pending)return;
+  clearHover();
   let shape;try{shape=candidate();}catch(error){if(mode!=='polygon'){points=points.slice(0,1);hover=null;draw();}update();$('selection-state').textContent=$('draw-instruction').textContent=error.message;return;}
   const current=++epoch,intended=identity(parent);controller=new AbortController();pending=true;update();
   try{
@@ -100,11 +107,23 @@ export function createAnalysisSelection(root,{map,request,getParent,onCommit,onS
   finally{if(current===epoch){pending=false;controller=null;}}
  }
  function undo(){if(mode!=='polygon'||pending)return;points.pop();draw();update();}
+ const toolbar=$('selection-actions');
+ L.DomEvent.disableClickPropagation(toolbar);
+ L.DomEvent.disableScrollPropagation(toolbar);
+ for(const type of ['pointerenter','pointerdown','mouseenter','mousedown','touchstart','focusin'])toolbar.addEventListener(type,event=>{clearHover();event.stopPropagation();});
+ for(const type of ['click','dblclick','mouseup','pointerup','contextmenu'])toolbar.addEventListener(type,event=>event.stopPropagation());
+ map.getContainer().addEventListener('mouseleave',clearHover);
+ // Native capture keeps the browser menu available outside polygon drawing.
+ // A permanent Leaflet contextmenu listener would suppress it in every mode.
+ map.getContainer().addEventListener('contextmenu',event=>{
+  if(mode!=='polygon'||pending||!isActive()||interactiveTarget(event))return;
+  event.preventDefault();event.stopPropagation();clearHover();finish();
+ },true);
  for(const button of root.querySelectorAll('[data-analysis-shape]'))button.addEventListener('click',()=>start(button.dataset.analysisShape));
  $('refine-area').addEventListener('click',()=>start('polygon'));$('selection-cancel').addEventListener('click',()=>cancel({focus:true}));$('selection-finish').addEventListener('click',finish);$('selection-undo').addEventListener('click',undo);
- map.on('click',event=>{if(!mode||pending||!isActive())return;hover=event.latlng;points.push(event.latlng);draw();update();if(mode!=='polygon'&&points.length===2)finish();});
- map.on('mousemove',event=>{if(!mode||pending)return;hover=event.latlng;draw();});
- root.addEventListener('keydown',event=>{if(event.key==='Escape'&&mode){event.preventDefault();cancel({focus:true});}else if(mode&&event.target===map.getContainer()&&['Backspace','Delete'].includes(event.key)){event.preventDefault();undo();}else if(mode==='polygon'&&event.target===map.getContainer()&&event.key==='Enter'){event.preventDefault();finish();}});
+ map.on('click',event=>{if(!mode||pending||!isActive()||interactiveTarget(event)||event.originalEvent?.button!=null&&event.originalEvent.button!==0)return;hover=event.latlng;points.push(event.latlng);draw();update();if(mode!=='polygon'&&points.length===2)finish();});
+ map.on('mousemove',event=>{if(!mode||pending||!isActive())return;if(interactiveTarget(event)){clearHover();return;}hover=event.latlng;draw();});
+ root.addEventListener('keydown',event=>{if(event.key==='Escape'&&mode){event.preventDefault();event.stopPropagation();cancel({focus:true});}else if(mode&&event.target===map.getContainer()&&['Backspace','Delete'].includes(event.key)){event.preventDefault();undo();}else if(mode==='polygon'&&event.target===map.getContainer()&&event.key==='Enter'){event.preventDefault();finish();}});
  update();
  return {start,cancel,get active(){return Boolean(mode);},get pending(){return pending;},setContextParent(roi){contextParent=clone(roi);if(!mode)renderParent();},clearContext(){contextParent=null;cancel();}};
 }

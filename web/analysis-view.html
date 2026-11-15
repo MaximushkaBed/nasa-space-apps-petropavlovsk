@@ -1,8 +1,10 @@
   <div class="application">
-    <aside class="filters" aria-label="Параметры анализа">
-      <div class="filter-heading"><span class="eyebrow">Рабочая область</span><h1>Исследование территории</h1><p>Территория → режим → условия → результат.</p></div>
+    <button id="analysis-settings-backdrop" class="analysis-settings-backdrop" type="button" aria-label="Закрыть параметры" hidden></button>
+    <aside class="filters" id="analysis-settings" aria-label="Параметры анализа">
+      <div class="filter-heading"><div class="analysis-settings-heading"><div><span class="eyebrow">Параметры анализа</span><h1>Настройка исследования</h1></div><button id="analysis-settings-close" type="button" aria-label="Закрыть параметры">×</button></div><p id="analysis-workflow-step" role="status">Шаг 1 из 4 · Территория</p></div>
+      <div id="analysis-settings-scroll" class="analysis-settings-scroll">
       <form id="analysis-form" novalidate>
-        <fieldset>
+        <fieldset data-workflow-step="territory">
           <legend><span class="step">1</span> Территория</legend>
           <div id="analysis-territory-search" class="territory-search">
             <label for="analysis-territory-query">Страна, область или район</label>
@@ -28,23 +30,23 @@
           </div><button class="text-button" id="apply-bounds" type="button">Показать границы</button></details>
           <p class="hint" id="area-note">Найдите территорию или выделите область на карте.</p>
         </fieldset>
-        <fieldset class="study-question-field">
-          <legend><span class="step">2</span> Режим анализа</legend>
+        <fieldset class="study-question-field" data-workflow-step="task" hidden>
+          <legend><span class="step">2</span> Задача и период</legend>
           <label for="study-question">Результат</label>
           <select id="study-question"><option value="anomaly">Отклонение от сезонной нормы</option><option value="compare-years">Сравнение активности по годам</option><option value="sensor-transition">Сопоставимость спутниковых данных</option></select>
           <p id="study-question-note" class="hint">Активность по месяцам, сезонная норма и отклонение от неё. Для сравнения используются те же дни других базовых лет.</p>
+          <label class="analysis-history-label">Период истории</label><div class="pair"><label>Начало<input id="start" type="date" value="2020-01-01" min="2000-11-01" required></label><label>Конец<input id="end" type="date" value="2025-12-31" required></label></div>
         </fieldset>
-        <section class="study-conditions" aria-labelledby="study-conditions-title">
+        <section class="study-conditions" aria-labelledby="study-conditions-title" data-workflow-step="conditions" hidden>
           <h2 id="study-conditions-title"><span class="step">3</span> Условия сравнения</h2>
           <p id="study-current-conditions" class="study-current-conditions"></p>
           <button class="outline full" id="study-plan-request" type="button" disabled>Подобрать условия</button>
           <p id="study-plan-status" class="hint" role="status" aria-live="polite">План учитывает наличие архива. Пригодность локальных наблюдений проверяется отдельно.</p>
           <div id="study-options-home"><div id="study-plan-display"><div id="study-plan-options" aria-label="Предложенные условия сравнения"></div>
           <div id="study-applied" class="study-applied" hidden><strong id="study-applied-title">Условия выбраны</strong><p id="study-applied-summary"></p><ul id="study-applied-changes"></ul><p class="hint">Проверьте условия и запустите расчёт ниже.</p></div></div></div>
-          <details id="manual-conditions" class="manual-conditions"><summary>Настроить условия вручную</summary>
+          <details id="manual-conditions" class="manual-conditions"><summary>Дополнительные настройки</summary>
         <fieldset>
-          <legend>История и база сравнения</legend>
-          <div class="pair"><label>Начало<input id="start" type="date" value="2020-01-01" min="2000-11-01" required></label><label>Конец<input id="end" type="date" value="2025-12-31" required></label></div>
+          <legend>База сравнения</legend>
           <label>Базовые годы<span class="pair"><input id="baseline-start" type="number" value="2020" min="2000" max="2100" aria-label="Первый базовый год" required><input id="baseline-end" type="number" value="2023" min="2000" max="2100" aria-label="Последний базовый год" required></span></label>
           <p class="hint">База задаёт обычную сезонность и обучение. Последующие годы используются для проверки калибровки.</p>
         </fieldset>
@@ -57,12 +59,15 @@
         </fieldset>
           <p class="hint manual-run-note">Можно рассчитать собственные условия без предложения плана. Возможность сравнения будет проверена по результату.</p>
           </details>
-        </section>
         <div class="submit-area"><p class="study-run-label"><span class="step">4</span> Расчёт территории</p><button class="primary full" id="run" type="submit" disabled>Построить анализ <span aria-hidden="true">→</span></button><p id="form-status" role="status">Подключаем сведения об архиве…</p></div>
+        </section>
+        <section class="analysis-workflow-result" data-workflow-step="result" hidden><h2>Результат исследования</h2><p>Календарь, карты и проверка условий доступны в рабочей области.</p><button id="analysis-workflow-show-result" class="outline" type="button">Открыть результат</button></section>
       </form>
       <div class="archive-foot"><span class="archive-indicator"></span><span id="archive-info">Мировой архив NASA FIRMS</span></div>
+      </div><div class="analysis-workflow-navigation"><p id="analysis-workflow-message" role="status"></p><div><button id="analysis-workflow-back" class="outline" type="button" disabled>Назад</button><button id="analysis-workflow-next" class="primary" type="button" disabled>Далее</button></div></div>
     </aside>
     <main class="workbench" id="workbench">
+      <div class="analysis-settings-bar" id="analysis-settings-bar"><button id="analysis-settings-toggle" class="outline" type="button" aria-expanded="true" aria-controls="analysis-settings">Параметры</button><span id="analysis-workflow-summary">Территория пока не выбрана</span></div>
       <div class="contextbar"><div><span class="eyebrow">Временной анализ</span><h2 id="analysis-area-title">Выберите территорию</h2><p id="context-note">Найдите территорию или выделите область на карте.</p></div><div class="context-actions"><button class="outline" id="show-atlas" type="button">Показать в атласе</button><button class="outline" id="share" type="button">Ссылка на параметры</button><button class="outline" id="export-csv" type="button" disabled>Экспорт CSV ↓</button><button class="outline" id="export-image" type="button" disabled>Изображение ↓</button><button class="subtle dark" id="export-json" type="button" disabled>JSON</button></div></div>
       <div class="focus-scope" id="focus-scope" role="status" hidden><strong id="focus-scope-label"></strong><p id="focus-scope-note"></p><button class="text-button" id="clear-focus-range" type="button">Вернуться к выбранному месяцу</button></div>
       <div class="job-banner" id="job-banner" role="status" hidden><span class="spinner" aria-hidden="true"></span><div><strong id="job-message">Готовлю запрос</strong><span id="job-detail">Первый расчёт территории занимает больше времени. Повторные используют кэш.</span></div><progress id="job-progress" max="100" value="0" aria-label="Прогресс анализа"></progress></div>

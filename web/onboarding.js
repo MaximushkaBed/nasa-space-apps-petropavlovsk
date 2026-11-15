@@ -26,22 +26,26 @@ const flows = {
     {target:'#anomaly-value',title:'Отклонение от исторического уровня',text:'Плюс — активность выше исторического уровня, минус — ниже. Это спутниковые сигналы, не число пожаров.',ready:'#study-results:not([hidden])'},
     {target:'#study-assessment',title:'Основания результата',text:'Здесь указано, хватает ли данных для сравнения. Подробности — в «Основаниях и ограничениях».'},
     {target:'#focus-month',title:'Другой месяц',text:'Выберите месяц здесь или в календаре. Значения и пояснение обновятся для выбранного месяца.'},
-    {target:'#analysis-territory-search',fallback:'#preset',title:'Ваша территория',text:'Для своего анализа найдите страну или регион либо выделите участок на карте.'},
+    {target:'#analysis-territory-search',fallback:'#preset',workflow:'territory',title:'Ваша территория',text:'Для своего анализа найдите страну или регион либо выделите участок на карте.'},
   ],
   setup: [
-    {target:'#analysis-territory-search',fallback:'#preset',title:'1. Территория',text:'Найдите страну или регион либо выделите свой участок на карте. Расчёт будет относиться к этой границе.'},
-    {target:'#study-question',title:'2. Результат анализа',text:'Выберите отклонение от сезонной нормы, сравнение лет или сопоставимость данных спутников.'},
-    {target:'#study-plan-request',title:'3. Условия сравнения',text:'Нажмите «Подобрать условия», затем выберите подходящий вариант. Расчёт пока не запускается.'},
-    {target:'#run',fallback:'#study-applied',title:'4. Расчёт и результат',text:'После выбора условий нажмите «Построить анализ». Готовый результат можно сохранить и сравнить с другой версией.',wait:'Кнопка расчёта появится после выбора условий.'},
+    {target:'#analysis-territory-search',fallback:'#preset',workflow:'territory',title:'1. Территория',text:'Найдите страну или регион либо выделите свой участок на карте. Расчёт будет относиться к этой границе.'},
+    {target:'#study-question',workflow:'task',title:'2. Результат анализа',text:'Выберите отклонение от сезонной нормы, сравнение лет или сопоставимость данных спутников.'},
+    {target:'#study-plan-request',workflow:'conditions',title:'3. Условия сравнения',text:'Нажмите «Подобрать условия», затем выберите подходящий вариант. Расчёт пока не запускается.'},
+    {target:'#run',fallback:'#study-applied',workflow:'conditions',title:'4. Расчёт и результат',text:'После выбора условий нажмите «Построить анализ». Готовый результат можно сохранить и сравнить с другой версией.',wait:'Кнопка расчёта появится после выбора условий.'},
   ],
 };
-let current = null, highlighted, observed, raf, returnFocus, demoRequest, revealPending = false;
+let current = null, highlighted, observed, raf, returnFocus, demoRequest, revealPending = false, workflowPending = false;
 const visible = selector => [...document.querySelectorAll(selector)].find(node => {const box=node.getBoundingClientRect();return box.width>0&&box.height>0;});
 const clamp = (value, low, high) => Math.max(low, Math.min(value, Math.max(low, high)));
 function clearTarget(){highlighted?.classList.remove('onboarding-target');highlighted=null;}
 function place(){
   if(!current||card.hidden)return;
   const step=flows[current.flow][current.index];
+  if(workflowPending&&step.workflow){
+    const view=document.querySelector('.analysis-workbench[data-workflow-ready="true"][data-workflow-active="true"]');
+    if(view&&visible('#analysis-settings-toggle')){workflowPending=false;document.dispatchEvent(new CustomEvent('nasa:analysis-settings',{detail:{open:true,step:step.workflow}}));}
+  }
   const target=(!step.ready||visible(step.ready))&&(visible(step.target)||(step.fallback&&visible(step.fallback)));
   if(target!==highlighted){clearTarget();highlighted=target||null;highlighted?.classList.add('onboarding-target');}
   const top=document.querySelector('#app-header').getBoundingClientRect().bottom+10;
@@ -70,12 +74,12 @@ function renderStep(){
   card.querySelector('#onboarding-step-text').textContent=step.text;
   card.querySelector('#onboarding-back').disabled=current.index===0;
   card.querySelector('#onboarding-next').textContent=current.index===list.length-1?current.flow==='demo'?'Свой анализ':'Готово':'Дальше';
-  card.hidden=false;revealPending=true;place();
+  card.hidden=false;revealPending=true;workflowPending=Boolean(step.workflow);place();
 }
 function finish(){
   demoRequest?.abort();demoRequest=null;
   const restore=card.contains(document.activeElement)||welcome.contains(document.activeElement);
-  current=null;revealPending=false;clearTarget();card.hidden=welcome.hidden=true;observed?.disconnect();observed=null;
+  current=null;revealPending=workflowPending=false;clearTarget();card.hidden=welcome.hidden=true;observed?.disconnect();observed=null;
   write(sessionStorage,resumeKey,null);write(localStorage,seenKey,true);
   if(restore&&returnFocus?.isConnected)returnFocus.focus({preventScroll:true});
 }
@@ -83,11 +87,11 @@ function start(flow,index=0){
   demoRequest?.abort();demoRequest=null;
   welcome.hidden=true;current={flow,index};write(localStorage,seenKey,true);
   observed?.disconnect();observed=new MutationObserver(()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(place);});
-  observed.observe(document.querySelector('#app-outlet'),{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','disabled']});
+  observed.observe(document.querySelector('#app-outlet'),{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','disabled','data-workflow-ready','data-workflow-active','data-workflow-step','data-settings-open']});
   renderStep();
 }
 function ownStudy(){
-  if(!visible('#analysis-form'))document.querySelector('#app-header a[data-app-view="analysis"]').click();
+  if(!visible('.analysis-workbench'))document.querySelector('#app-header a[data-app-view="analysis"]').click();
   start('setup');
 }
 function showWelcome(){
@@ -101,7 +105,7 @@ welcome.querySelector('#onboarding-skip').addEventListener('click',finish);
 document.querySelector('#app-tour-open').addEventListener('click',showWelcome);
 document.addEventListener('pointerdown',event=>{if(!welcome.hidden&&!welcome.contains(event.target)&&!event.target.closest('#app-tour-open, #app-language'))finish();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&(!card.hidden||!welcome.hidden))finish();});
-document.addEventListener('click',event=>{if(current&&event.target.closest('#app-header a[data-app-view]'))finish();});
+document.addEventListener('click',event=>{if(current&&event.target.closest('#app-header a[data-app-view], #analysis-settings-close, #run'))finish();});
 document.addEventListener('nasa:analysis-drawing',event=>{if(event.detail?.active)finish();});
 addEventListener('resize',place);addEventListener('scroll',place,{capture:true,passive:true});
 

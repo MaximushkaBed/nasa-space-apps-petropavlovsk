@@ -14,13 +14,11 @@ const availabilityNames = {'published-world-calendar':'Обновляемый м
 
 // This controller retains only portable intent. Metadata options and assessment
 // responses are always requested again; they are never restored as evidence.
-export function mountStudyPlanner(root, {request,getInput,validate,applyOption,onQuestion,onChange,onPlanning,onExistingResult,isActive}) {
+export function mountStudyPlanner(root, {request,getInput,validate,applyOption,onQuestion,onChange,onPlanning,onExistingResult,openSettings,isActive}) {
   const $ = id => root.querySelector('#'+CSS.escape(id));
   let state={question:'anomaly',optionId:null,stage:'question',appliedSignature:null};
   let plan=null,planSignature=null,sequence=0,planAbort=null,assessmentAbort=null,resultRef=null,assessmentKey=null,loading=false,suspended=false,appliedTitle='Условия выбраны',appliedChanges=[];
-  const wideLayout=window.matchMedia('(min-width:1001px)');
-  function placeConditions(){$(wideLayout.matches?'study-options-wide':'study-options-home').append($('study-plan-display'));}
-  placeConditions();wideLayout.addEventListener('change',()=>{placeConditions();render();});
+  $('study-options-home').append($('study-plan-display'));
   const signature = () => {const input=getInput();return scientificSignature(input.config)+'|'+input.platform+'|'+state.question;};
   const safeSignature = () => {try{return signature();}catch{return null;}};
   function focusChange(config){const focus=getInput().focus;if(!focus||!config||!(focus.start<config.start||focus.end>config.end))return null;return {field:'focus',from:`${focus.start} — ${focus.end}`,to:'месяц внутри выбранной истории',reason:'Выбранные условия не включают прежний фокус карты. История не будет расширена автоматически.'};}
@@ -50,7 +48,7 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
     const nextNote=running?'Прогресс показан над картой. Расчёт использует выбранную границу, историю, сетку и фильтры.':applied?'Проверьте историю, базовые годы и спутник в выбранных условиях. Кнопка «Построить анализ» запустит расчёт.':plan?'Варианты показывают доступную историю, спутник и базу сравнения. Примените подходящие условия, затем запустите расчёт.':null;
     $('study-next-note').replaceChildren(...(nextNote?[nextNote]:[questions[state.question].note,' ','Подберите условия по доступному архиву, затем запустите расчёт.']));
     $('study-next-action').textContent=running?'К прогрессу расчёта ↑':applied?'К запуску расчёта ↑':plan?'К вариантам условий ↑':'Подобрать условия ↑';
-    $('study-next-action').hidden=Boolean(plan&&wideLayout.matches);
+    $('study-next-action').hidden=false;
     $('study-existing-result').hidden=!resultRef||state.stage==='result'||running;
     root.dataset.studyStage=state.stage;
   }
@@ -165,8 +163,8 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
   $('study-existing-result').addEventListener('click',()=>{cancelPlan();plan=null;planSignature=null;$('study-plan-options').replaceChildren();onExistingResult?.();});
   $('manual-conditions').addEventListener('toggle',render);
   $('study-assessment-retry').addEventListener('click',()=>assess(true));
-  $('study-change-conditions').addEventListener('click',()=>{$('study-question').scrollIntoView({block:'center'});$('study-question').focus({preventScroll:true});});
-  $('study-next-action').addEventListener('click',()=>{const id=state.stage==='running'?'job-banner':state.stage==='applied'?'run':'study-plan-request';$(id).scrollIntoView({block:'center'});if(id!=='job-banner')$(id).focus({preventScroll:true});});
+  $('study-change-conditions').addEventListener('click',()=>{openSettings?.('task');$('study-question').scrollIntoView({block:'center'});$('study-question').focus({preventScroll:true});});
+  $('study-next-action').addEventListener('click',()=>{const id=state.stage==='running'?'job-banner':state.stage==='applied'?'run':'study-plan-request';if(id!=='job-banner')openSettings?.('conditions');$(id).scrollIntoView({block:'center'});if(id!=='job-banner')$(id).focus({preventScroll:true});});
   render();
   return {invalidate,prepareRun,runFailed,resultReady,updateMonth,restore,getState:()=>({...state}),pause(){suspended=true;cancelPlan();cancelAssessment();if(state.stage==='running')state.stage='applied';},resume(){suspended=false;render();if(resultRef)assess();}};
 }

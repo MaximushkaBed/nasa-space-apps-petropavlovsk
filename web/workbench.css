@@ -323,3 +323,51 @@ dialog::backdrop { background: #020918b8; }
     .job-banner progress { width:100%; margin-left:27px; }
   }
 }
+
+/* Settings and results each scroll inside the application viewport. */
+body[data-app-view="analysis"] { height:100dvh; overflow:hidden; }
+body[data-app-view="analysis"] .app-outlet { position:fixed; inset:var(--app-header-height,56px) 0 0; margin-top:0; height:calc(100dvh - var(--app-header-height,56px)); min-height:0; overflow:hidden; }
+#analysis-view.analysis-workbench { height:100%; min-height:0; overflow:hidden; }
+:where(.analysis-workbench) {
+ .application { position:relative; height:100%; min-height:0; grid-template-columns:330px minmax(0,1fr); overflow:hidden; }
+ &[data-settings-open="false"] .application { grid-template-columns:minmax(0,1fr); }
+ .filters { height:100%; min-height:0; overflow:hidden; }
+ .filter-heading { flex:none; padding:17px 20px 12px; }
+ .filter-heading h1 { font-size:17px; margin:6px 0 9px; }
+ .analysis-settings-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+ #analysis-settings-close { font-size:23px; line-height:1; min-width:36px; min-height:36px; padding:5px; }
+ .analysis-settings-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
+ #analysis-form { display:block; }
+ .analysis-workflow-navigation { flex:none; padding:12px 18px 15px; border-top:1px solid var(--line); background:var(--app-surface); }
+ .analysis-workflow-navigation>div { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+ .analysis-workflow-navigation button { min-height:40px; min-width:95px; justify-content:center; }
+ #analysis-workflow-message { font-size:10px; line-height:1.6; color:var(--muted); margin:0 0 10px; }
+ #analysis-workflow-message:empty { display:none; }
+ .analysis-workflow-result { padding:20px; }
+ .analysis-workflow-result h2 { font-size:14px; margin:0 0 12px; }
+ .analysis-workflow-result p { font-size:11px; color:var(--muted); line-height:1.7; }
+ .analysis-history-label { clear:both; padding-top:13px; }
+ .workbench { position:relative; z-index:0; height:100%; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-top:0; scrollbar-gutter:stable; }
+ .workbench>* { flex-shrink:0; }
+ .analysis-settings-bar { position:sticky; top:0; z-index:700; display:flex; align-items:center; gap:14px; padding:12px 0; background:var(--app-bg); border-bottom:1px solid var(--line); }
+ #analysis-settings-toggle { flex:none; min-height:38px; }
+ #analysis-workflow-summary { min-width:0; font-size:11px; color:var(--muted); line-height:1.6; overflow-wrap:anywhere; }
+ .analysis-settings-backdrop { display:none; }
+ .archive-foot { margin-top:0; }
+ .study-conditions .submit-area { padding:12px 0 0; }
+ #job-banner,#study-assessment { scroll-margin-top:72px; }
+ @media(max-width:760px) {
+  .application, &[data-settings-open="false"] .application { grid-template-columns:minmax(0,1fr); }
+  .filters { position:absolute; inset:0 auto 0 0; z-index:900; width:min(360px,calc(100% - 28px)); border-right:1px solid var(--line); box-shadow:12px 0 35px #0007; }
+  .analysis-settings-backdrop { position:absolute; inset:0; z-index:850; display:block; width:100%; border:0; border-radius:0; background:#020b16a8; cursor:default; }
+  .analysis-settings-backdrop:hover:not(:disabled) { background:#020b16a8; }
+  .analysis-settings-bar { gap:10px; padding:10px 0; }
+  #analysis-workflow-summary { font-size:10px; }
+  .filter-heading { padding:16px 16px 12px; }
+  .filter-heading>p { display:block; }
+  .filters fieldset { padding:16px; }
+  .filters .study-question-field,.study-conditions { padding:16px; }
+  .analysis-workflow-navigation { padding:11px 16px 13px; }
+  .analysis-draw-modes { grid-template-columns:1fr; }
+ }
+}
