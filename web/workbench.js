@@ -1,6 +1,7 @@
 import { mountMatrixPanel } from './matrix-panel.js?v=dark';
 import { sameScientificConfig, scientificSignature } from './scientific-context.js';
 import { mountStudyPlanner } from './study-planner.js';
+import { mountStudyRevisions } from './study-revisions.js';
 
 export function mountWorkbench(root, bridge={}) {
 if (!(root instanceof Element)) throw new TypeError('Workbench root is required');
@@ -33,6 +34,9 @@ const planner=mountStudyPlanner(root,{request,getInput:()=>({config:formConfig()
  onPlanning:()=>{showResultSurface(false);$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=true;},
  onExistingResult:()=>{if(result&&source!=='all'&&sameScientificConfig(result.config,formConfig())){showResultSurface(true);$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=false;renderAll();planner.resultReady({id:jobId,platform:source,month});}},
  onQuestion:(tab,action)=>{if(action?.invalidate){pendingQuestionNavigation=true;if(result&&source!=='all'&&sameScientificConfig(result.config,formConfig())){showResultSurface(true);$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=false;planner.resultReady({id:jobId,platform:source,month},{navigate:true});pendingQuestionNavigation=false;}else if(!result)invalidate();publishContext();}else if(tab)activateTab(tab);},onChange:publishContext});
+const revisions=mountStudyRevisions($('study-revisions'),{request,isActive:()=>active,getAnalysis:()=>result&&jobId&&source!=='all'?{id:jobId,result,platform:source,question:planner.getState().question,month,seriesMode:$('series-mode').value,years:[compareYearA,compareYearB]}:null,onChange:publishContext,
+ onShare:pair=>bridge.navigate?.('analysis',{share:true,state:{...getState(),revisions:pair,shareRevisions:true}}),
+ onArchive:()=>{$('analysis-area-title').textContent='Сравнение сохранённых расчётов';$('context-note').textContent='Архивные значения показаны ниже. Новый расчёт не запускался.';$('study-next-title').textContent='Архивное сравнение';$('study-next-note').textContent='Текущий анализ этой версии не восстановлен. Сохранённые числа и ограничения доступны в сравнении выше.';}});
 showResultSurface(false);
 setBootstrapPending(true);
 
@@ -77,10 +81,11 @@ function showBounds(fit=true){
 function clearShape(){roiGeometry=roiCircle=null;roiName=roiSource='';}
 function publishContext(){if(active)bridge.setContext?.(getState().context);}
 function setPreset(){clearShape();const p=selectedPreset();if(p)['west','south','east','north'].forEach((k,i)=>$(k).value=p.bbox[i]);showBounds();invalidate();publishContext();}
-function showResultSurface(value){root.dataset.hasResult=String(value);$('study-results').hidden=!value;$('study-next-step').hidden=value;root.querySelector('.insights').hidden=!value;root.querySelector('.timeline-bar').hidden=!value;}
+function showResultSurface(value){root.dataset.hasResult=String(value);$('study-results').hidden=!value;$('study-next-step').hidden=value;root.querySelector('.insights').hidden=!value;root.querySelector('.timeline-bar').hidden=!value;$('study-revisions').hidden=!value;}
 function invalidate({keepStudy=false}={}){
   ++generation;analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);
   if(!keepStudy)planner.invalidate();showResultSurface(false);
+  revisions.clear();
   $('error-banner').hidden=true;
   matrixPanel.reset();
   result=null;jobId=null;++mapGeneration;mapYear=null;cellsLayer.clearLayers();$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=true;
@@ -104,7 +109,7 @@ async function startAnalysis(event){
   if(source==='all'){$('error-banner').hidden=false;$('error-banner').textContent='Выберите один спутник для временного анализа. Данные разных платформ не суммируются.';return;}
   stopPlaying();drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';const config=formConfig();const current=++generation;
   analysisAbort?.abort();const controller=new AbortController();analysisAbort=controller;
-  planner.prepareRun();showResultSurface(false);
+  planner.prepareRun();revisions.clear();showResultSurface(false);
   $('error-banner').hidden=true;setBusy(true);result=null;matrixPanel.reset();++mapGeneration;mapYear=null;cellsLayer.clearLayers();publishContext();
   $('retry-map').hidden=true;
   $('analysis-area-title').textContent=areaName(config);$('context-note').textContent=`${config.start} — ${config.end} · базовые годы ${config.baseline_start}–${config.baseline_end}`;
@@ -199,6 +204,7 @@ function renderAll(){
  $('map-mode').disabled=Boolean(mapYear||rangeFocus);
  renderFocusScope();
  matrixPanel.refresh();
+ revisions.refresh();
 }
 function isRangeFocus(focus){return Boolean(focus?.start&&focus?.end&&focus.basis!=='ISO'&&focus.grain!=='day'&&focus.grain!=='month');}
 function clearRangeFocus(){rangeFocus=null;retainedFocus=null;renderFocusScope();}
@@ -508,7 +514,7 @@ $('platform').addEventListener('change',()=>{
   if(source==='all'){$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=true;$('form-status').textContent='Расчёт сохранён. Выберите один спутник для просмотра; платформы не суммируются.';$('map-count').textContent='Выберите один спутник';$('map-key-text').textContent='Разные платформы не суммируются.';$('map-period').textContent='Область исследования';}
   else{$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=false;populateCompareYears();renderAll();planner.resultReady({id:jobId,platform:source,month},{navigate:pendingQuestionNavigation});pendingQuestionNavigation=false;updateMap();$('form-status').textContent='Открыт исходный ряд выбранного спутника из готового расчёта.';}
  }else{invalidate();if(source==='all')$('form-status').textContent='Для ручного анализа выберите один спутник или получите предложение условий.';}
- matrixPanel.refresh();publishContext();
+ matrixPanel.refresh();revisions.refresh();publishContext();
 });
 $('focus-month').addEventListener('change',()=>selectMonth($('focus-month').value));
 $('series-mode').addEventListener('change',renderAll);
@@ -588,7 +594,7 @@ function getState(){
  const config=result?.config||formConfig(),geometry=config.circle?null:config.geometry||(config.preset==='sko'?(roiGeometry||settings?.region_geometry):roiGeometry),circle=config.circle||roiCircle;
  const matrix=matrixPanel.getState();
  const study=planner.getState();
- return {context:{roi:{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')},history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km,study},study,tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
+ return {context:{roi:{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')},history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km,study},study,revisions:revisions.getState(),tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
 }
 async function activate(options={}){
  const current=++activation;active=true;
@@ -606,7 +612,7 @@ async function activate(options={}){
   const incoming=options.context||saved.context;
   if(incoming){applyContext(incoming);contextApplied=true;}
   else if(matching&&saved.context){if(labels[saved.context.platform]){source=saved.context.platform;$('platform').value=source;}retainedFocus=clone(saved.context.focus);applyFocus(retainedFocus);}
-  planner.restore(incoming?.study||saved.study||saved.context?.study||planner.getState());planner.resume();matrixPanel.resume();
+  planner.restore(incoming?.study||saved.study||saved.context?.study||planner.getState());planner.resume();revisions.resume();matrixPanel.resume();
   pendingViewState=incoming||options.run?saved:null;
   if(result)restoreView(saved);
   if(options.tab||saved.tab)activateTab(options.tab||saved.tab);
@@ -630,6 +636,7 @@ async function activate(options={}){
   if(current!==activation||!active)return;
   const matrixId=saved.matrixId||(residentReused?residentView?.matrixId:null),matrixState=saved.matrixState||(residentReused?residentView?.matrixState:null);
   if(matrixId&&result&&matrixId!==matrixPanel.getState().id)await matrixPanel.restore(matrixId,matrixState);
+  await revisions.restore(saved.revisions||(residentReused?residentView?.revisions:null));
   matrixPanel.setVisible(view==='matrix');
   return getState();
  }catch(error){if(current===activation&&active){if(!settings&&intended&&!contextApplied){applyContext(intended);planner.restore(intended.study||options.state?.study||planner.getState());}planner.resume();setBootstrapPending(false);$('error-banner').hidden=false;$('error-banner').textContent='Сервис анализа недоступен: '+error.message;$('study-config-retry').hidden=Boolean(settings);$('form-status').textContent='Территория и условия сохранены. Повторите подключение к архиву.';if(!settings)$('archive-info').textContent='Подключение к архиву недоступно';}return getState();}
@@ -644,7 +651,7 @@ function restoreView(state){
  if(['raw','calibrated'].includes(state.seriesMode))$('series-mode').value=state.seriesMode;
 }
 function deactivate(){
- active=false;++activation;++generation;analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);planner.pause();stopPlaying();++mapGeneration;drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';$('method-dialog').close();matrixPanel.pause();
+ active=false;++activation;++generation;analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);planner.pause();revisions.pause();stopPlaying();++mapGeneration;drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';$('method-dialog').close();matrixPanel.pause();
 }
 
 /* Lifecycle is owned by the application shell; importing this module is inert. */

@@ -146,6 +146,43 @@ dialog::backdrop { background: #020918b8; }
 
 /* The study planner follows the existing atlas panels and control palette. */
 :where(.analysis-workbench) {
+  .study-revisions { background:var(--app-surface); border:1px solid var(--line); border-radius:5px; padding:13px 16px; min-width:0; }
+  .revision-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .revision-heading h3 { font-size:13px; margin:4px 0 0; }
+  .revision-heading button,.revision-actions button,#revision-share { font-size:10px; min-height:36px; }
+  #revision-status { font-size:10px; line-height:1.7; color:var(--muted); margin:8px 0; overflow-wrap:anywhere; }
+  #revision-details>summary { font-size:11px; color:var(--app-accent); padding:4px 0; }
+  #revision-details .hint { font-size:10px; margin:8px 0; }
+  .revision-pickers { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:15px; margin-top:14px; }
+  .revision-pickers input,.revision-pickers select { margin-bottom:3px; }
+  .revision-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:10px 0 15px; }
+  .revision-comparability { font-size:12px; line-height:1.6; color:var(--teal); border-top:1px solid var(--line); padding-top:14px; margin:0 0 12px; }
+  .revision-comparability[data-status=limited],.revision-comparability[data-status=different-context],.revision-comparability[data-status=unavailable] { color:var(--app-warning); }
+  .revision-comparability span { display:block; font-size:10px; color:var(--muted); margin-top:5px; }
+  .revision-pair { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; }
+  .revision-pair>div { border-left:2px solid var(--app-control-line); padding-left:11px; min-width:0; }
+  .revision-pair strong { font-size:11px; }
+  .revision-pair p { font-size:10px; line-height:1.6; color:var(--muted); margin:5px 0; overflow-wrap:anywhere; }
+  .revision-table { overflow:auto; max-height:420px; margin:14px 0; }
+  .revision-table table { width:100%; border-collapse:collapse; font-size:10px; line-height:1.6; }
+  .revision-table th,.revision-table td { border-bottom:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
+  .revision-table tbody th { font-weight:500; color:var(--muted); width:35%; }
+  .revision-table thead th { color:var(--ink); font-weight:550; background:var(--app-control); }
+  #revision-changes { margin-top:12px; }
+  .revision-change-group { border-top:1px solid var(--line); padding-top:8px; line-height:1.8; }
+  .revision-change-group ul,#revision-warnings { padding-left:18px; font-size:10px; line-height:1.8; overflow-wrap:anywhere; }
+  .revision-evidence { display:block; color:var(--muted); }
+  #revision-attribution { font-size:11px; line-height:1.8; margin:14px 0 8px; }
+  #revision-share { margin-top:14px; white-space:normal; text-align:left; }
+  @media(max-width:620px) {
+    .study-revisions { padding:12px; }
+    .revision-heading { align-items:flex-start; flex-wrap:wrap; gap:9px; }
+    .revision-pickers { grid-template-columns:1fr; gap:8px; }
+    .revision-pair { gap:10px; }
+    .revision-table th,.revision-table td { padding:7px 5px; }
+    .revision-table table { min-width:340px; font-size:9px; }
+    .revision-heading button,.revision-actions button,#revision-share { min-height:40px; }
+  }
   .study-conditions { padding:18px 20px; border-bottom:1px solid var(--line); min-width:0; }
   .study-conditions h2,.study-run-label { display:flex; align-items:center; gap:8px; margin:0 0 12px; font-size:12px; font-weight:650; color:var(--ink); }
   .study-current-conditions { font-size:10px; line-height:1.7; color:var(--muted); margin:0 0 12px; overflow-wrap:anywhere; }

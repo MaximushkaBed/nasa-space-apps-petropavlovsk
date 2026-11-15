@@ -1,0 +1,28 @@
+.onboarding-dialog { position: fixed; color: var(--app-ink); background: var(--app-surface); border: 1px solid var(--app-control-line); border-radius: 8px; box-shadow: 0 16px 60px #0008; padding: 24px; font: 14px/1.6 Inter, system-ui, sans-serif; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.onboarding-welcome { width: min(570px, calc(100vw - 28px)); }
+.onboarding-welcome::backdrop { background: #020918b8; }
+.onboarding-dialog h2 { font-size: 24px; line-height: 1.25; margin: 10px 0 14px; color: var(--app-ink); }
+.onboarding-dialog p { margin: 10px 0; }
+.onboarding-dialog .onboarding-kicker { color: var(--app-accent); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; }
+.onboarding-dialog .onboarding-muted { color: var(--app-muted); font-size: 12px; }
+.onboarding-dialog .onboarding-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 20px; }
+.onboarding-dialog button { cursor: pointer; font: inherit; min-height: 40px; padding: 8px 13px; border: 1px solid var(--app-control-line); border-radius: 4px; background: var(--app-control); color: var(--app-ink); }
+.onboarding-dialog button:hover { background: var(--app-hover); }
+.onboarding-dialog button:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 3px; }
+.onboarding-dialog button:disabled { opacity: .6; cursor: wait; }
+.onboarding-dialog .onboarding-primary { background: var(--app-primary); border-color: var(--app-primary); color: #07132d; font-weight: 650; }
+.onboarding-dialog .onboarding-dismiss { border: 0; background: transparent; padding: 6px 0; color: var(--app-muted); font-size: 12px; }
+.onboarding-dialog .onboarding-error { color: var(--app-warning); }
+.onboarding-dialog .onboarding-steps { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 0; color: var(--app-accent); font-size: 12px; }
+.onboarding-card { z-index: 2400; inset: auto 16px 18px auto; margin: 0; width: min(390px, calc(100vw - 28px)); padding: 18px; }
+.onboarding-card h2 { font-size: 19px; margin-top: 5px; }
+.onboarding-card .onboarding-actions { justify-content: flex-end; margin-top: 14px; }
+.onboarding-card .onboarding-close { float: right; border: 0; min-height: 28px; padding: 0 5px; font-size: 20px; background: transparent; }
+.onboarding-target { outline: 3px solid #8bc6ff !important; outline-offset: 5px; box-shadow: 0 0 0 8px #07132d99; }
+@media (max-width: 600px) {
+  .onboarding-dialog { padding: 18px; }
+  .onboarding-dialog h2 { font-size: 21px; }
+  .onboarding-card { right: 14px; bottom: 14px; font-size: 13px; max-height: 42dvh; }
+  .onboarding-card h2 { font-size: 17px; }
+  .app-header #app-tour-open { margin-left: auto; }
+}

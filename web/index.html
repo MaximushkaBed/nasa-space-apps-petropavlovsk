@@ -12,8 +12,10 @@
   <link rel="stylesheet" href="workbench.css?v=dark">
   <link rel="stylesheet" href="matrix-panel.css?v=dark">
   <link rel="stylesheet" href="app-shell.css?v=territory">
+  <link rel="stylesheet" href="onboarding.css?v=first-study">
   <script src="vendor/leaflet.js" defer></script>
   <script src="app-shell.js?v=atlas-compact" type="module"></script>
+  <script src="onboarding.js?v=first-study" type="module"></script>
 </head>
 <body>
   <header id="app-header" class="app-header">
@@ -24,6 +26,7 @@
       <a href="?view=cases" data-app-view="cases">Кейсы</a>
     </nav>
     <span id="app-context" class="app-context">Выберите территорию</span>
+    <button id="app-tour-open" class="app-utility" type="button">Как пользоваться</button>
     <button id="app-method-open" class="app-utility" type="button">Метод и данные</button>
   </header>
   <div id="shell-status" class="shell-status" role="status" hidden></div>

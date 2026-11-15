@@ -148,19 +148,24 @@ function portableStudy(study){
   if(!study||typeof study!=='object')return null;
   return {question:study.question,optionId:study.optionId,stage:study.stage};
 }
+function portableRevisions(value){
+  if(!value||!/^[0-9a-f]{32}$/.test(value.beforeId||'')||!/^[0-9a-f]{32}$/.test(value.afterId||''))return null;
+  return {beforeId:value.beforeId,afterId:value.afterId,question:['anomaly','compare-years','sensor-transition'].includes(value.question)?value.question:'anomaly',platform:platformNames.has(value.platform)&&value.platform!=='all'?value.platform:'NOAA-20',month:/^\d{4}-(0[1-9]|1[0-2])$/.test(value.month||'')?value.month:null,seriesMode:value.seriesMode==='calibrated'?'calibrated':'raw',years:Array.isArray(value.years)?value.years.map(String).filter(year=>/^\d{4}$/.test(year)).slice(0,2):[],open:true};
+}
 async function share(view,state) {
   try{
     const selected=state||controllers.get(view==='cases'?'atlas':view)?.getState?.();
     const sourceContext=selected?.context||context;
     const study=portableStudy(selected?.study||sourceContext.study);
-    const portable={version:1,context:{...sourceContext,study},study,atlasStudy:selected?.atlasStudy,tab:selected?.tab,step:selected?.step,month:selected?.month,mapMode:selected?.mapMode,mapYear:selected?.mapYear,compareYearA:selected?.compareYearA,compareYearB:selected?.compareYearB,seriesMode:selected?.seriesMode,analysisId:selected?.analysisId,matrixId:selected?.matrixId,matrixState:selected?.matrixState};
+    const pair=selected?.shareRevisions?portableRevisions(selected.revisions):null;
+    const portable=pair?{version:1,revisions:pair}:{version:1,context:{...sourceContext,study},study,atlasStudy:selected?.atlasStudy,tab:selected?.tab,step:selected?.step,month:selected?.month,mapMode:selected?.mapMode,mapYear:selected?.mapYear,compareYearA:selected?.compareYearA,compareYearB:selected?.compareYearB,seriesMode:selected?.seriesMode,analysisId:selected?.analysisId,matrixId:selected?.matrixId,matrixState:selected?.matrixState};
     let encoded=JSON.stringify(portable);const url=urlFor(view);
     if(encodeURIComponent(encoded).length>6000){
       if(!selected?.analysisId)throw new Error('Для ссылки с подробной границей сначала завершите расчёт территории.');
       url.searchParams.set('analysis_id',selected.analysisId);encoded=JSON.stringify({...portable,context:{...portable.context,roi:null}});
     }
     url.searchParams.set('state',encoded);history.replaceState({...history.state,app:true,view},'',url);
-    try{await navigator.clipboard.writeText(url.href);notice('Ссылка на выбранный контекст скопирована.');}catch{notice('Ссылка с выбранным контекстом находится в адресной строке.');}
+    try{await navigator.clipboard.writeText(url.href);notice(pair?'Ссылка на две сохранённые версии скопирована.':'Ссылка на выбранный контекст скопирована.');}catch{notice('Ссылка с выбранным контекстом находится в адресной строке.');}
   }catch(error){notice(error.message);}
 }
 function contextFromLegacy(value) {
@@ -192,7 +197,19 @@ window.addEventListener('popstate',event=>{
     if(!viewNames.has(view))view='atlas';
     if(state?.version!==1)state=null;
     if(state?.context)mergeContext(state.context);else if(legacy)mergeContext(contextFromLegacy(legacy));else if(restored?.version===1&&restored.context)mergeContext(restored.context);
-    const id=url.searchParams.get('analysis_id');
+    const pair=portableRevisions(state?.revisions);
+    if(pair){
+      view='analysis';state.revisions=pair;state.analysisId=null;
+      try{
+        const response=await fetch(`/api/v1/analyses/${pair.afterId}/snapshot`);if(!response.ok)throw new Error('Сохранённая версия недоступна.');
+        const snapshot=await response.json();if(!snapshot.config)throw new Error('Параметры сохранённой версии не записаны.');
+        const canonical=contextFromLegacy({...snapshot.config,platform:pair.platform});canonical.study={question:pair.question,stage:'result'};canonical.focus=null;
+        mergeContext(canonical);state.context=clone(context);state.study=canonical.study;state.month=pair.month;state.seriesMode=pair.seriesMode;state.compareYearA=pair.years[0];state.compareYearB=pair.years[1];
+        state.tab=pair.question==='compare-years'?'compare':pair.question==='sensor-transition'?'validation':'calendar';
+        if(snapshot.method_status==='current')state.analysisId=pair.afterId;
+      }catch{notice('Основной расчёт не восстановлен. Откроем доступные архивные значения пары без нового расчёта.');}
+    }
+    const id=pair?null:url.searchParams.get('analysis_id');
     if(id&&/^[0-9a-f]{32}$/.test(id)){
       const response=await fetch(`/api/v1/analyses/${id}`);if(!response.ok)throw new Error('Сохранённый расчёт больше недоступен. Выберите территорию заново.');
       const job=await response.json();if(job.status!=='done')throw new Error('Сохранённый расчёт ещё не завершён.');

@@ -21,6 +21,7 @@ from urllib.parse import urlsplit, parse_qs
 from api.analysis import analyze, PLATFORMS
 from api.geometry import circle_polygon, normalize_geometry
 from api.study_plan import build_plan, load_calendar, assess as assess_study, validate_choices
+from api.revisions import RevisionStore, RevisionError
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get('SPACEAPPS_DATA_DIR', ROOT / 'data/raw/firms/global'))
@@ -544,6 +545,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
+            if match := re.fullmatch(r'/api/v1/analyses/([0-9a-f]{32})/save', self.path):
+                size = int(self.headers.get('Content-Length', 0))
+                if not 0 <= size <= 1024:
+                    return self.respond(413, {'error': 'Сохранение использует готовый расчёт; передайте {}.'})
+                if size and json.loads(self.rfile.read(size)) != {}:
+                    return self.respond(400, {'error': 'Сохранение использует готовый расчёт; передайте {}.'})
+                identifier = match[1]
+                with JOBS_LOCK:
+                    info = dict(JOBS[identifier]) if identifier in JOBS else None
+                if info and info['status'] != 'done':
+                    return self.respond(409, {'error': 'Сначала дождитесь готовности расчёта.', 'code': 'analysis_not_ready'})
+                return self.respond(200, RevisionStore(CACHE).save(identifier, info['result'] if info else None))
             if self.path == '/api/v1/study-plan':
                 size = int(self.headers.get('Content-Length', 0))
                 if not 0 < size <= 524288:
@@ -593,12 +606,29 @@ class Handler(BaseHTTPRequestHandler):
                 JOBS[job] = {'id':job, 'status':'queued', 'progress':0, 'message':'Запрос в очереди'}
             POOL.submit(run,job,config)
             return self.respond(202, {'id':job, 'status':'queued'})
+        except RevisionError as error:
+            return self.respond(error.status, error.response())
         except (ValueError,TypeError,KeyError,OverflowError) as error:
             return self.respond(400, {'error':str(error)[:200]})
 
     def do_GET(self):
         parsed = urlsplit(self.path)
         try:
+            if match := re.fullmatch(r'/api/v1/analyses/([0-9a-f]{32})/(snapshot|changes)', parsed.path):
+                identifier, action = match.groups()
+                query = parse_qs(parsed.query)
+                before = query.get('before', [None])[0]
+                for requested in ([identifier, before] if action == 'changes' else [identifier]):
+                    with JOBS_LOCK:
+                        info = JOBS.get(requested)
+                    if info and info['status'] != 'done' and not (CACHE / 'saved-analyses' / (requested + '.json')).exists():
+                        return self.respond(409, {'error': 'Сначала дождитесь готовности расчёта.', 'code': 'analysis_not_ready'})
+                store = RevisionStore(CACHE)
+                if action == 'snapshot':
+                    return self.respond(200, store.snapshot(identifier))
+                return self.respond(200, store.changes(before, identifier,
+                    question=query.get('question', ['anomaly'])[0], platform=query.get('platform', [None])[0],
+                    month=query.get('month', [None])[0], series_mode=query.get('series_mode', ['raw'])[0], years=query.get('years', [None])[0]))
             if match := re.fullmatch(r'/api/v1/analyses/([0-9a-f]{32})/study-assessment', parsed.path):
                 identifier = match[1]
                 query = parse_qs(parsed.query)
@@ -607,8 +637,12 @@ class Handler(BaseHTTPRequestHandler):
                 with JOBS_LOCK:
                     info = dict(JOBS[identifier]) if identifier in JOBS else None
                 saved = CACHE / 'jobs' / (identifier + '.json')
-                if info is None and saved.exists():
-                    info = {'status': 'done', 'result': json.loads(saved.read_text())}
+                if info is None:
+                    if (CACHE / 'saved-analyses' / (identifier + '.json')).exists():
+                        result, _ = RevisionStore(CACHE).load(identifier)
+                        info = {'status': 'done', 'result': result}
+                    elif saved.exists():
+                        info = {'status': 'done', 'result': json.loads(saved.read_text())}
                 if info is None:
                     return self.respond(404, {'error': 'Исходный анализ не найден.'})
                 if info['status'] != 'done':
@@ -659,8 +693,12 @@ class Handler(BaseHTTPRequestHandler):
                 with JOBS_LOCK:
                     info = dict(JOBS[job]) if job in JOBS else None
                 saved = CACHE/'jobs'/(job+'.json')
-                if info is None and saved.exists():
-                    info = {'id':job,'status':'done','progress':100,'message':'Анализ готов','result':json.loads(saved.read_text())}
+                if info is None:
+                    if (CACHE / 'saved-analyses' / (job + '.json')).exists():
+                        result, _ = RevisionStore(CACHE).load(job)
+                        info = {'id':job,'status':'done','progress':100,'message':'Сохранённый анализ готов','result':result}
+                    elif saved.exists():
+                        info = {'id':job,'status':'done','progress':100,'message':'Анализ готов','result':json.loads(saved.read_text())}
                 if info is None:
                     return self.respond(404, {'error':'Запрос не найден.'})
                 if info['status']=='done' and info['result'].get('analysis_version')!=ANALYSIS_VERSION:
@@ -687,6 +725,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200,anomaly_map(match[1],query.get('month',[''])[0],query.get('platform',[''])[0],
                     query.get('baseline_start',['0'])[0],query.get('baseline_end',['0'])[0]))
             return self.respond(404,{'error':'Неизвестный адрес API.'})
+        except RevisionError as error:
+            return self.respond(error.status, error.response())
         except BusyMapError as error:
             return self.respond(429,{'error':str(error)})
         except (ValueError,KeyError,TypeError) as error:
