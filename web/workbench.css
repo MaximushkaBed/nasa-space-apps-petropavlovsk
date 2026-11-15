@@ -162,6 +162,16 @@ dialog::backdrop { background: #020918b8; }
 
 /* The study planner follows the existing atlas panels and control palette. */
 :where(.analysis-workbench) {
+  .territory-context-control { padding:9px 0; margin:9px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .territory-context-toggle { display:flex; align-items:center; gap:7px; font-size:11px; line-height:1.6; color:var(--ink); cursor:pointer; }
+  .territory-context-toggle input { width:14px; height:14px; margin:0; accent-color:#9dcfff; }
+  .territory-context-legend { display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin:7px 0; color:var(--muted); font-size:9px; }
+  .territory-context-legend i { width:15px; flex:none; border-top:2px solid #8bd2f8; }
+  .territory-context-legend .context-child-line { border-top:1px solid #b3c8dc; margin-left:4px; }
+  .territory-context-status,.territory-context-sources { color:var(--muted); font-size:9px; line-height:1.7; margin:5px 0; overflow-wrap:anywhere; }
+  .territory-context-sources summary { color:#9dcfff; cursor:pointer; }
+  .territory-context-label { border:0; background:transparent; }
+  .territory-context-label span { display:block; position:absolute; transform:translate(-50%,-50%); width:max-content; max-width:148px; text-align:center; white-space:normal; color:#e4edfc; font:500 11px/1.2 Inter,system-ui,sans-serif; text-shadow:1px 1px 2px #061329,-1px -1px 2px #061329,1px -1px 2px #061329,-1px 1px 2px #061329; }
   .analysis-draw-modes { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:9px; }
   .analysis-draw-modes #draw-area { grid-column:1/-1; width:auto; display:block; }
   .analysis-draw-modes button { font-size:10px; padding:8px 5px; min-height:36px; }

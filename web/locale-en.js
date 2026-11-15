@@ -1,5 +1,17 @@
 // English UI strings. Numbered placeholders correspond to the runtime values in the Russian message.
 export default {
+  "Границы и названия": "Boundaries and labels",
+  "Выберите часть территории. Её граница будет ограничена выбранной областью.": "Choose a subdivision. Its boundary will be clipped to the selected territory.",
+  "Основная граница": "Selected boundary",
+  "Границы частей": "Internal boundaries",
+  "Источники и статус": "Sources and status",
+  "Контекст территории скрыт.": "Territory context is hidden.",
+  "Загружаем границы частей территории…": "Loading internal boundaries…",
+  "Часть справочных подписей Esri не загрузилась.": "Some Esri reference labels did not load.",
+  "Границы каталога: {0}. Названия мест: Esri.": "Catalogue boundaries: {0}. Place names: Esri.",
+  "Границы каталога недоступны. Показана справочная картография Esri.": "Catalogue subdivisions are unavailable. Esri reference cartography is shown.",
+  "Границы частей территории временно недоступны.": "Internal territory boundaries are temporarily unavailable.",
+  "Справочная картография Esri; подпись города не задаёт его административную границу.": "Esri reference cartography; a city label does not define its administrative boundary.",
   " Файл не выбран": "No file chosen",
   "% точек": "percentage",
   "+1 · прямая": "+1 · positive",

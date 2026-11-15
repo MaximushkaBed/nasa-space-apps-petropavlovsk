@@ -7,6 +7,12 @@ const normalize = name => String(name || '').toLocaleLowerCase().replace(/ё/g, 
   .replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const namesFor = ([name, , aliases]) => [name, ...aliases].map(normalize);
 
+function readonlyPreview(geometry) {
+  const copy = structuredClone(geometry);
+  const freeze = value => {if (value && typeof value === 'object') {Object.values(value).forEach(freeze);Object.freeze(value);}return value;};
+  return freeze(copy);
+}
+
 function contains(geometry, [lon, lat]) {
   const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
   return polygons.some(rings => inRing(rings[0], lon, lat) && !rings.slice(1).some(ring => inRing(ring, lon, lat)));
@@ -118,6 +124,7 @@ export function createTerritorySearch(getJSON, getSkoGeometry) {
         const boundary_ref = {code, id: childId, level: childLevel};
         items.push({id: `${code}:${childId}:${childLevel}`, name: displayName, label: displayName, level: childLevel,
           source: childLevel === 2 ? 'Границы geoBoundaries' : 'Границы Natural Earth',
+          previewGeometry: readonlyPreview(geometry), labelPoint: point ? Object.freeze([...point]) : null,
           async load(options = {}) {
             const clipped = await getJSON('/api/v1/geometry/clip', {method: 'POST', headers: {'Content-Type': 'application/json'},
               body: JSON.stringify({parent: parentGeometry, geometry}), signal: options.signal || signal});

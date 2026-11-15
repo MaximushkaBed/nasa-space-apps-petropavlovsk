@@ -9,6 +9,8 @@ import { createFireViewport } from './fire-viewport.js?v=paired-days';
 import { createAreaAnalysis, inRing } from './area-analysis.js?v=atlas-polish';
 import { createMapNotice } from './map-notice.js';
 import { createAreaLayerClip } from './area-layer-clip.js?v=atlas-polish';
+import { createTerritorySearch } from './territory-search.js';
+import { createTerritoryContext } from './territory-context.js';
 import { createAtlasStudy } from './atlas-study.js?v=demo-sko';
 import { createLayerReadout } from './layer-values.js?v=atlas-polish';
 import { addTerrainControl } from './terrain-layer.js';
@@ -48,6 +50,7 @@ let viewportFrame;
 let displayedViewport;
 let areaAnalysis;
 let areaClip;
+let territoryContext;
 let study;
 let clearLayerReadout;
 let detailNoticeRevision = 0;
@@ -96,8 +99,8 @@ function element(tag, label, className) {
   return node;
 }
 
-async function getJSON(path) {
-  const response = await fetch(path);
+async function getJSON(path, options = {}) {
+  const response = await fetch(path, options);
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${path}`);
   return response.json();
 }
@@ -221,9 +224,12 @@ function createMap(basemap, boundary, closePanel) {
     else if (worldFrame?.local) showWorldFrame();
   });
   areaClip = createAreaLayerClip(map);
+  const contextSearch = createTerritorySearch(getJSON, () => boundary.geometry);
+  territoryContext = createTerritoryContext(map, $('atlas-territory-context'));
   const scopedLayers = (roi) => {
     $('map').classList.toggle('show-sko-context', roi?.preset === 'sko');
     areaClip.select(roi);
+    territoryContext.select(roi, {load: ({signal}) => contextSearch.children(roi, {signal})});
     const scopeName = roi?.name || 'Весь мир';
     $('layer-scope').textContent = roi ? `Наложения внутри границы · ${scopeName}` : 'Слои на всей карте';
     $('open-area').textContent = roi ? 'Выбранная область' : 'Обзор мира';
@@ -1221,7 +1227,7 @@ function getState() {
       platform, atlasQuality: worldFrame?.method === 'publisher' || viewportFrame?.method === 'archive' ? 'publisher_all' : 'atlas_filtered',
     },
     camera: map ? { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() } : null,
-    fireDisplay, localPanel: currentPanel, atlasStudy:settings,
+    fireDisplay, localPanel: currentPanel, atlasStudy:settings,territoryContext:territoryContext?.getState(),
   };
 }
 function publishContext() {
@@ -1310,6 +1316,8 @@ return {
     else if (state?.localPanel) showPanel?.(state.localPanel);
     else if(options.view==='atlas'&&root.querySelector('#kishkenekol-case')&&!root.querySelector('#kishkenekol-case').hidden)showPanel?.('#observations');
     study.resume();
+    territoryContext?.resume();
+    territoryContext?.setEnabled(state?.territoryContext?.enabled);
     weatherOverlay?.resume?.();
     if(worldArchive)renderLayers();
     if (worldArchive) await loadWorldFrame();
@@ -1318,6 +1326,7 @@ return {
     active = false;++activation;
     detailNotice.clear();
     study?.pause();
+    territoryContext?.pause();
     worldRequest?.controller.abort();
     worldRequest = undefined;
     if (map) savedCamera = { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() };

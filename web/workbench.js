@@ -5,6 +5,7 @@ import { mountStudyPlanner } from './study-planner.js';
 import { mountStudyRevisions } from './study-revisions.js';
 import { createTerritorySearch, fitTerritory } from './territory-search.js';
 import { createAnalysisSelection, roiGeometry as geometryOfROI } from './analysis-selection.js';
+import { createTerritoryContext } from './territory-context.js';
 
 export function mountWorkbench(root, bridge={}) {
 if (!(root instanceof Element)) throw new TypeError('Workbench root is required');
@@ -46,6 +47,7 @@ const revisions=mountStudyRevisions($('study-revisions'),{request,isActive:()=>a
 showResultSurface(false);
 setBootstrapPending(true);
 const territorySearch=createTerritorySearch(request,()=>settings?.region_geometry||request('data/region.geojson').then(value=>value.features?.[0]?.geometry||value.geometry||value));
+const territoryContext=createTerritoryContext(map,$('analysis-territory-context'));
 selection=createAnalysisSelection(root,{map,request,getParent:currentTerritory,canDraw:()=>!busy&&!bootstrapPending,isActive:()=>active,
  onState:state=>{drawing=state.active;stopPlaying();syncTerritoryControls();},
  onCommit:(roi,{parent,clipped})=>{useTerritory(roi,{parent,resetParents:false,keepDrawing:true});$('area-note').textContent=clipped?'Граница ограничена выбранной областью; расчёт использует точное пересечение.':roi.circle?'Круг сохранён с точным центром и радиусом.':'Для расчёта сохранена точная граница участка.';}});
@@ -97,13 +99,13 @@ function renderBreadcrumb(){
  selection?.setContextParent(territoryParents.at(-1)||null);
 }
 async function refreshTerritoryParts(){
- cancelHierarchy();renderBreadcrumb();const parent=currentTerritory(),select=$('territory-child');$('territory-parts').hidden=!parent;territoryChildren=[];select.disabled=true;
+ cancelHierarchy();renderBreadcrumb();const parent=currentTerritory(),select=$('territory-child');$('territory-parts').hidden=!parent;territoryChildren=[];select.disabled=true;territoryContext.select(parent,{loading:Boolean(parent)});
  if(!parent){select.replaceChildren(new Option('Нет выбранной территории',''));return;}
  select.replaceChildren(new Option('Загружаем части территории…',''));$('territory-parts-status').textContent='';
- if(!territorySearch.children){select.replaceChildren(new Option('Подтерритории недоступны',''));return;}
+ if(!territorySearch.children){select.replaceChildren(new Option('Подтерритории недоступны',''));territoryContext.select(parent,{data:{items:[]}});return;}
  const revision=hierarchyRevision;hierarchyAbort=new AbortController();
- try{const response=await territorySearch.children(parent,{signal:hierarchyAbort.signal});if(revision!==hierarchyRevision||!active)return;territoryChildren=response.items||[];if(response.parent_ref)roiBoundaryRef=clone(response.parent_ref);select.replaceChildren(new Option(territoryChildren.length?'Выберите часть территории':'Подтерриторий в каталоге нет',''),...territoryChildren.map((item,index)=>new Option(item.label||item.name,String(index))));select.disabled=!territoryChildren.length;$('territory-parts-status').textContent=response.coverage?.message||'Уточните участок на карте.';}
- catch(error){if(revision!==hierarchyRevision||error.name==='AbortError')return;select.replaceChildren(new Option('Не удалось загрузить список',''));$('territory-parts-status').textContent='Список недоступен. Можно уточнить участок на карте.';}
+ try{const response=await territorySearch.children(parent,{signal:hierarchyAbort.signal});if(revision!==hierarchyRevision||!active)return;territoryContext.select(parent,{data:response});territoryChildren=response.items||[];if(response.parent_ref)roiBoundaryRef=clone(response.parent_ref);select.replaceChildren(new Option(territoryChildren.length?'Выберите часть территории':'Подтерриторий в каталоге нет',''),...territoryChildren.map((item,index)=>new Option(item.label||item.name,String(index))));select.disabled=!territoryChildren.length;$('territory-parts-status').textContent=territoryChildren.length?'Выберите часть территории. Её граница будет ограничена выбранной областью.':response.coverage?.message||'Уточните участок на карте.';}
+ catch(error){if(revision!==hierarchyRevision||error.name==='AbortError')return;select.replaceChildren(new Option('Не удалось загрузить список',''));$('territory-parts-status').textContent='Список недоступен. Можно уточнить участок на карте.';territoryContext.select(parent,{data:{items:[],coverage:{message:'Границы частей территории временно недоступны.'}}});}
 }
 function useTerritory(roi,{parent=null,resetParents=true,keepDrawing=false}={}){
  if(!keepDrawing)selection?.cancel();cancelTerritorySearch();if(resetParents)territoryParents=[];if(parent)territoryParents.push(clone(parent));
@@ -677,7 +679,7 @@ function getState(){
  const config=result?.config||formConfig(),geometry=config.circle?null:config.geometry||(config.preset==='sko'?(roiGeometry||settings?.region_geometry):roiGeometry),circle=config.circle||roiCircle;
  const matrix=matrixPanel.getState();
  const study=planner.getState();
- return {context:{roi:territorySelected?{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),...(roiBoundaryRef?{boundary_ref:clone(roiBoundaryRef)}:{}),...(roiParentRef?{parent_ref:clone(roiParentRef)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')}:null,history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km,study},territoryParents:clone(territoryParents),study,revisions:revisions.getState(),tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
+ return {context:{roi:territorySelected?{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),...(roiBoundaryRef?{boundary_ref:clone(roiBoundaryRef)}:{}),...(roiParentRef?{parent_ref:clone(roiParentRef)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')}:null,history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km,study},territoryParents:clone(territoryParents),territoryContext:territoryContext.getState(),study,revisions:revisions.getState(),tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
 }
 async function activate(options={}){
  const current=++activation;active=true;
@@ -696,7 +698,7 @@ async function activate(options={}){
   if(incoming){applyContext(incoming);contextApplied=true;}
   else if(matching&&saved.context){if(labels[saved.context.platform]){source=saved.context.platform;$('platform').value=source;}retainedFocus=clone(saved.context.focus);applyFocus(retainedFocus);}
   if(Array.isArray(saved.territoryParents)){territoryParents=clone(saved.territoryParents).filter(parent=>parent&&Array.isArray(parent.bbox)&&parent.name);refreshTerritoryParts();}
-  planner.restore(incoming?.study||saved.study||saved.context?.study||planner.getState());planner.resume();revisions.resume();matrixPanel.resume();
+  planner.restore(incoming?.study||saved.study||saved.context?.study||planner.getState());planner.resume();revisions.resume();territoryContext.resume();territoryContext.setEnabled(saved.territoryContext?.enabled);matrixPanel.resume();
   pendingViewState=incoming||options.run?saved:null;
   if(result)restoreView(saved);
   if(options.tab||saved.tab)activateTab(options.tab||saved.tab);
@@ -736,7 +738,7 @@ function restoreView(state){
  if(['raw','calibrated'].includes(state.seriesMode))$('series-mode').value=state.seriesMode;
 }
 function deactivate(){
- active=false;++activation;++generation;selection.cancel();cancelHierarchy();cancelTerritorySearch();analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);planner.pause();revisions.pause();stopPlaying();++mapGeneration;drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';$('method-dialog').close();matrixPanel.pause();
+ active=false;++activation;++generation;selection.cancel();territoryContext.pause();cancelHierarchy();cancelTerritorySearch();analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);planner.pause();revisions.pause();stopPlaying();++mapGeneration;drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';$('method-dialog').close();matrixPanel.pause();
 }
 
 /* Lifecycle is owned by the application shell; importing this module is inert. */

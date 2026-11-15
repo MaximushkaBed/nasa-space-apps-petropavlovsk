@@ -17,14 +17,14 @@ function ringsFor({ circle, geometry }) {
   return [[ring]];
 }
 
-export function createAreaLayerClip(map) {
+export function createAreaLayerClip(map, {panes = clipPanes, id = 'atlas-selection-clip'} = {}) {
   const sprite = document.createElementNS(svgNS, 'svg');
   sprite.setAttribute('aria-hidden', 'true');
   sprite.setAttribute('width', '0');
   sprite.setAttribute('height', '0');
   sprite.style.position = 'absolute';
   const clip = document.createElementNS(svgNS, 'clipPath');
-  clip.id = 'atlas-selection-clip';
+  clip.id = id;
   clip.setAttribute('clipPathUnits', 'userSpaceOnUse');
   const path = document.createElementNS(svgNS, 'path');
   path.setAttribute('clip-rule', 'evenodd');
@@ -34,9 +34,9 @@ export function createAreaLayerClip(map) {
   let polygons;
 
   function update() {
-    for (const name of clipPanes) {
+    for (const name of panes) {
       const pane = map.getPane(name);
-      if (pane) pane.style.clipPath = polygons ? 'url(#atlas-selection-clip)' : '';
+      if (pane) pane.style.clipPath = polygons ? `url(#${id})` : '';
     }
     if (!polygons) return;
     const center = map.getCenter().lng;
