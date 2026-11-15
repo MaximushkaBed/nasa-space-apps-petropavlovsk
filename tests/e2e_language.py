@@ -1,4 +1,4 @@
-"""Verify all three interface languages and switching without loading a new page.
+"""Verify browser-language defaults, persistence and all three interface languages.
 
 python tests/e2e_language.py --local-web
 python tests/e2e_language.py --base-url https://nasa.aican.cloud
@@ -11,10 +11,53 @@ from playwright.sync_api import expect, sync_playwright
 from e2e_workbench import local_server
 
 
-def language(page, code, control='#app-language'):
-    page.locator(f'{control} [data-language="{code}"]').click()
+def expect_language(page, code, control='#app-language'):
     expect(page.locator('html')).to_have_attribute('lang', code)
     expect(page.locator(f'{control} [data-language="{code}"]')).to_have_attribute('aria-pressed', 'true')
+
+
+def language(page, code, control='#app-language'):
+    page.locator(f'{control} [data-language="{code}"]').click()
+    expect_language(page, code, control)
+
+
+def initial_languages(browser, base):
+    atlas = f'{base}/?view=atlas'
+    preference = "localStorage.getItem('nasa-space-apps-language')"
+    for locale, code, demo in (
+        ('ru-KZ', 'ru', 'Готовый пример'),
+        ('en-GB', 'en', 'Example study'),
+        ('kk-KZ', 'kk', 'Дайын мысал'),
+        ('fr-FR', 'ru', 'Готовый пример'),
+    ):
+        page = browser.new_page(locale=locale)
+        page.goto(atlas, wait_until='domcontentloaded')
+        expect_language(page, code)
+        expect(page.locator('#onboarding-demo')).to_have_text(demo)
+        assert page.evaluate(preference) is None
+        page.close()
+
+    page = browser.new_page(locale='fr-FR')
+    page.add_init_script("""Object.defineProperty(navigator, 'languages', {
+        get: () => ['fr-FR', 'kk-Cyrl-KZ', 'en-GB']
+    });""")
+    page.goto(atlas, wait_until='domcontentloaded')
+    expect_language(page, 'kk')
+    assert page.evaluate(preference) is None
+
+    language(page, 'en')
+    assert page.evaluate(preference) == 'en'
+    page.goto(atlas, wait_until='domcontentloaded')
+    expect_language(page, 'en')
+    page.reload(wait_until='domcontentloaded')
+    expect_language(page, 'en')
+
+    page.goto(f'{atlas}&lang=ru', wait_until='domcontentloaded')
+    expect_language(page, 'ru')
+    assert page.evaluate(preference) == 'en'
+    page.goto(atlas, wait_until='domcontentloaded')
+    expect_language(page, 'en')
+    page.close()
 
 
 def desktop(browser, base):
@@ -176,12 +219,13 @@ if __name__ == '__main__':
     try:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
+            initial_languages(browser, base)
             desktop(browser, base)
             mobile(browser, base)
             example(browser, base, 'en', 'Example study', 'Anomaly from the historical baseline')
             example(browser, base, 'kk', 'Дайын мысал', 'Тарихи деңгейден ауытқу')
             browser.close()
-        print('PASS RU / EN / KK in onboarding, atlas, calendar, matrix and file import, case study and area analysis')
+        print('PASS browser language and persistence, RU / EN / KK in onboarding, atlas, calendar, matrix and file import, case study and area analysis')
     finally:
         if server:
             server.shutdown()

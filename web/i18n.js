@@ -27,10 +27,13 @@ function initialLanguage() {
   if (supported.has(urlLanguage)) return urlLanguage;
   try {
     const saved = localStorage.getItem(storageKey);
-    return supported.has(saved) ? saved : 'ru';
-  } catch {
-    return 'ru';
+    if (supported.has(saved)) return saved;
+  } catch { /* Storage can be disabled. */ }
+  for (const locale of [...(navigator.languages ?? []), navigator.language]) {
+    const code = locale?.toLowerCase().split('-')[0];
+    if (supported.has(code)) return code;
   }
+  return 'ru';
 }
 
 let language = initialLanguage();
