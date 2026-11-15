@@ -8,7 +8,7 @@ import { createFireViewport } from './fire-viewport.js?v=paired-days';
 import { createAreaAnalysis, inRing } from './area-analysis.js?v=atlas-polish';
 import { createMapNotice } from './map-notice.js';
 import { createAreaLayerClip } from './area-layer-clip.js?v=atlas-polish';
-import { createAtlasStudy } from './atlas-study.js?v=file-matrix';
+import { createAtlasStudy } from './atlas-study.js?v=demo-sko';
 import { createLayerReadout } from './layer-values.js?v=atlas-polish';
 import { addTerrainControl } from './terrain-layer.js';
 import { createTemperatureBackground } from './surface-temperature.js';
@@ -248,9 +248,10 @@ function createMap(basemap, boundary, closePanel) {
   $('world-view').addEventListener('click', () => {
     if (areaAnalysis.getSelection()) areaAnalysis.clearSelection();
   });
-  $('reset-map').addEventListener('click', () => areaAnalysis.setSelection({
-    preset: 'sko', source: boundary.properties?.source || 'Граница СКО · geoBoundaries',
-  }));
+  $('reset-map').addEventListener('click', () => {
+    areaAnalysis.setSelection({ preset: 'sko', source: boundary.properties?.source || 'Граница СКО · geoBoundaries' });
+    study.usePreparedSko();
+  });
   weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)), root);
   worldWind = createWorldWind(map, $('world-wind-status'));
   temperature = createTemperatureBackground(map, $('temperature-status'),
@@ -1223,8 +1224,10 @@ return {
     await ready;
     if(!active||token!==activation)return;
     map?.invalidateSize({ pan: false });
-    const state = options.state;
-    const context = options.context || state?.context;
+    const demo = options.view === 'atlas' && new URLSearchParams(location.search).get('demo') === 'sko';
+    const demoPanel = location.hash === '#external-factors' ? '#external-factors' : '#activity-calendar';
+    const state = demo ? undefined : options.state;
+    const context = demo ? undefined : options.context || state?.context;
     if (context) {
       for (const field of ['grid_km','quality','daynight','study']) {
         if (Object.hasOwn(context,field)) analysisPreferences[field] = structuredClone(context[field]);
@@ -1236,11 +1239,12 @@ return {
       if (context.roi) areaAnalysis?.setSelection(context.roi);
       else if (areaAnalysis?.getSelection()) areaAnalysis.clearSelection();
     }
-    if (context?.history && context?.baseline) {
+    if (state?.atlasStudy) study.restoreSettings(state.atlasStudy);
+    else if (context?.history && context?.baseline) {
       study.restoreSettings({start:context.history.start,end:context.history.end,
         baseline_start:context.baseline.start,baseline_end:context.baseline.end,
         platform:context.analysisPlatform || context.platform || 'auto',explicit:true});
-    } else if (state?.atlasStudy) study.restoreSettings(state.atlasStudy);
+    }
     if (context?.platform && worldArchive) {
       const id = context.platform === 'all' ? -1 : worldArchive.platforms.findIndex(p => normalizePlatform(p) === context.platform);
       if (context.platform !== 'all' && id < 0) bridge.notice?.('Эта платформа недоступна в текущем архиве атласа. Фильтр не изменён.');
@@ -1267,7 +1271,11 @@ return {
       $('fire-points').setAttribute('aria-pressed', String(fireDisplay === 'points'));
       $('fire-heat').setAttribute('aria-pressed', String(fireDisplay === 'heat'));
     }
-    if (options.caseId || options.view === 'cases') showPanel?.('#kishkenekol-case');
+    if (demo) {
+      $('reset-map').click();
+      showPanel?.(demoPanel);
+      bridge.setLocalHash?.(demoPanel);
+    } else if (options.caseId || options.view === 'cases') showPanel?.('#kishkenekol-case');
     else if (state?.localPanel) showPanel?.(state.localPanel);
     else if(options.view==='atlas'&&root.querySelector('#kishkenekol-case')&&!root.querySelector('#kishkenekol-case').hidden)showPanel?.('#observations');
     study.resume();

@@ -47,10 +47,9 @@ if __name__ == "__main__":
     data = bundle(completed(base, "analyses", args.analysis_id), completed(base, "matrices", args.matrix_id), args.preset)
     encoded = (json.dumps(data, ensure_ascii=False, allow_nan=False, indent=1) + "\n").encode()
     output = args.output or Path("web/data/world-atlas.json" if args.preset == "world" else "web/data/sko-study.json")
-    if args.preset == "world":
-        temporary = output.with_suffix(".json.tmp")
-        temporary.write_bytes(encoded)
-        temporary.replace(output)
+    temporary = output.with_suffix(".json.tmp")
+    temporary.write_bytes(encoded)
+    temporary.replace(output)
     compressed = output.with_suffix(".json.gz")
     temporary = compressed.with_suffix(".gz.tmp")
     temporary.write_bytes(gzip.compress(encoded, mtime=0))

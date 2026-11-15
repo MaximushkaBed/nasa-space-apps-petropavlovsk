@@ -16,10 +16,16 @@ async function request(path, options) {
   return data;
 }
 
-async function requestCompressedSnapshot(name) {
-  const response = await fetch(`data/${name}.json.gz`);
-  if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
-  return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
+async function requestSnapshot(name) {
+  if ('DecompressionStream' in window) {
+    try {
+      const response = await fetch(`data/${name}.json.gz`);
+      if (response.ok && response.body) {
+        return await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
+      }
+    } catch { /* The plain JSON copy also works with older browsers. */ }
+  }
+  return request(`data/${name}.json`);
 }
 
 export function createAtlasStudy(root, getPlatform, selectMonth) {
@@ -29,6 +35,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   const start = $('study-start'), end = $('study-end');
   const baselineStart = $('study-baseline-start'), baselineEnd = $('study-baseline-end');
   const platform = $('study-platform'), retry = $('study-retry');
+  const preparedSko = $('study-prepared-sko');
   platform.add(new Option('Авто · доступный спутник', 'auto'));
   for (const source of sources) platform.add(new Option(source, source));
   let roi, scopeKey, archive, job, timer, controller, worldSnapshot, worldDownload, worldCalendar, calendarTimer;
@@ -69,7 +76,10 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     allWorld = !roi;
     $('study-area').textContent = roi?.name || 'Весь мир';
     if (!roi && worldCalendar && !explicitDates) setWorldDates();
-    else if (roi && archive && !explicitDates) setArchiveDates();
+    else if (roi && !explicitDates) {
+      if (archive) setArchiveDates();
+      else if (roi.preset === 'sko') setDates(defaultStudyDates);
+    }
     $('study-default-period').hidden = Boolean(roi);
     if (roi?.preset === 'sko') loadSkoSnapshot();
     schedule();
@@ -81,6 +91,8 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     controller?.abort();
     job = undefined;
     retry.hidden = true;
+    preparedSko.hidden = roi?.preset !== 'sko' || Object.entries(defaultStudyDates)
+      .every(([name, value]) => dates[name].value === String(value));
     $('study-calendar').replaceChildren();
     $('study-calendar-detail').textContent = '';
     matrix.reset();
@@ -203,7 +215,8 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   }
 
   function setArchiveDates() {
-    const preferredDates = worldSnapshot?.analysis.result.config ?? defaultStudyDates;
+    const preferredDates = roi?.preset === 'sko' ? defaultStudyDates
+      : worldSnapshot?.analysis.result.config ?? defaultStudyDates;
     const first = preferredDates.start < archive.first ? archive.first : preferredDates.start;
     const last = preferredDates.end > archive.last ? archive.last : preferredDates.end;
     const range = first <= last ? { start: first, end: last } : { start: archive.first, end: archive.last };
@@ -246,15 +259,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   }
 
   function loadDefault() {
-    const download = async () => {
-      if ('DecompressionStream' in window) {
-        try {
-          return await requestCompressedSnapshot('world-atlas');
-        } catch { /* Older deployments and browsers can use the JSON copy. */ }
-      }
-      return request('data/world-atlas.json');
-    };
-    worldDownload ??= download().then(snapshot => {
+    worldDownload ??= requestSnapshot('world-atlas').then(snapshot => {
       if (snapshot.analysis?.result?.config?.preset !== 'world' || !snapshot.matrix?.result) {
         throw new Error('Готовый мировой обзор временно недоступен.');
       }
@@ -268,8 +273,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   }
 
   function loadSkoSnapshot() {
-    if (!('DecompressionStream' in window)) return null;
-    skoDownload ??= requestCompressedSnapshot('sko-study').then(snapshot => {
+    skoDownload ??= requestSnapshot('sko-study').then(snapshot => {
       const analysis = snapshot.analysis?.result;
       const factors = snapshot.matrix?.result;
       if (analysis?.config?.preset !== 'sko' || !analysis.monthly?.length || !factors
@@ -377,7 +381,15 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     }
   }
 
+  function usePreparedSko() {
+    if (roi?.preset !== 'sko') return;
+    explicitDates = false;
+    setDates(defaultStudyDates);
+    schedule(0);
+  }
+
   retry.addEventListener('click', () => schedule(0));
+  preparedSko.addEventListener('click', usePreparedSko);
   $('study-default-period').addEventListener('click', () => {
     allWorld = true;
     explicitDates = false;
@@ -402,6 +414,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
 
   return {
     setScope,
+    usePreparedSko,
     pause() {
       suspended = true;
       clearTimeout(timer);
@@ -422,21 +435,23 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     restoreSettings(value) {
       if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value.start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(value.end || '')
           || !Number.isInteger(value.baseline_start) || !Number.isInteger(value.baseline_end)) return;
-      const previous = JSON.stringify([start.value,end.value,baselineStart.valueAsNumber,baselineEnd.valueAsNumber,platform.value]);
-      setDates(value);
-      if (value.platform === 'auto' || sources.includes(value.platform)) platform.value = value.platform;
+      const previous = [allWorld, start.value, end.value, baselineStart.value, baselineEnd.value, platform.value];
       explicitDates = value.explicit !== false;
-      if (explicitDates) allWorld = false;
-      const next = JSON.stringify([start.value,end.value,baselineStart.valueAsNumber,baselineEnd.valueAsNumber,platform.value]);
-      if (next !== previous) schedule();
+      allWorld = !roi && !explicitDates;
+      if (explicitDates) setDates(value);
+      else if (roi && archive) setArchiveDates();
+      else if (allWorld && worldCalendar) setWorldDates();
+      if (value.platform === 'auto' || sources.includes(value.platform)) platform.value = value.platform;
+      const next = [allWorld, start.value, end.value, baselineStart.value, baselineEnd.value, platform.value];
+      if (next.some((field, index) => field !== previous[index])) schedule();
     },
     setArchive(value) {
       archive = value;
       start.min = end.min = archive.first;
       start.max = end.max = archive.last;
-      if (!start.value || (!explicitDates && (end.value > archive.last || start.value < archive.first))) {
-        if (roi) setArchiveDates();
-        else setDates(worldSnapshot?.analysis.result.config ?? defaultStudyDates);
+      if (roi && !explicitDates) setArchiveDates();
+      else if (!start.value || (!explicitDates && (end.value > archive.last || start.value < archive.first))) {
+        setDates(worldSnapshot?.analysis.result.config ?? defaultStudyDates);
       }
       for (const input of Object.values(dates)) input.disabled = false;
       if (roi) schedule();
