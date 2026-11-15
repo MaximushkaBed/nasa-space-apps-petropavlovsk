@@ -1,7 +1,6 @@
 const nominalPixelMeters = [1000, 1000, 375, 375, 375];
 const mercatorCircumference = 2 * Math.PI * 6378137;
 const mercatorLimit = 85.0511287798;
-const overviewSpacing = 24;
 export const fireDetailZoom = 7;
 const projectedPixelWidth = (meters, latitude) => 256 * meters
   / (mercatorCircumference * Math.cos(latitude * Math.PI / 180));
@@ -73,8 +72,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     ctx.drawImage(heat, 0, 0, width, height);
   }
 
-  function drawOverview(ctx, bins, width) {
-    const spacing = overviewSpacing;
+  function drawOverview(ctx, bins, width, spacing, wideView) {
     const stride = Math.ceil(width / spacing) + 4;
     const cells = new Map();
     const groups = [];
@@ -110,11 +108,13 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     }
 
     groups.sort((a, b) => a.count - b.count);
-    const reference = groups[Math.floor((groups.length - 1) * .97)]?.count ?? 1;
+    const reference = groups[Math.floor((groups.length - 1) * .95)]?.count ?? 1;
+    const minOpacity = wideView ? .66 : .48;
+    ctx.fillStyle = '#ff4538';
     for (const group of groups) {
-      const strength = Math.min(1, (group.count / reference) ** .48);
-      const half = .85 + 2.65 * strength;
-      ctx.globalAlpha = .10 + .84 * strength;
+      const strength = Math.min(1, (group.count / reference) ** .36);
+      const half = 1.25 + 1.9 * strength;
+      ctx.globalAlpha = minOpacity + (.96 - minOpacity) * strength;
       ctx.beginPath();
       ctx.arc(group.x, group.y, half, 0, 2 * Math.PI);
       ctx.fill();
@@ -146,6 +146,8 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     const origin = map.getPixelBounds().min;
     const worldWidth = 256 * scale;
     const overview = aggregated && !detailZoom;
+    const wideView = zoom < 4;
+    const overviewSpacing = wideView ? 13 : zoom < 5 ? 18 : 24;
     const detailed = mode === 'points' && detailZoom;
     const heatRadius = overview ? Math.min(34, Math.max(13, worldWidth / 460)) : zoom < 6 ? 17 : 23;
     const margin = detailed ? Math.max(4, maxPixelWidth * scale / 2)
@@ -184,7 +186,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     }
     if (detailed) return;
     if (overview) {
-      drawOverview(ctx, bins, width);
+      drawOverview(ctx, bins, width, overviewSpacing, wideView);
       return;
     }
     for (const regional of [false, true]) {
