@@ -8,7 +8,7 @@
   <title>Атлас пожаров · NASA FIRMS</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=atlas-polish">
+  <link rel="stylesheet" href="styles.css?v=atlas-compact">
   <script src="vendor/leaflet.js" defer></script>
   <script src="legacy-atlas-entry.js" type="module"></script>
 </head>
@@ -137,6 +137,7 @@
           <ul id="area-platforms" class="area-platforms"></ul>
           <button type="button" class="quiet-button area-analysis-action" id="area-open-analysis" hidden disabled>Анализ территории →</button>
           <button type="button" class="quiet-button" id="area-clear" hidden>Очистить выделение</button>
+          <button type="button" class="quiet-button" id="sko-example" title="Открыть 12 апреля 2025 года" hidden>СКО · открыть пример ↗</button>
         </section>
       </aside>
 
@@ -200,7 +201,7 @@
           </div>
           <div class="fire-key" id="world-point-legend"><i aria-hidden="true"></i> Пиксели MODIS / VIIRS</div>
           <div class="fire-key" id="heat-legend" hidden><i aria-hidden="true"></i> Плотность детекций</div>
-          <button id="show-period-days" class="quiet-button" type="button" hidden>Смотреть по дням</button>
+          <button id="show-period-days" class="quiet-button" type="button" hidden>По дням</button>
           <button id="play-weather" class="quiet-button" type="button" aria-label="Воспроизвести или остановить погоду" aria-pressed="false" disabled>▶ Погода</button>
         </div>
         <div class="timeline-controls">
@@ -214,7 +215,6 @@
           <span id="fire-frame-date" role="status" hidden></span>
           <span id="map-summary" role="status"></span>
           <span id="regional-count"></span>
-          <button class="quiet-button" id="sko-example" type="button" title="Открыть 12 апреля 2025 года" hidden>СКО · открыть пример ↗</button>
           <span id="archive-caption"></span>
         </div>
         <div class="fire-detail-caption">

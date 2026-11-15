@@ -149,7 +149,7 @@ body:not(.leaflet-dragging) #map.reading-layer:not(.selecting-area) { cursor: de
 .area-summary h3 { margin: 0; font-size: 14px; }
 .area-count { display: block; color: #9ae8ff; margin-top: 6px; font-size: 17px; }
 .area-platforms { padding-left: 16px; margin: 7px 0; color: var(--muted); font-size: 12px; }
-#sko-example { padding: 2px 5px; color: #b9efff; font: inherit; }
+#sko-example { color: #b9efff; }
 .drawer-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .drawer-heading h2 { font-size: 15px; font-weight: 660; }
 .drawer-heading .quiet-button { padding: 3px 8px; font-size: 18px; line-height: 1; }

@@ -530,7 +530,7 @@ function showWorldFrame() {
     : worldFrame ? `Мир · ${number.format(worldFrame.total ?? selectedPoints.length)} детекций` : 'Загрузка детекций…';
   const regionalPrefix = approximate && !worldFrame.regionalExact ? '≈ ' : '';
   $('regional-count').textContent = visible && worldFrame && !local ? `СКО · ${regionalPrefix}${number.format(regionalCount)}` : '';
-  $('sko-example').hidden = !visible || !worldFrame || local || regionalCount > 0 || approximate
+  $('sko-example').hidden = !visible || !worldFrame || worldFrame.path !== requestedFire?.path || local || regionalCount > 0 || approximate
     || kishkenekolDay < worldArchive.first || kishkenekolDay > worldArchive.last;
   if (worldFrame?.method === 'publisher' && worldFrame.path === requestedFire?.path) {
     const through = worldFrame.coveredEnd;
@@ -681,7 +681,7 @@ function setWorldPeriod(span) {
   $('play-frames').disabled = first === last;
   root.querySelector('.timeline-controls').hidden = range;
   $('show-period-days').hidden = !range && !inspectionPeriod;
-  $('show-period-days').textContent = range ? 'Смотреть по дням' : 'Сводка за период';
+  $('show-period-days').textContent = range ? 'По дням' : 'За период';
   const through = worldArchive.through;
   $('archive-caption').textContent = range ? `Слои на ${shortDate.format(new Date(end))}`
     : day === worldArchive.last && through?.startsWith(day)
@@ -1040,6 +1040,8 @@ async function start() {
     $('open-area').textContent = 'Обзор мира';
     $('sko-example').addEventListener('click', () => {
       stopPlayback();
+      closePanel();
+      if (areaAnalysis.getSelection()) areaAnalysis.clearSelection();
       dailySatellite = '';
       $('world-satellite').value = '';
       reset();
