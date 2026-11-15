@@ -26,7 +26,7 @@ VIEWPORT_LIMIT = 25000
 VIEWPORT_WIDTH = 20
 VIEWPORT_HEIGHT = 15
 VIEWPORT_TIMEOUT = 18
-WORLD_CELL_DEGREES = 1
+WORLD_CELL_DEGREES = 0.5
 SKO_CELL_DEGREES = 0.08
 DETECTION_FILTER = """AND (type = 0 OR type IS NULL)
     AND coalesce(lower(confidence), '') NOT IN ('l', 'low')
@@ -375,26 +375,20 @@ class FireArchive:
         # counts from each annual file and append the anti-joined live tail.
         for year, year_dates in dates_by_year.items():
             directory = self.root / "aggregate" / f"year={year}"
-            candidates = (directory / f"aggregate-r{resolution}.parquet" for resolution in (5, 8))
-            path = next((candidate for candidate in candidates if candidate.is_file()), None)
-            if path is None:
-                continue
-            columns = {name for name, in self.connection.execute(
-                "SELECT name FROM parquet_schema(?) WHERE regexp_full_match(name, 'count_[0-9]{8}')", [str(path)]).fetchall()}
-            supported = {day: f"count_{day:%Y%m%d}" for day in year_dates if f"count_{day:%Y%m%d}" in columns}
-            covered.update(supported)
-            if not supported:
-                continue
-            amount = "count" if set(supported.values()) == columns else " + ".join(f"coalesce({col}, 0)" for col in supported.values())
-            rows = self.connection.execute(f"""
-                SELECT (bbox.xmin + bbox.xmax) / 2, (bbox.ymin + bbox.ymax) / 2, {amount} AS weight
-                FROM read_parquet(?, hive_partitioning=false) WHERE weight > 0
-            """, [str(path)])
-            while chunk := rows.fetchmany(10000):
-                for lon, lat, count in chunk:
-                    lon = (lon + 180) % 360 - 180
-                    regional = self.boundary.contains(lon, lat)
-                    add_to_grid(points, lon, lat, -1, count, regional, WORLD_CELL_DEGREES)
+            remaining = {f"count_{day:%Y%m%d}": day for day in year_dates}
+            for resolution in (8, 5):
+                if not remaining:
+                    break
+                path = directory / f"aggregate-r{resolution}.parquet"
+                if not path.is_file():
+                    continue
+                columns = {name for name, in self.connection.execute(
+                    "SELECT name FROM parquet_schema(?) WHERE regexp_full_match(name, 'count_[0-9]{8}')", [str(path)]).fetchall()}
+                supported = sorted(remaining.keys() & columns)
+                if not supported:
+                    continue
+                covered.update(remaining.pop(column) for column in supported)
+                self.add_publisher_bins(points, path, supported, len(columns))
         if tail is not None:
             path, tail_start, tail_end = tail
             # An overlapping tail cannot fill gaps in the underlying snapshot.
@@ -403,6 +397,19 @@ class FireArchive:
             for lon, lat, platform, weight, regional in self.observation_bins([path], dates[0], dates[-1], None, filtered=False):
                 add_to_grid(points, lon, lat, platform, weight, regional, WORLD_CELL_DEGREES)
         return list(grid_points(points)), covered
+
+    def add_publisher_bins(self, points, path, selected_columns, column_count):
+        amount = "count" if len(selected_columns) == column_count else " + ".join(
+            f"coalesce({column}, 0)" for column in selected_columns)
+        rows = self.connection.execute(f"""
+            SELECT (bbox.xmin + bbox.xmax) / 2, (bbox.ymin + bbox.ymax) / 2, {amount} AS weight
+            FROM read_parquet(?, hive_partitioning=false) WHERE weight > 0
+        """, [str(path)])
+        while chunk := rows.fetchmany(10000):
+            for lon, lat, count in chunk:
+                lon = (lon + 180) % 360 - 180
+                regional = self.boundary.contains(lon, lat)
+                add_to_grid(points, lon, lat, -1, count, regional, WORLD_CELL_DEGREES)
 
     def period(self, start, end, platform=None):
         catalog_path = self.root / "catalog.json"

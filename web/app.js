@@ -4,7 +4,7 @@ import { numberFormat, dateFormat } from './i18n.js';
 import { createExtraLayers } from './map-layers.js?v=atlas-polish';
 import { createWorldWind } from './world-wind.js?v=atlas-polish';
 import { createWeatherOverlay } from './weather-overlay.js?v=layer-values';
-import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=fire-contrast';
+import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=period-detail';
 import { createFireViewport } from './fire-viewport.js?v=paired-days';
 import { createAreaAnalysis, inRing } from './area-analysis.js?v=atlas-polish';
 import { createMapNotice } from './map-notice.js';
@@ -630,7 +630,7 @@ async function loadWorldFrame() {
   showWorldFrame();
   request.promise = (async () => {
     try {
-      const response = await fetch(path, { signal: controller.signal });
+      const response = await fetch(path, { signal: controller.signal, cache: range ? 'no-cache' : 'default' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const frame = await response.json();
       if (controller.signal.aborted) return;

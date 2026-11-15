@@ -146,6 +146,7 @@ class GlobalFireTests(unittest.TestCase):
             root = Path(directory)
             old = root / "aggregate/year=2024/aggregate-r8.parquet"
             new = root / "aggregate/year=2025/aggregate-r5.parquet"
+            fine = root / "aggregate/year=2025/aggregate-r8.parquet"
             tail = root / "derived/live-tail.parquet"
             for path in (old, new, tail):
                 path.parent.mkdir(parents=True)
@@ -164,6 +165,10 @@ class GlobalFireTests(unittest.TestCase):
                 conn.execute("""COPY (SELECT 50 AS count, 20 AS count_20250129,
                                       30 AS count_20250130,
                                       {'xmin':119.9,'xmax':120.1,'ymin':15.9,'ymax':16.1} AS bbox) TO ?""", [str(new)])
+                conn.execute("""COPY (SELECT n AS count, n AS count_20250129,
+                                      {'xmin':lon,'xmax':lon,'ymin':lat,'ymax':lat} AS bbox
+                                      FROM (VALUES (7, 119.8, 15.9), (13, 120.25, 16.72)) AS cells(n, lon, lat)) TO ?""",
+                             [str(fine)])
                 conn.execute("""COPY (SELECT DATE '2025-02-01' AS acq_date,
                                       ST_GeomFromWKB(?) AS geometry) TO ?""",
                              [struct.pack("<BIdd", 1, 1, 69, 54), str(tail)])
@@ -178,7 +183,9 @@ class GlobalFireTests(unittest.TestCase):
                 self.assertEqual(frame["total"], 62)
                 self.assertEqual(frame["regionalCount"], 12)
                 self.assertFalse(frame["regionalExact"])
-                self.assertCountEqual(frame["points"], [[120, 16, -1, 50], [69, 54, -1, 12]])
+                self.assertEqual(frame["cellDegrees"], .5)
+                self.assertCountEqual(frame["points"], [[120, 16, -1, 30], [69, 54, -1, 12],
+                                                        [119.8, 15.9, -1, 7], [120.25, 16.72, -1, 13]])
                 with self.assertRaises(InvalidPeriod):
                     archive.period(start, end, 0)
             finally:

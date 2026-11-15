@@ -76,14 +76,16 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     const stride = Math.ceil(width / spacing) + 4;
     const cells = new Map();
     const groups = [];
-    // Keep each marker at its strongest source group and add nearby counts to it.
     const ordered = [...bins.values()].sort((a, b) => b.count - a.count || a.y - b.y || a.x - b.x);
+    const busyGroup = ordered[Math.floor(ordered.length * .10)]?.count ?? 1;
     for (const bin of ordered) {
       const col = Math.floor(bin.x / spacing);
       const row = Math.floor(bin.y / spacing);
       const key = row * stride + col;
       let nearest;
-      let distance = spacing * spacing;
+      // Keep more detail where adjacent bins each have substantial activity.
+      const radius = spacing * (1 - .52 * Math.sqrt(Math.min(1, bin.count / busyGroup)));
+      let distance = radius * radius;
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           const candidates = cells.get(key + dy * stride + dx);
@@ -97,9 +99,14 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
           }
         }
       }
-      if (nearest) nearest.count += bin.count;
+      if (nearest) {
+        nearest.count += bin.count;
+        nearest.offsetX += (bin.x - nearest.x) * bin.count;
+        nearest.offsetY += (bin.y - nearest.y) * bin.count;
+      }
       else {
-        const group = { ...bin };
+        // The first bin stays the spatial index anchor while the drawn centre follows the data.
+        const group = { ...bin, offsetX: 0, offsetY: 0 };
         groups.push(group);
         const cell = cells.get(key);
         if (cell) cell.push(group);
@@ -112,13 +119,15 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     const minOpacity = wideView ? .66 : .48;
     ctx.fillStyle = '#ff4538';
     for (const group of groups) {
+      const x = group.x + group.offsetX / group.count;
+      const y = group.y + group.offsetY / group.count;
       const strength = Math.min(1, (group.count / reference) ** .36);
       const half = 1.25 + 1.9 * strength;
       ctx.globalAlpha = minOpacity + (.96 - minOpacity) * strength;
       ctx.beginPath();
-      ctx.arc(group.x, group.y, half, 0, 2 * Math.PI);
+      ctx.arc(x, y, half, 0, 2 * Math.PI);
       ctx.fill();
-      hitTargets.push({ ...group, half });
+      hitTargets.push({ ...group, x, y, half });
     }
     ctx.globalAlpha = 1;
   }
@@ -147,7 +156,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     const worldWidth = 256 * scale;
     const overview = aggregated && !detailZoom;
     const wideView = zoom < 4;
-    const overviewSpacing = wideView ? 13 : zoom < 5 ? 18 : 24;
+    const overviewSpacing = wideView ? 18 : zoom < 5 ? 24 : 28;
     const detailed = mode === 'points' && detailZoom;
     const heatRadius = overview ? Math.min(34, Math.max(13, worldWidth / 460)) : zoom < 6 ? 17 : 23;
     const margin = detailed ? Math.max(4, maxPixelWidth * scale / 2)
