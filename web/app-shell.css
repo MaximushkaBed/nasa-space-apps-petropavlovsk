@@ -60,6 +60,7 @@ button, a, select, input { font: inherit; }
 .app-language button { min-width: 29px; min-height: 24px; padding: 2px 4px; border: 0; border-radius: 3px; background: transparent; color: var(--app-muted); font-size: 10px; font-weight: 650; line-height: 1.2; cursor: pointer; }
 .app-language button[aria-pressed="true"] { color: var(--app-bg); background: var(--app-primary); }
 .app-utility-icon { display: none; }
+.app-language-mobile { display:none; }
 
 .app-outlet { position: relative; margin-top: var(--app-header-height); min-height: calc(100dvh - var(--app-header-height)); outline: none; }
 .app-view { position: relative; min-height: calc(100dvh - var(--app-header-height)); }
@@ -148,6 +149,39 @@ button, a, select, input { font: inherit; }
   .app-utility-icon { display: inline; font-size: 15px; line-height: 1; }
   .app-utility-label { display: none; }
   .app-header .app-utility { width: 29px; height: 29px; padding: 0; }
+}
+/* Touch navigation keeps the map below two compact rows on a phone. */
+@media (max-width:760px), (max-width:1050px) and (pointer:coarse) {
+  .app-header { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 8px; padding:6px max(10px,env(safe-area-inset-right)) 0 max(10px,env(safe-area-inset-left)); }
+  .app-header .app-brand { grid-row:1; grid-column:1; min-width:0; gap:7px; }
+  .app-header .app-brand img { width:24px; height:24px; flex:none; }
+  .app-header .app-brand strong { min-width:0; font-size:14px; overflow:hidden; text-overflow:ellipsis; }
+  .app-header .app-actions { grid-row:1; grid-column:2; margin:0; gap:4px; }
+  .app-header #app-language { display:none; }
+  .app-header .app-utility-icon { display:inline; font-size:18px; line-height:1; }
+  .app-header .app-utility-label { display:none; }
+  .app-header .app-utility { width:40px; height:40px; min-width:40px; padding:0; margin:0; }
+  .app-header .app-language-mobile { display:block; width:60px; min-height:40px; padding:4px 2px 4px 6px; border:1px solid var(--app-control-line); border-radius:4px; background:var(--app-control); color:var(--app-ink); font-size:16px; cursor:pointer; }
+  .app-header .app-nav { grid-row:2; grid-column:1/-1; order:0; width:100%; gap:0; min-width:0; }
+  .app-header .app-nav a { min-height:42px; padding:9px 12px 7px; font-size:11px; justify-content:center; }
+  .app-header .app-context { display:none; }
+  .app-dialog { max-height:calc(100dvh - 24px); overscroll-behavior:contain; }
+  .app-dialog .app-dialog-heading { position:sticky; top:-18px; z-index:1; background:var(--app-surface); padding-block:10px; }
+  .app-dialog .app-dialog-heading button { min-width:40px; min-height:40px; }
+  .app-dialog-actions button { min-height:42px; }
+}
+@media (max-width:340px) {
+  .app-header .app-brand strong { font-size:13px; }
+  .app-header .app-nav a { padding-inline:10px; }
+}
+@media (min-width:560px) and (max-width:1050px) and (max-height:500px) and (pointer:coarse) {
+  .app-header { display:flex; flex-wrap:nowrap; min-height:48px; padding-block:4px; gap:12px; }
+  .app-header .app-nav { order:0; width:auto; margin-right:auto; }
+  .app-header .app-nav a { min-height:40px; padding-block:8px 5px; }
+  .app-header .app-actions { margin:0; }
+}
+@media (min-width:560px) and (max-width:699px) and (max-height:500px) and (pointer:coarse) {
+  .app-header .app-brand strong { display:none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .app-outlet * { scroll-behavior: auto !important; }

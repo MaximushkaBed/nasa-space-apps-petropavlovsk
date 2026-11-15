@@ -103,7 +103,7 @@ card.querySelector('#onboarding-next').addEventListener('click',()=>{if(current.
 welcome.querySelector('#onboarding-own').addEventListener('click',ownStudy);
 welcome.querySelector('#onboarding-skip').addEventListener('click',finish);
 document.querySelector('#app-tour-open').addEventListener('click',showWelcome);
-document.addEventListener('pointerdown',event=>{if(!welcome.hidden&&!welcome.contains(event.target)&&!event.target.closest('#app-tour-open, #app-language'))finish();});
+document.addEventListener('pointerdown',event=>{if(!welcome.hidden&&!welcome.contains(event.target)&&!event.target.closest('#app-tour-open, #app-language, #app-language-mobile'))finish();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&(!card.hidden||!welcome.hidden))finish();});
 document.addEventListener('click',event=>{if(current&&event.target.closest('#app-header a[data-app-view], #analysis-settings-close, #run'))finish();});
 document.addEventListener('nasa:analysis-drawing',event=>{if(event.detail?.active)finish();});

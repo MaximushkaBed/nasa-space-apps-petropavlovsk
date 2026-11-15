@@ -52,3 +52,10 @@
 .matrix-file-columns input { flex: none; margin: 0; }
 .matrix-file-status.is-error { color: var(--app-warning); }
 .matrix-file-result .matrix-scope { overflow-wrap: anywhere; }
+@media(max-width:760px), (max-width:1050px) and (max-height:500px) and (pointer:coarse) {
+ :where(.analysis-workbench) .matrix-tool :is(button,summary) { min-height:44px; }
+ :where(.analysis-workbench) .matrix-tool .matrix-cell { min-height:44px; }
+ :where(.analysis-workbench) .matrix-tool .matrix-grid { overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; }
+ :where(.analysis-workbench) .matrix-tool .matrix-exports button { font-size:11px; }
+ :where(.analysis-workbench) .matrix-file-picker,:where(.analysis-workbench) .matrix-file-columns label { min-height:44px; }
+}

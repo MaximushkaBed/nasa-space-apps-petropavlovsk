@@ -19,7 +19,7 @@
 </head>
 <body>
   <header id="app-header" class="app-header">
-    <a class="app-brand" href="?view=atlas" data-app-view="atlas"><img src="favicon.svg" width="27" height="27" alt=""><strong>NASA Space Apps</strong></a>
+    <a class="app-brand" href="?view=atlas" data-app-view="atlas" aria-label="NASA Space Apps"><img src="favicon.svg" width="27" height="27" alt=""><strong>NASA Space Apps</strong></a>
     <nav class="app-nav" aria-label="Разделы приложения">
       <a href="?view=atlas" data-app-view="atlas">Атлас</a>
       <a href="?view=analysis" data-app-view="analysis">Анализ территории</a>
@@ -34,6 +34,7 @@
         <button type="button" data-language="en" lang="en" aria-label="English" aria-pressed="false" translate="no">EN</button>
         <button type="button" data-language="kk" lang="kk" aria-label="Қазақша" aria-pressed="false" translate="no">ҚАЗ</button>
       </div>
+      <select id="app-language-mobile" class="app-language-mobile" aria-label="Язык интерфейса"><option value="ru" lang="ru" translate="no">RU</option><option value="en" lang="en" translate="no">EN</option><option value="kk" lang="kk" translate="no">ҚАЗ</option></select>
     </div>
   </header>
   <div id="shell-status" class="shell-status" role="status" hidden></div>

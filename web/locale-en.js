@@ -1,5 +1,6 @@
 // English UI strings. Numbered placeholders correspond to the runtime values in the Russian message.
 export default {
+  "Полигон: отметьте точки и нажмите «Готово».": "Polygon: mark points, then tap Done.",
   "Данные для анализа": "Analysis data",
   "3. Данные для анализа": "3. Analysis data",
   "Проверим, какие данные спутников доступны за выбранный период. Для сравнения с обычной активностью подберём годы, которые задают её исторический уровень.": "We will check which satellite data are available for the selected period and choose reference years to compare activity with its typical historical level.",

@@ -43,6 +43,7 @@ export function selectionBounds(geometry){
 
 export function createAnalysisSelection(root,{map,request,getParent,onCommit,onState,canDraw=()=>true,isActive=()=>true}){
  const $=id=>root.querySelector('#'+CSS.escape(id));
+ const touchInput=matchMedia('(pointer:coarse)');
  const preview=L.layerGroup().addTo(map),parentOutline=L.layerGroup().addTo(map);
  const interactiveTarget=event=>{
   const target=(event.originalEvent||event).target;
@@ -56,9 +57,11 @@ export function createAnalysisSelection(root,{map,request,getParent,onCommit,onS
   root.dataset.drawMode=mode||'';root.dataset.drawPending=String(pending);
   for(const button of root.querySelectorAll('[data-analysis-shape]')){button.setAttribute('aria-pressed',String(button.dataset.analysisShape===mode));button.disabled=pending;}
   $('selection-actions').hidden=!mode;$('selection-finish').hidden=mode!=='polygon';$('selection-finish').disabled=pending||points.length<3;$('selection-undo').hidden=mode!=='polygon';$('selection-undo').disabled=pending||!points.length;$('selection-cancel').disabled=false;
+  $('selection-finish').textContent=touchInput.matches?'Готово':'Применить полигон';$('selection-cancel').textContent=touchInput.matches?'Отмена':'Отмена · Esc';
   $('draw-instruction').hidden=!mode;map.getContainer().style.cursor=mode?'crosshair':'';
   const withinParent=parent?[' ',`Только внутри «${parent.name}».`]:[];
-  $('draw-instruction').replaceChildren(...(mode?[pending?'Применяем точную границу…':mapDescriptions[mode],...withinParent,...(mode==='polygon'?[]:[' ','Esc — отмена.'])]:[]));
+  const instruction=touchInput.matches&&mode==='polygon'?'Полигон: отметьте точки и нажмите «Готово».':mapDescriptions[mode];
+  $('draw-instruction').replaceChildren(...(mode?[pending?'Применяем точную границу…':instruction,...withinParent,...(touchInput.matches||mode==='polygon'?[]:[' ','Esc — отмена.'])]:[]));
   const selectionNote=mode?(pending?['Проверяем пересечение с выбранной территорией…']:[descriptions[mode],...withinParent])
     :['Выберите инструмент. Граница изменится после завершения выделения.'];
   $('selection-state').replaceChildren(...selectionNote);
@@ -117,6 +120,7 @@ export function createAnalysisSelection(root,{map,request,getParent,onCommit,onS
  // A permanent Leaflet contextmenu listener would suppress it in every mode.
  map.getContainer().addEventListener('contextmenu',event=>{
   if(mode!=='polygon'||pending||!isActive()||interactiveTarget(event))return;
+  if(touchInput.matches){event.preventDefault();event.stopPropagation();return;}
   event.preventDefault();event.stopPropagation();clearHover();finish();
  },true);
  for(const button of root.querySelectorAll('[data-analysis-shape]'))button.addEventListener('click',()=>start(button.dataset.analysisShape));

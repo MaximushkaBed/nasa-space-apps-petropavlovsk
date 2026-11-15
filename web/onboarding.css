@@ -21,3 +21,8 @@
   .onboarding-panel button:not(.onboarding-close) { min-height: 35px; }
   .app-header #app-tour-open { margin-left: auto; }
 }
+@media (pointer:coarse) {
+  .onboarding-panel button:not(.onboarding-close) { min-height:40px; }
+  .onboarding-panel .onboarding-close { position:sticky; top:0; min-width:40px; min-height:40px; background:var(--app-surface); }
+  .onboarding-panel h2 { margin-right:44px; }
+}

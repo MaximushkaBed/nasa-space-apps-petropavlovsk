@@ -2,6 +2,12 @@ import { initializeLocalization, preserveLanguage } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 await initializeLocalization();
+const mobileLanguage=$('app-language-mobile');
+const syncMobileLanguage=()=>{mobileLanguage.value=document.documentElement.lang;};
+syncMobileLanguage();
+mobileLanguage.addEventListener('change',()=>document.querySelector(`#app-language [data-language="${mobileLanguage.value}"]`)?.click());
+document.addEventListener('nasa:language-changed',syncMobileLanguage);
+new MutationObserver(syncMobileLanguage).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
 const views = new Map();
 const controllers = new Map();
 const loading = new Map();

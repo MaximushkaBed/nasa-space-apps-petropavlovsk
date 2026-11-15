@@ -15,10 +15,15 @@ from e2e_workbench import local_server
 def expect_language(page, code, control='#app-language'):
     expect(page.locator('html')).to_have_attribute('lang', code)
     expect(page.locator(f'{control} [data-language="{code}"]')).to_have_attribute('aria-pressed', 'true')
+    if control == '#app-language' and page.locator('#app-language-mobile').is_visible():
+        expect(page.locator('#app-language-mobile')).to_have_value(code)
 
 
 def language(page, code, control='#app-language'):
-    page.locator(f'{control} [data-language="{code}"]').click()
+    if control == '#app-language' and page.locator('#app-language-mobile').is_visible():
+        page.locator('#app-language-mobile').select_option(code)
+    else:
+        page.locator(f'{control} [data-language="{code}"]').click()
     expect_language(page, code, control)
 
 
@@ -326,7 +331,7 @@ def mobile(browser, base):
         for code in ('en', 'ru', 'kk'):
             language(page, code)
             assert page.evaluate('document.documentElement.scrollWidth === innerWidth')
-            box = page.locator('#app-language').bounding_box()
+            box = page.locator('#app-language-mobile').bounding_box()
             assert width - 20 <= box['x'] + box['width'] <= width
         page.reload(wait_until='domcontentloaded')
         expect(page.locator('#app-language [data-language="kk"]')).to_have_attribute('aria-pressed', 'true')

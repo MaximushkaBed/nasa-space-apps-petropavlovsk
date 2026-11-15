@@ -363,7 +363,7 @@ body[data-app-view="analysis"] .app-outlet { position:fixed; inset:var(--app-hea
  .archive-foot { margin-top:0; }
  .study-conditions .submit-area { padding:12px 0 0; }
  #job-banner,#study-assessment { scroll-margin-top:72px; }
- @media(max-width:760px) {
+ @media(max-width:760px), (max-width:1050px) and (max-height:500px) and (pointer:coarse) {
   .application, &[data-settings-open="false"] .application { grid-template-columns:minmax(0,1fr); }
   .filters { position:absolute; inset:0 auto 0 0; z-index:900; width:min(360px,calc(100% - 28px)); border-right:1px solid var(--line); box-shadow:12px 0 35px #0007; }
   .analysis-settings-backdrop { position:absolute; inset:0; z-index:850; display:block; width:100%; border:0; border-radius:0; background:#020b16a8; cursor:default; }
@@ -376,5 +376,38 @@ body[data-app-view="analysis"] .app-outlet { position:fixed; inset:var(--app-hea
   .filters .study-question-field,.study-conditions { padding:16px; }
   .analysis-workflow-navigation { padding:11px 16px 13px; }
   .analysis-draw-modes { grid-template-columns:1fr; }
+ }
+}
+
+/* Touch workflows retain the map controls inside the available screen. */
+@media(max-width:760px), (max-width:1050px) and (max-height:500px) and (pointer:coarse) {
+ :where(.analysis-workbench) {
+  .filters :is(button,summary), .context-actions button, .analysis-settings-bar button { min-height:44px; }
+  :is(input:not([type=checkbox]):not([type=range]),select) { font-size:16px; min-height:44px; }
+  .analysis-tabs { scroll-padding-inline:12px; }
+  .analysis-tabs button { flex:none; min-height:44px; padding-inline:8px; font-size:12px; }
+  .calendar-grid { grid-template-columns:42px repeat(12,minmax(44px,1fr)); gap:4px; max-height:380px; overscroll-behavior-x:contain; }
+  .calendar-cell { height:44px; min-height:44px; font-size:11px; }
+  .calendar-label { font-size:10px; background:var(--app-surface); }
+  .calendar-grid>.calendar-label:nth-child(13n+1) { position:sticky; left:0; z-index:2; }
+  .calendar-grid>.calendar-label:nth-child(-n+13) { position:sticky; top:0; z-index:3; }
+  .calendar-grid>.calendar-label:first-child { z-index:4; }
+  .revision-heading { align-items:flex-start; flex-wrap:wrap; }
+  .revision-pickers { grid-template-columns:minmax(0,1fr); }
+  .revision-actions button,.revision-heading button { min-height:44px; }
+  &[data-draw-mode]:not([data-draw-mode=""]) .workbench { padding:6px; gap:0; overflow:hidden; }
+  &[data-draw-mode]:not([data-draw-mode=""]) .workbench>:not(.work-panels) { display:none; }
+  &[data-draw-mode]:not([data-draw-mode=""]) .work-panels { flex:1; min-height:0; height:100%; display:block; }
+  &[data-draw-mode]:not([data-draw-mode=""]) .work-panels>:not(.workspace-top) { display:none; }
+  &[data-draw-mode]:not([data-draw-mode=""]) .workspace-top { display:block; height:100%; min-height:0; }
+  &[data-draw-mode]:not([data-draw-mode=""]) .workspace-top>:not(.map-frame) { display:none; }
+  &[data-draw-mode]:not([data-draw-mode=""]) :is(.map-frame,#analysis-map) { height:100%; min-height:0; }
+  &[data-draw-mode]:not([data-draw-mode=""]) :is(.map-top,.map-mode-control,.map-bottom) { display:none; }
+  &[data-draw-mode]:not([data-draw-mode=""]) .draw-instruction { top:8px; left:58px; right:8px; transform:none; width:auto; max-width:none; padding:8px; line-height:1.45; pointer-events:none; }
+  &[data-draw-mode]:not([data-draw-mode=""]) .leaflet-control-zoom { margin-top:10px!important; }
+  &[data-draw-mode]:not([data-draw-mode=""]) .leaflet-control-attribution { margin-bottom:0!important; }
+  .selection-actions { bottom:34px; left:8px; right:8px; padding:7px; gap:5px; }
+  .selection-actions button { min-height:44px; font-size:11px; padding:7px 10px; }
+  #selection-measure { flex:1 0 100%; font-size:11px; line-height:1.4; }
  }
 }

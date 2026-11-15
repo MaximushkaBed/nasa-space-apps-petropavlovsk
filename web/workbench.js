@@ -52,7 +52,7 @@ setBootstrapPending(true);
 const territorySearch=createTerritorySearch(request,()=>settings?.region_geometry||request('data/region.geojson').then(value=>value.features?.[0]?.geometry||value.geometry||value));
 const territoryContext=createTerritoryContext(map,$('analysis-territory-context'));
 selection=createAnalysisSelection(root,{map,request,getParent:currentTerritory,canDraw:()=>!busy&&!bootstrapPending,isActive:()=>active,
- onState:state=>{drawing=state.active;stopPlaying();syncTerritoryControls();workflow?.draw(state.active);},
+ onState:state=>{const started=state.active&&!drawing;drawing=state.active;stopPlaying();syncTerritoryControls();workflow?.draw(state.active);if(started&&matchMedia('(pointer:coarse)').matches)requestAnimationFrame(()=>{if(!active||!drawing)return;map.invalidateSize({pan:false});const parent=currentTerritory();if(parent)fitTerritory(map,geometryOfROI(parent));});},
  onCommit:(roi,{parent,clipped})=>{useTerritory(roi,{parent,resetParents:false,keepDrawing:true});$('area-note').textContent=clipped?'Граница ограничена выбранной областью; расчёт использует точное пересечение.':roi.circle?'Круг сохранён с точным центром и радиусом.':'Для расчёта сохранена точная граница участка.';}});
 workflow=mountAnalysisWorkflow(root,{getState:()=>({roi:currentTerritory(),start:$('start').value,end:$('end').value,platform:labels[source]||'Все спутники',result:Boolean(result),busy,loading:bootstrapPending,drawing}),isActive:()=>active,onLayout:()=>requestAnimationFrame(()=>{if(active)map.invalidateSize({pan:false});}),onChange:publishContext});
 for(const id of ['run','study-plan-request'])new MutationObserver(()=>{if(!territorySelected&&!$(id).disabled)$(id).disabled=true;}).observe($(id),{attributes:true,attributeFilter:['disabled']});
@@ -528,6 +528,7 @@ function activateTab(next){
  if(!root.querySelector(`[data-view="${CSS.escape(next)}"]`))next='calendar';
  view=next;
  root.querySelectorAll('[data-view]').forEach(tab=>{const selected=tab.dataset.view===view;tab.classList.toggle('active',selected);tab.setAttribute('aria-selected',selected);tab.tabIndex=selected?0:-1;});
+ if(active)requestAnimationFrame(()=>{const tab=root.querySelector(`[data-view="${CSS.escape(view)}"]`),strip=tab?.parentElement;if(!tab||!strip)return;const item=tab.getBoundingClientRect(),bounds=strip.getBoundingClientRect();if(item.left<bounds.left)strip.scrollLeft+=item.left-bounds.left-12;else if(item.right>bounds.right)strip.scrollLeft+=item.right-bounds.right+12;});
  root.querySelectorAll('.analysis-view').forEach(panel=>panel.hidden=panel.id!=='view-'+view);
  if(view!=='compare'&&mapYear){mapYear=null;frame=0;updateMap();}
  renderAll();

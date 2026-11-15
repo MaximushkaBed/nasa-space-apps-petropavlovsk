@@ -26,7 +26,7 @@ export function mountAnalysisWorkflow(root,{getState,isActive,onLayout,onChange}
  function change(next=step,{show=true,focus=false}={}){
   const state=getState();if(!steps.includes(next))next='territory';if(next!=='territory'&&!state.roi)next='territory';
   step=next;open=show;refresh();scroll.scrollTop=0;onLayout?.();onChange?.();
-  if(focus&&open){const target=step==='territory'?$('analysis-territory-query'):step==='task'?$('study-question'):step==='conditions'?$('study-plan-request'):$('analysis-workflow-show-result');target?.focus({preventScroll:true});}
+  if(focus&&open){if(matchMedia('(pointer:coarse)').matches){panel.tabIndex=-1;panel.focus({preventScroll:true});}else{const target=step==='territory'?$('analysis-territory-query'):step==='task'?$('study-question'):step==='conditions'?$('study-plan-request'):$('analysis-workflow-show-result');target?.focus({preventScroll:true});}}
  }
  function close({focus=false}={}){open=false;refresh();onLayout?.();onChange?.();if(focus)$('analysis-settings-toggle').focus({preventScroll:true});}
  function showResult(){close();$('study-assessment').scrollIntoView({block:'start'});}

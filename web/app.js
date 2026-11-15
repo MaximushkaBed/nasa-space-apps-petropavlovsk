@@ -967,6 +967,9 @@ function setupPanels() {
   const tabs = [...root.querySelectorAll('.tool-nav a')];
   const toggles = [...tabs, layersToggle, areaToggle];
   const toolbar = root.querySelector('.topbar');
+  // Leave the map available on phones; the date summary remains a touch target.
+  // This is only the initial state, so later navigation keeps the user's choice.
+  if (matchMedia('(max-width: 820px), (max-height: 520px) and (max-width: 1024px)').matches) root.querySelector('.timeline').open = false;
   new ResizeObserver(() => {
     $('top').style.setProperty('--panel-top', `${Math.ceil(toolbar.getBoundingClientRect().bottom - root.getBoundingClientRect().top + 7)}px`);
   }).observe(toolbar);

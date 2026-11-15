@@ -478,3 +478,59 @@ dialog strong { color: var(--text); }
   .timeline-heading :is(.view-switch button, .quiet-button) { padding-inline: 4px; font-size: 10px; }
 }
 .temperature-background { position: absolute; left: 0; top: 0; pointer-events: none; }
+
+/* Mobile atlas: keep controls reachable without covering each other. */
+@media (max-width: 820px), (max-height: 520px) and (max-width: 1024px) {
+  .atlas-view .topbar { inset-inline: 7px; gap: 6px; }
+  .atlas-view .map-filters {
+    order: 0;
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr) 70px;
+    width: 100%;
+    min-width: 0;
+    gap: 5px;
+  }
+  .atlas-view .map-filters > .view-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 96px; padding: 2px; gap: 2px; }
+  .atlas-view .map-filters > .view-switch button { min-width: 0; min-height: 40px; padding: 4px; }
+  .atlas-view .world-date { width: auto; min-width: 0; }
+  .atlas-view .world-date input { width: 100%; min-width: 0; min-height: 44px; font-size: 16px; }
+  .atlas-view #open-period { min-height: 44px; padding: 7px; }
+  .atlas-view .map-filters .source-field { grid-column: 1 / -1; width: 100%; min-width: 0; }
+  .atlas-view .map-filters .source-field select { width: 100%; min-width: 0; min-height: 44px; font-size: 16px; }
+  .atlas-view .tool-nav { order: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; gap: 5px; }
+  .atlas-view .tool-nav .quiet-button { min-width: 0; min-height: 40px; padding: 6px 4px; white-space: normal; text-align: center; font-size: 11px; line-height: 1.25; }
+  .atlas-view .tool-nav #atlas-open-analysis { display: none; }
+  .atlas-view .map-tools button { width: 40px; height: 40px; }
+  .atlas-view .atlas-panel { left: 7px; right: 7px; width: calc(100% - 14px); padding: 10px; scroll-padding-block: 56px 12px; }
+  .atlas-view .atlas-panel .drawer-heading { margin-top: -10px; padding-top: 10px; min-height: 52px; }
+  .atlas-view .atlas-panel .drawer-heading .quiet-button { width: 40px; height: 40px; min-width: 40px; }
+  .atlas-view .atlas-panel :is(button, a.quiet-button, select, input:not([type=checkbox], [type=range])) { min-height: 40px; }
+  .atlas-view .atlas-panel :is(select, input:not([type=checkbox], [type=range])) { font-size: 16px; }
+  .atlas-view .map-layer-controls label { min-height: 42px; padding-block: 7px; }
+  .atlas-view .map-layer-controls input[type=checkbox] { width: 20px; height: 20px; }
+  .atlas-view .map-layer-controls input[type=range] { min-height: 34px; }
+  .atlas-view .area-panel { top: auto; bottom: max(26px, env(safe-area-inset-bottom)); max-height: 43%; }
+  .atlas-view .selected-area-panel:not([hidden], .is-expanded) { max-height: calc(100% - var(--panel-top, 62px) - 14px); }
+  .atlas-view .atlas-panel.is-expanded { height: calc(100% - var(--panel-top, 62px) - 14px); }
+  .atlas-view .workspace:has(.atlas-panel:not([hidden])) :is(.timeline, .map-notices, .fire-loading) { visibility: hidden; pointer-events: none; }
+  .atlas-view .workspace:has(#map.selecting-area) .map-notices { visibility: hidden; }
+  .atlas-view .timeline { bottom: max(30px, env(safe-area-inset-bottom)); max-width: calc(100% - 14px); }
+  .atlas-view .timeline summary { min-height: 36px; }
+  .atlas-view .timeline .fire-key { display: none; }
+  .atlas-view .timeline-heading { flex-wrap: wrap; }
+  .atlas-view .timeline :is(.view-switch button, .quiet-button, .play-button) { min-height: 40px; }
+  .atlas-view .day-slider { min-height: 40px; }
+  .atlas-view .area-instruction { left: 55px; max-width: calc(100% - 62px); }
+}
+@media (max-height: 520px) and (max-width: 1024px) {
+  .atlas-view .map-tools { display: flex; gap: 5px; width: max-content; max-width: calc(100% - 14px); }
+  .atlas-view .area-tools { display: flex; gap: 5px; margin-top: 0; padding: 0 0 0 7px; border-top: 0; border-left: 1px solid #7e98b6; }
+  .atlas-view .area-panel { top: var(--panel-top, 62px); left: auto; right: 7px; bottom: auto; width: min(320px, 45%); max-height: calc(100% - var(--panel-top, 62px) - 14px); }
+  .atlas-view .timeline { max-height: calc(100% - var(--panel-top, 62px) - 90px); overflow: auto; }
+  .atlas-view .area-instruction { top: calc(var(--panel-top, 62px) + 48px); }
+  .atlas-view .map-notices { top: calc(var(--panel-top, 62px) + 48px); }
+}
+@media (min-width: 600px) and (max-height: 520px) and (max-width: 1024px) {
+  .atlas-view .map-filters { grid-template-columns: 96px minmax(130px, .8fr) 70px minmax(150px, 1fr); }
+  .atlas-view .map-filters .source-field { grid-column: auto; }
+}
