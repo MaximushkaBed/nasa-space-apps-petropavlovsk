@@ -1,5 +1,8 @@
+import { numberFormat } from './i18n.js';
+
 const clone=value=>value==null?value:structuredClone(value);
 const radians=Math.PI/180,earthRadius=6371.0088;
+const distanceFormat=numberFormat({maximumFractionDigits:2});
 const canonical=longitude=>longitude>=-180&&longitude<=180?longitude:((longitude+180)%360+360)%360-180;
 const near=(longitude,reference)=>longitude+360*Math.round((reference-longitude)/360);
 const descriptions={rectangle:'Прямоугольник: отметьте два противоположных угла.',polygon:'Полигон: добавьте вершины и нажмите «Применить полигон».',circle:'Круг: отметьте центр, затем точку на окружности.'};
@@ -49,8 +52,11 @@ export function createAnalysisSelection(root,{map,request,getParent,onCommit,onS
   for(const button of root.querySelectorAll('[data-analysis-shape]')){button.setAttribute('aria-pressed',String(button.dataset.analysisShape===mode));button.disabled=pending;}
   $('selection-actions').hidden=!mode;$('selection-finish').hidden=mode!=='polygon';$('selection-finish').disabled=pending||points.length<3;$('selection-undo').hidden=mode!=='polygon';$('selection-undo').disabled=pending||!points.length;$('selection-cancel').disabled=false;
   $('draw-instruction').hidden=!mode;map.getContainer().style.cursor=mode?'crosshair':'';
-  $('draw-instruction').textContent=mode?`${pending?'Применяем точную границу…':mapDescriptions[mode]}${parent?' Внутри: '+parent.name+'.':''} Esc — отмена.`:'';
-  $('selection-state').textContent=mode?pending?'Проверяем пересечение с выбранной территорией…':`${descriptions[mode]}${parent?' Только внутри «'+parent.name+'».':''}`:'Выберите инструмент. Граница изменится после завершения выделения.';
+  const withinParent=parent?[' ',`Только внутри «${parent.name}».`]:[];
+  $('draw-instruction').replaceChildren(...(mode?[pending?'Применяем точную границу…':mapDescriptions[mode],...withinParent,' ','Esc — отмена.']:[]));
+  const selectionNote=mode?(pending?['Проверяем пересечение с выбранной территорией…']:[descriptions[mode],...withinParent])
+    :['Выберите инструмент. Граница изменится после завершения выделения.'];
+  $('selection-state').replaceChildren(...selectionNote);
   onState?.({active:Boolean(mode),pending,mode});
  }
  function draw(){
@@ -58,7 +64,7 @@ export function createAnalysisSelection(root,{map,request,getParent,onCommit,onS
   const style={color:'#ffd288',weight:2,fillColor:'#f3b858',fillOpacity:.14,interactive:false};
   for(const point of points)L.circleMarker(point,{...style,radius:4,fillOpacity:1,color:'#fff0c8'}).addTo(preview);
   if(mode==='rectangle'&&points[0]&&hover)L.rectangle([points[0],hover],style).addTo(preview);
-  else if(mode==='circle'&&points[0]&&hover){const radius=map.distance(points[0],hover);L.circle(points[0],{...style,radius}).addTo(preview);$('selection-measure').textContent=`Радиус: ${(radius/1000).toLocaleString('ru',{maximumFractionDigits:2})} км`;}
+  else if(mode==='circle'&&points[0]&&hover){const radius=map.distance(points[0],hover);L.circle(points[0],{...style,radius}).addTo(preview);$('selection-measure').textContent=`Радиус: ${distanceFormat.format(radius/1000)} км`;}
   else if(mode==='polygon'&&points.length){const outline=hover?[...points,hover]:points;if(outline.length>=3)L.polygon(outline,style).addTo(preview);else if(outline.length>1)L.polyline(outline,style).addTo(preview);$('selection-measure').textContent=`Вершин: ${points.length}`;}
  }
  function cancel({focus=false}={}){
@@ -75,7 +81,7 @@ export function createAnalysisSelection(root,{map,request,getParent,onCommit,onS
    return {geometry:longitudeParts(ring),name:'Полигональный участок'};
   }
   if(points.length<2)throw new Error('Отметьте две точки на карте.');
-  if(mode==='circle'){const circle={center:[canonical(points[0].lng),points[0].lat],radius_km:map.distance(points[0],points[1])/1000};return {geometry:circleGeometry(circle),circle,name:`Круг ${circle.radius_km.toLocaleString('ru',{maximumFractionDigits:2})} км`};}
+  if(mode==='circle'){const circle={center:[canonical(points[0].lng),points[0].lat],radius_km:map.distance(points[0],points[1])/1000};return {geometry:circleGeometry(circle),circle,name:`Круг ${distanceFormat.format(circle.radius_km)} км`};}
   const a=points[0],b=points[1],w=canonical(a.lng),e=near(b.lng,w),south=Math.min(a.lat,b.lat),north=Math.max(a.lat,b.lat);
   return {geometry:longitudeParts([[Math.min(w,e),south],[Math.max(w,e),south],[Math.max(w,e),north],[Math.min(w,e),north]]),name:'Прямоугольный участок'};
  }

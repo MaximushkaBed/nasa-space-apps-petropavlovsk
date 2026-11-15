@@ -1,11 +1,11 @@
-import { registerBoundaryNames } from './i18n.js';
+import { registerBoundaryNames, translate } from './i18n.js';
+import { inRing } from './area-analysis.js?v=layer-values';
 
 // The atlas boundary catalogue, ranking and boundary sources are shared with
 // area-analysis.js. Loading a result never simplifies or rewrites its geometry.
-import { inRing } from './area-analysis.js?v=layer-values';
 const normalize = name => String(name || '').toLocaleLowerCase().replace(/ё/g, 'е').normalize('NFD')
   .replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-const namesFor = ([name, , aliases]) => [name, ...aliases].map(normalize);
+const namesFor = ([name, , aliases]) => [name, ...aliases, translate(name)].map(normalize);
 
 function readonlyPreview(geometry) {
   const copy = structuredClone(geometry);

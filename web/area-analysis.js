@@ -1,4 +1,4 @@
-import { numberFormat, registerBoundaryNames, uiLanguage } from './i18n.js';
+import { numberFormat, registerBoundaryNames, translate, uiLanguage } from './i18n.js';
 const number = numberFormat({ maximumFractionDigits: 2 });
 const normalize = (name) => name.toLocaleLowerCase().replace(/ё/g, 'е').normalize('NFD')
   .replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -275,7 +275,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
   byId('area-clear').addEventListener('click', clearSelection);
 
   function namesFor([name, , aliases]) {
-    return [name, ...aliases].map(normalize);
+    return [name, ...aliases, translate(name)].map(normalize);
   }
 
   async function loadDistricts(code) {

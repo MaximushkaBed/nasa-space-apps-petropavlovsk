@@ -1,4 +1,4 @@
-"""Verify the bilingual atlas and language changes without loading a new page.
+"""Verify all three interface languages and switching without loading a new page.
 
 python tests/e2e_language.py --local-web
 python tests/e2e_language.py --base-url https://nasa.aican.cloud
@@ -23,6 +23,9 @@ def desktop(browser, base):
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.goto(f'{base}/?view=atlas&lang=ru', wait_until='domcontentloaded')
     expect(page.locator('#onboarding-welcome')).to_be_visible()
+    language(page, 'kk')
+    expect(page.locator('#app-language')).to_have_attribute('aria-label', 'Интерфейс тілі')
+    expect(page.locator('#onboarding-demo')).to_have_text('Дайын мысал')
     language(page, 'en')
     expect(page.locator('#onboarding-demo')).to_have_text('Example study')
     page.locator('#onboarding-skip').click()
@@ -34,12 +37,24 @@ def desktop(browser, base):
     page.locator('#open-layers').click()
     expect(page.locator('#layers-title')).to_have_text('Map layers')
     expect(page.locator('label', has=page.locator('#overlay-world-clouds'))).to_have_text('Cloud cover')
+    language(page, 'kk')
+    expect(page.locator('#layers-title')).to_have_text('Карта қабаттары')
+    expect(page.locator('label', has=page.locator('#overlay-world-clouds'))).to_have_text('Бұлттылық')
+    expect(page.locator('#frame-date')).to_contain_text(re.compile(
+        r'қаңтар|ақпан|наурыз|сәуір|мамыр|маусым|шілде|тамыз|қыркүйек|қазан|қараша|желтоқсан'))
+    formatted = page.evaluate(r"""async () => {
+        const {numberFormat, translate} = await import('./i18n.js');
+        return translate(numberFormat().format(74578.25)).replace(/\s/g, ' ');
+    }""")
+    assert formatted == '74 578,25', formatted
     page.locator('#open-period').click()
-    expect(page.locator('[data-period="month"]')).to_have_text('Month')
+    expect(page.locator('[data-period="month"]')).to_have_text('Ай')
     page.keyboard.press('Escape')
 
     page.locator('a[href="#activity-calendar"]').click()
     expect(page.locator('#study-calendar table')).to_be_visible(timeout=25000)
+    expect(page.locator('#analysis-heading')).to_have_text('Белсенділік күнтізбесі')
+    language(page, 'en')
     expect(page.locator('#analysis-heading')).to_have_text('Activity calendar')
     labels = page.locator('#study-calendar button[title]').evaluate_all(
         "buttons => buttons.map(button => button.title)")
@@ -64,6 +79,11 @@ def desktop(browser, base):
     expect(upload).to_contain_text('Свои данные')
     expect(result).to_be_visible()
     assert date.input_value() == chosen_date
+    language(page, 'kk')
+    expect(upload).to_contain_text('Өз деректеріңіз')
+    expect(result).to_be_visible()
+    expect(page.locator('.matrix-file-result .matrix-pair-title')).to_have_text('Активность × Осадки')
+    expect(page.locator('.matrix-file-result .matrix-pair-summary')).to_contain_text('жұп')
     language(page, 'en')
     expect(upload).to_contain_text('Your data')
     expect(result).to_be_visible()
@@ -72,6 +92,9 @@ def desktop(browser, base):
     page.locator('.app-nav [data-app-view="cases"]').click()
     expect(page.locator('#kishkenekol-case')).to_be_visible(timeout=25000)
     expect(page.locator('#kishkenekol-case')).to_contain_text('What happened southwest of Kishkenekol')
+    language(page, 'kk')
+    expect(page.locator('#kishkenekol-case')).to_contain_text('Кішкенекөлдің оңтүстік-батысында не болды?')
+    language(page, 'en')
     page.locator('.app-nav [data-app-view="analysis"]').click()
     expect(page.locator('#analysis-form')).to_be_visible(timeout=25000)
     expect(page.locator('#preset option[value="sko"]')).to_have_text('North Kazakhstan Region')
@@ -84,11 +107,32 @@ def desktop(browser, base):
     page.keyboard.press('Enter')
     expect(page.locator('#analysis-territory-results')).to_be_hidden()
     expect(query).to_have_value('Kazakhstan')
+    language(page, 'kk')
+    expect(query).to_have_value('Қазақстан')
+    expect(page.locator('#preset option[value="sko"]')).to_have_text('Солтүстік Қазақстан облысы')
+    expect(page.locator('#territory-child')).to_contain_text('Ақмола облысы')
+    expect(page.locator('#analysis-territory-context .territory-context-toggle')).to_have_text('Шекаралар мен атаулар')
+    expect(page.locator('#analysis-map .leaflet-control-zoom-in')).to_have_attribute('aria-label', 'Картаны жақындату')
+    page.locator('#app-method-open').click()
+    expect(page.locator('#app-method-heading')).to_have_text('Әдіс және деректер')
+    page.keyboard.press('Escape')
     language(page, 'ru')
     expect(query).to_have_value('Казахстан')
     language(page, 'en')
     page.locator('#app-method-open').click()
     expect(page.locator('#app-method-heading')).to_have_text('Method and data')
+    page.keyboard.press('Escape')
+    language(page, 'kk')
+    expect(page.locator('label[for="territory-child"]')).to_have_text('Аумақ бөлігі')
+    page.locator('#draw-circle').click()
+    expect(page.locator('#selection-state')).to_contain_text('Шеңбер үшін алдымен ортасын')
+    language(page, 'en')
+    expect(page.locator('#selection-state')).to_contain_text('Circle: select its centre')
+    expect(page.locator('#draw-circle')).to_have_attribute('aria-pressed', 'true')
+    page.locator('#selection-cancel').click()
+    language(page, 'kk')
+    query.fill('Ұлыбритания')
+    expect(page.locator('#analysis-territory-results button').first).to_have_text('Ұлыбритания')
     assert not errors, errors
     page.close()
 
@@ -97,23 +141,27 @@ def mobile(browser, base):
     for width in (320, 390):
         page = browser.new_page(viewport={'width': width, 'height': 820})
         page.add_init_script("localStorage.setItem('nasa-space-apps-onboarding-v1', 'true')")
-        page.goto(f'{base}/?view=atlas&lang=en', wait_until='domcontentloaded')
-        expect(page.locator('#app-language [data-language="en"]')).to_have_attribute('aria-pressed', 'true')
-        assert page.evaluate('document.documentElement.scrollWidth === innerWidth')
-        box = page.locator('#app-language').bounding_box()
-        assert width - 20 <= box['x'] + box['width'] <= width
+        page.goto(f'{base}/?view=atlas&lang=kk', wait_until='domcontentloaded')
+        expect(page.locator('#app-language [data-language="kk"]')).to_have_attribute('aria-pressed', 'true')
+        for code in ('en', 'ru', 'kk'):
+            language(page, code)
+            assert page.evaluate('document.documentElement.scrollWidth === innerWidth')
+            box = page.locator('#app-language').bounding_box()
+            assert width - 20 <= box['x'] + box['width'] <= width
+        page.reload(wait_until='domcontentloaded')
+        expect(page.locator('#app-language [data-language="kk"]')).to_have_attribute('aria-pressed', 'true')
         page.close()
 
 
-def example(browser, base):
+def example(browser, base, code, button, step):
     page = browser.new_page(viewport={'width': 1440, 'height': 900})
-    page.goto(f'{base}/?view=atlas&lang=en', wait_until='domcontentloaded')
-    expect(page.locator('#onboarding-demo')).to_have_text('Example study')
+    page.goto(f'{base}/?view=atlas&lang={code}', wait_until='domcontentloaded')
+    expect(page.locator('#onboarding-demo')).to_have_text(button)
     page.locator('#onboarding-demo').click()
     expect(page.locator('#analysis-form')).to_be_visible(timeout=25000)
-    expect(page.locator('html')).to_have_attribute('lang', 'en')
-    expect(page.locator('#onboarding-step-title')).to_have_text('Anomaly from the historical baseline', timeout=25000)
-    assert 'lang=en' in page.url
+    expect(page.locator('html')).to_have_attribute('lang', code)
+    expect(page.locator('#onboarding-step-title')).to_have_text(step, timeout=25000)
+    assert f'lang={code}' in page.url
     page.close()
 
 
@@ -130,9 +178,10 @@ if __name__ == '__main__':
             browser = playwright.chromium.launch()
             desktop(browser, base)
             mobile(browser, base)
-            example(browser, base)
+            example(browser, base, 'en', 'Example study', 'Anomaly from the historical baseline')
+            example(browser, base, 'kk', 'Дайын мысал', 'Тарихи деңгейден ауытқу')
             browser.close()
-        print('PASS language switching in onboarding, atlas, calendar, matrix and file import, case study and area analysis')
+        print('PASS RU / EN / KK in onboarding, atlas, calendar, matrix and file import, case study and area analysis')
     finally:
         if server:
             server.shutdown()

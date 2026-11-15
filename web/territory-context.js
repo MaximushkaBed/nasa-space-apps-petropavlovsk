@@ -72,6 +72,7 @@ export function createTerritoryContext(map,control){
  }
  checkbox.addEventListener('change',()=>{enabled=checkbox.checked;render();});
  map.on('moveend zoomend resize',()=>{if(!roi||!enabled||paused)return;if(lastBand!==Math.round(map.getCenter().lng/360))drawBoundaries();drawLabels();mask.update();});
+ document.addEventListener('nasa:language-changed',drawLabels);
  localizeTree(control);
  return {select,pause(){paused=true;cancel();hide();renderControl();},resume(){paused=false;if(roi)select(roi);},getState:()=>({enabled}),setEnabled(value){if(typeof value==='boolean'){enabled=value;render();}}};
 }

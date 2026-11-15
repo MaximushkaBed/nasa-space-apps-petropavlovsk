@@ -29,7 +29,8 @@ const clone=value=>value==null?value:structuredClone(value);
 const monthFormat = dateFormat({ month: 'long', year: 'numeric', timeZone: 'UTC' });
 const formatMonth = (key) => monthFormat.format(new Date(`${key}-01`));
 const n = (value) => value===null || value===undefined ? '—' : num.format(value);
-const map = L.map($('analysis-map'), {preferCanvas:true, minZoom:1, maxZoom:17, worldCopyJump:false}).setView([18,0],1);
+const map = L.map($('analysis-map'), {preferCanvas:true, minZoom:1, maxZoom:17, worldCopyJump:false, zoomControl:false}).setView([18,0],1);
+L.control.zoom({ zoomInTitle:'Приблизить карту', zoomOutTitle:'Отдалить карту' }).addTo(map);
 map.attributionControl.setPrefix(false);
 const land = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg', {maxNativeZoom:8,maxZoom:17,noWrap:true,attribution:'NASA GIBS'}).addTo(map);
 const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:17,attribution:'Esri World Imagery · дата мозаики не равна дате детекций'});
@@ -94,7 +95,7 @@ function currentTerritory(){if(!territorySelected)return null;return {preset:$('
 function cancelHierarchy(){++hierarchyRevision;hierarchyAbort?.abort();hierarchyAbort=null;}
 function renderBreadcrumb(){
  const nav=$('territory-breadcrumb');nav.replaceChildren();nav.hidden=!territoryParents.length;
- territoryParents.forEach((parent,index)=>{const button=document.createElement('button');button.type='button';button.className='text-button';button.textContent='← '+parent.name;button.title='Вернуться к территории «'+parent.name+'»';button.addEventListener('click',()=>{territoryParents=territoryParents.slice(0,index);useTerritory(parent,{resetParents:false});});nav.append(button);});
+ territoryParents.forEach((parent,index)=>{const button=document.createElement('button');button.type='button';button.className='text-button';button.append('← ',parent.name);button.title=`Вернуться к территории «${parent.name}»`;button.addEventListener('click',()=>{territoryParents=territoryParents.slice(0,index);useTerritory(parent,{resetParents:false});});nav.append(button);});
  if(territoryParents.length){const current=document.createElement('span');current.textContent=areaName(formConfig());nav.append(current);}
  selection?.setContextParent(territoryParents.at(-1)||null);
 }

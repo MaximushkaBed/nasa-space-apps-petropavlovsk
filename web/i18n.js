@@ -1,15 +1,26 @@
 const storageKey = 'nasa-space-apps-language';
-const supported = new Set(['ru', 'en']);
+const supported = new Set(['ru', 'en', 'kk']);
+const displayLocales = new Map([['en', 'en-GB'], ['kk', 'kk-KZ']]);
+const catalogLoaders = new Map([
+  ['en', () => import('./locale-en.js')],
+  ['kk', () => import('./locale-kk.js')],
+]);
 const cyrillic = /\p{Script=Cyrillic}/u;
 const whitespace = /\s+/g;
 const localAttributes = ['title', 'aria-label', 'aria-description', 'aria-valuetext', 'placeholder', 'alt', 'content', 'label'];
 const ignored = 'script, style, textarea, [translate="no"]';
 const placeholders = /\{(\d+)\}/g;
 const escapeRegex = value => value.replace(/[.*+?^$${}()|[\]\\]/g, '\\$&');
-const englishNames = new Map();
+const boundaryNames = new Map([...displayLocales.keys()].map(code => [code, new Map()]));
+const kazakhLetters = /[ӘәҒғҚқҢңӨөҰұҮүҺһІі]/u;
 const boundaryCatalogues = new WeakSet();
-const localizedFormats = new Map();
+const localizedFormats = new Map([...displayLocales.keys()].map(code => [code, new Map()]));
 const memo = new Map();
+const loadedCatalogs = new Map();
+const kazakhMonths = ['қаңтар', 'ақпан', 'наурыз', 'сәуір', 'мамыр', 'маусым', 'шілде', 'тамыз', 'қыркүйек', 'қазан', 'қараша', 'желтоқсан'];
+const kazakhShortMonths = ['қаң.', 'ақп.', 'нау.', 'сәу.', 'мам.', 'мау.', 'шіл.', 'там.', 'қыр.', 'қаз.', 'қар.', 'жел.'];
+const nativeKazakhDecimal = new Intl.NumberFormat('kk-KZ').formatToParts(1.5)
+  .find(part => part.type === 'decimal')?.value === ',';
 
 function initialLanguage() {
   const urlLanguage = new URLSearchParams(location.search).get('lang');
@@ -26,24 +37,40 @@ let language = initialLanguage();
 document.documentElement.lang = language;
 let appliedLanguage = 'ru';
 let catalog;
-let englishCatalog;
-let patterns = [];
 let revision = 0;
 
 export function uiLanguage() {
   return language;
 }
 
+function kazakhDate(format, options, value) {
+  const native = format.format(value);
+  // Chromium builds with reduced ICU can expose the generic M01…M12 labels.
+  if (!/\bM(?:0[1-9]|1[0-2])\b/.test(native)) return native;
+  const { year, month, day, hour, minute, second } = Object.fromEntries(
+    format.formatToParts(value).filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+  const index = Number(month.slice(1)) - 1;
+  const label = (options.month === 'short' || options.dateStyle === 'medium' ? kazakhShortMonths : kazakhMonths)[index];
+  const date = [year && `${year} жылғы`, day, label].filter(Boolean).join(' ');
+  const time = [hour, minute, second].filter(Boolean).join(':');
+  return [date, time].filter(Boolean).join(' ');
+}
+
 function formatter(Format, options) {
   const russian = new Format('ru', options);
-  const english = new Format('en-GB', options);
+  const formats = [...displayLocales].map(([code, locale]) => ({
+    code, localized: new Format(locale, options), cache: localizedFormats.get(code),
+  }));
   return {
     format(value) {
       const original = russian.format(value);
-      const translated = english.format(value);
-      if (original !== translated) {
-        if (localizedFormats.size >= 8192) localizedFormats.clear();
-        localizedFormats.set(original.replace(whitespace, ' '), translated);
+      for (const { code, localized, cache } of formats) {
+        const translated = code !== 'kk' ? localized.format(value)
+          : Format === Intl.DateTimeFormat ? kazakhDate(localized, options ?? {}, value)
+          : nativeKazakhDecimal ? localized.format(value) : original.replace('тыс.', 'мың');
+        if (original === translated) continue;
+        if (cache.size >= 8192) cache.clear();
+        cache.set(original.replace(whitespace, ' '), translated);
       }
       return original;
     },
@@ -53,10 +80,11 @@ function formatter(Format, options) {
 export const numberFormat = options => formatter(Intl.NumberFormat, options);
 export const dateFormat = options => formatter(Intl.DateTimeFormat, options);
 
-function loadEnglish() {
-  englishCatalog ??= import('./locale-en.js').then(({ default: translations }) => {
+function loadCatalog(code) {
+  if (loadedCatalogs.has(code)) return loadedCatalogs.get(code);
+  const pending = catalogLoaders.get(code)().then(({ default: translations }) => {
     const messages = new Map(Object.entries(translations));
-    patterns = [...messages].flatMap(([source, target]) => {
+    const patterns = [...messages].flatMap(([source, target]) => {
       const slots = [...source.matchAll(placeholders)];
       if (!slots.length) return [];
       const literals = source.split(/\{\d+\}/);
@@ -66,12 +94,13 @@ function loadEnglish() {
       return [{ clue, target, matcher, slots: slots.map(match => Number(match[1])),
         specificity: literals.reduce((sum, literal) => sum + literal.length, 0) }];
     }).sort((a, b) => b.specificity - a.specificity);
-    return messages;
+    return { messages, patterns };
   }).catch(error => {
-    englishCatalog = undefined;
+    loadedCatalogs.delete(code);
     throw error;
   });
-  return englishCatalog;
+  loadedCatalogs.set(code, pending);
+  return pending;
 }
 
 export function registerBoundaryNames(entries) {
@@ -80,46 +109,60 @@ export function registerBoundaryNames(entries) {
   for (const [name, , aliases] of entries) {
     if (!cyrillic.test(name)) continue;
     const english = aliases.find(alias => /^[\p{Script=Latin}\p{N}]/u.test(alias) && !cyrillic.test(alias));
-    if (english) englishNames.set(name, english);
+    if (english) boundaryNames.get('en').set(name, english);
+    const kazakh = aliases.find(alias => kazakhLetters.test(alias));
+    if (kazakh) boundaryNames.get('kk').set(name, kazakh);
   }
   memo.clear();
 }
 
+function lookup(text) {
+  return catalog.messages.get(text) ?? boundaryNames.get(language).get(text) ?? localizedFormats.get(language).get(text);
+}
+
+// A translated phrase can still be Cyrillic in Kazakh. Check whether its original
+// pieces were covered by the catalog instead of using the output alphabet.
 function substitute(text, depth) {
-  const exact = catalog.get(text) ?? englishNames.get(text) ?? localizedFormats.get(text);
-  if (exact) return exact;
-  if (depth > 6 || text.length > 1600) return text;
-  let partial = text;
-  for (const { clue, target, matcher, slots } of patterns) {
+  const exact = lookup(text);
+  if (exact !== undefined) return { text: exact, complete: true };
+  if (!cyrillic.test(text)) return { text, complete: true };
+  if (depth > 6 || text.length > 1600) return { text, complete: false };
+  let partial;
+  for (const { clue, target, matcher, slots } of catalog.patterns) {
     if (!text.includes(clue)) continue;
     const match = matcher.exec(text);
     if (!match) continue;
+    let complete = true;
     const translated = target.replace(placeholders, (_, key) => {
       const raw = match[slots.indexOf(Number(key)) + 1];
-      return raw === undefined ? '' : substitute(raw.trim(), depth + 1);
+      if (raw === undefined) return '';
+      const part = substitute(raw.trim(), depth + 1);
+      complete = complete && part.complete;
+      return part.text;
     });
-    if (!cyrillic.test(translated)) return translated;
-    if (partial === text && translated !== text) partial = translated;
+    if (complete) return { text: translated, complete };
+    if (translated !== text) partial ??= { text: translated, complete: false };
   }
   const segments = text.split(/( · | — | × | \/ | ↔ | \| | \(|\)$)/u);
   if (segments.length > 1) {
-    const translated = segments.map(part => cyrillic.test(part) || localizedFormats.has(part) ? substitute(part, depth + 1) : part).join('');
-    if (!cyrillic.test(translated) || partial === text) return translated;
+    const translated = segments.map(part => substitute(part, depth + 1));
+    const complete = translated.every(part => part.complete);
+    if (complete || !partial) return { text: translated.map(part => part.text).join(''), complete };
   }
   const sentence = text.match(/^(.*?)(?:([.!?])$)/s);
   if (sentence) {
-    const short = catalog.get(sentence[1]) ?? englishNames.get(sentence[1]);
-    if (short) return short + sentence[2];
+    const short = lookup(sentence[1]);
+    if (short !== undefined) return { text: short + sentence[2], complete: true };
   }
-  return partial;
+  return partial ?? { text, complete: false };
 }
 
 export function translate(value) {
-  if (!catalog || language !== 'en' || typeof value !== 'string') return value;
+  if (!catalog || typeof value !== 'string') return value;
   const key = value.replace(whitespace, ' ').trim();
-  const direct = localizedFormats.get(key);
+  const direct = localizedFormats.get(language).get(key);
   if (!direct && !cyrillic.test(value)) return value;
-  const translated = direct ?? memo.get(key) ?? substitute(key, 0);
+  const translated = direct ?? memo.get(key) ?? substitute(key, 0).text;
   if (memo.size >= 4096) memo.clear();
   memo.set(key, translated);
   return translated === key ? value : value.match(/^\s*/)[0] + translated + value.match(/\s*$/)[0];
@@ -147,7 +190,7 @@ export function protectLocaleText(node, terms) {
 
 function translateProtected(value, element) {
   const protectedText = protectedTerms.get(element);
-  if (language !== 'en' || !protectedText) return translate(value);
+  if (!catalog || !protectedText) return translate(value);
   const { terms, matches } = protectedText;
   const tokens = value.replace(matches, term => `\uE000${terms.indexOf(term)}\uE001`);
   return translate(tokens).replace(/\uE000(\d+)\uE001/g, (_, index) => terms[Number(index)]);
@@ -161,7 +204,7 @@ function translateValue(value, previous, write, render = translate) {
 }
 
 function jsonDisplay(source) {
-  if (language !== 'en' || !cyrillic.test(source)) return source;
+  if (!catalog || !cyrillic.test(source)) return source;
   try {
     const value = JSON.parse(source);
     const display = JSON.parse(JSON.stringify(value, (key, item) =>
@@ -237,9 +280,11 @@ export function initializeLocalization() {
     if (!supported.has(next)) return;
     const token = ++revision;
     try {
-      if (next === 'en') catalog = await loadEnglish();
+      const selected = catalogLoaders.has(next) ? await loadCatalog(next) : undefined;
       if (token !== revision) return;
       observer.disconnect();
+      catalog = selected;
+      memo.clear();
       language = appliedLanguage = next;
       document.documentElement.lang = next;
       if (explicit) {
@@ -248,15 +293,16 @@ export function initializeLocalization() {
       }
       sync();
       localizeTree(document.documentElement);
-      if (next === 'en') observer.observe(document.documentElement, {
+      if (catalog) observer.observe(document.documentElement, {
         subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: localAttributes,
       });
+      document.dispatchEvent(new Event('nasa:language-changed'));
     } catch (error) {
       if (token !== revision) return;
       language = appliedLanguage;
       document.documentElement.lang = language;
       sync();
-      console.error('Could not load the English interface.', error);
+      console.error('Could not load the selected interface language.', error);
     }
   }
   document.addEventListener('click', event => {
