@@ -153,16 +153,16 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     panel.hidden = !(method === 'search' || (method === 'circle' && selection?.circle)
       || (method === 'polygon' && vertices.length) || (method === 'report' && selection?.circle));
     instruction.hidden = !panel.hidden || !drawing();
-    instruction.textContent = method === 'circle' ? 'Выберите центр на карте, задайте радиус, затем нажмите «Анализ территории».' : 'Поставьте первую вершину на карте.';
+    instruction.textContent = method === 'circle' ? 'Поставьте точку на карте.' : 'Поставьте первую вершину на карте.';
     byId('area-radius-label').hidden = byId('area-presets').hidden = !selection?.circle || method === 'search' || method === 'polygon';
     byId('area-polygon-controls').hidden = method !== 'polygon';
     byId('area-search').hidden = method !== 'search';
     byId('area-sources').hidden = method !== 'search';
     byId('area-title').textContent = method === 'search' ? 'Поиск территории'
-      : method === 'polygon' ? 'Новый полигон' : 'Круговая область для анализа';
+      : method === 'polygon' ? 'Новый полигон' : 'Точка и радиус';
     guide.textContent = method === 'polygon' ? 'Добавьте хотя бы три вершины и замкните полигон.'
       : method === 'search' ? 'Для района укажите название и страну через запятую.'
-      : method === 'circle' || (method === 'report' && selection?.circle) ? 'Выберите центр и задайте радиус области, затем нажмите «Анализ территории».' : '';
+      : method === 'circle' ? 'Щёлкните по карте, чтобы переместить центр.' : '';
     guide.hidden = !guide.textContent;
     renderSummary();
   }
