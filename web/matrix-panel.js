@@ -40,8 +40,7 @@ function scatterAxis(points,key,intervals){
 }
 
 function scatterPlot({points,xFactor,yFactor},width,height){
- const xAxis=scatterAxis(points,'x',Math.max(2,Math.min(6,Math.floor((width-60)/100))));
- const yAxis=scatterAxis(points,'y',height<240?4:5);
+ const xAxis=scatterAxis(points,'x',6),yAxis=scatterAxis(points,'y',5);
  const left=Math.max(41,xAxis.ticks[0].label.length*3.5+8,Math.max(...yAxis.ticks.map(({label})=>label.length))*7+11);
  const right=width-Math.max(18,xAxis.ticks.at(-1).label.length*3.5+8);
  const top=27,bottom=height-44;
@@ -53,7 +52,11 @@ function scatterPlot({points,xFactor,yFactor},width,height){
   plot.append(svg('line',{x1:left,x2:right,y1:row,y2:row,stroke:'#2a4072'}),
    svg('text',{x:left-8,y:row+4,'text-anchor':'end'},label));
  }
- for(const {fraction,label} of xAxis.ticks)plot.append(svg('text',{x:x(fraction),y:bottom+16,'text-anchor':'middle'},label));
+ const tickSpacing=Math.max(65,Math.max(...xAxis.ticks.map(({label})=>label.length))*7+10);
+ const tickStride=Math.max(1,Math.ceil((xAxis.ticks.length-1)*tickSpacing/(right-left)));
+ xAxis.ticks.forEach(({fraction,label},index)=>{
+  if((xAxis.ticks.length-1-index)%tickStride===0)plot.append(svg('text',{x:x(fraction),y:bottom+16,'text-anchor':'middle'},label));
+ });
  const radius=points.length>400?1.8:points.length>100?2.3:2.8;
  for(const point of points){
   const dot=svg('circle',{cx:x(xAxis.fraction(point.x)),cy:y(yAxis.fraction(point.y)),r:radius,fill:'#ffa46e','fill-opacity':points.length>400?.52:.72});
