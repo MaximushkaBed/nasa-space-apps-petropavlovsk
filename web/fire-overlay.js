@@ -1,6 +1,7 @@
 const nominalPixelMeters = [1000, 1000, 375, 375, 375];
 const mercatorCircumference = 2 * Math.PI * 6378137;
 const mercatorLimit = 85.0511287798;
+const overviewSpacing = 24;
 export const fireDetailZoom = 7;
 const projectedPixelWidth = (meters, latitude) => 256 * meters
   / (mercatorCircumference * Math.cos(latitude * Math.PI / 180));
@@ -72,6 +73,56 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     ctx.drawImage(heat, 0, 0, width, height);
   }
 
+  function drawOverview(ctx, bins, width) {
+    const spacing = overviewSpacing;
+    const stride = Math.ceil(width / spacing) + 4;
+    const cells = new Map();
+    const groups = [];
+    // Keep each marker at its strongest source group and add nearby counts to it.
+    const ordered = [...bins.values()].sort((a, b) => b.count - a.count || a.y - b.y || a.x - b.x);
+    for (const bin of ordered) {
+      const col = Math.floor(bin.x / spacing);
+      const row = Math.floor(bin.y / spacing);
+      const key = row * stride + col;
+      let nearest;
+      let distance = spacing * spacing;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const candidates = cells.get(key + dy * stride + dx);
+          if (!candidates) continue;
+          for (const group of candidates) {
+            const squared = (group.x - bin.x) ** 2 + (group.y - bin.y) ** 2;
+            if (squared < distance) {
+              nearest = group;
+              distance = squared;
+            }
+          }
+        }
+      }
+      if (nearest) nearest.count += bin.count;
+      else {
+        const group = { ...bin };
+        groups.push(group);
+        const cell = cells.get(key);
+        if (cell) cell.push(group);
+        else cells.set(key, [group]);
+      }
+    }
+
+    groups.sort((a, b) => a.count - b.count);
+    const reference = groups[Math.floor((groups.length - 1) * .97)]?.count ?? 1;
+    for (const group of groups) {
+      const strength = Math.min(1, (group.count / reference) ** .48);
+      const half = .85 + 2.65 * strength;
+      ctx.globalAlpha = .10 + .84 * strength;
+      ctx.beginPath();
+      ctx.arc(group.x, group.y, half, 0, 2 * Math.PI);
+      ctx.fill();
+      hitTargets.push({ ...group, half });
+    }
+    ctx.globalAlpha = 1;
+  }
+
   function draw() {
     const zoom = map.getZoom();
     const detailZoom = zoom >= fireDetailZoom;
@@ -97,7 +148,8 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     const overview = aggregated && !detailZoom;
     const detailed = mode === 'points' && detailZoom;
     const heatRadius = overview ? Math.min(34, Math.max(13, worldWidth / 460)) : zoom < 6 ? 17 : 23;
-    const margin = detailed ? Math.max(4, maxPixelWidth * scale / 2) : mode === 'heat' ? heatRadius : 8;
+    const margin = detailed ? Math.max(4, maxPixelWidth * scale / 2)
+      : mode === 'heat' ? heatRadius : overview ? overviewSpacing + 4 : 8;
     const firstCopy = Math.floor((origin.x - margin) / worldWidth);
     const lastCopy = Math.floor((origin.x + width + margin) / worldWidth);
     const stride = Math.ceil((width + 2 * margin) / step) + 1;
@@ -131,17 +183,16 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
       return;
     }
     if (detailed) return;
+    if (overview) {
+      drawOverview(ctx, bins, width);
+      return;
+    }
     for (const regional of [false, true]) {
       for (const bin of bins.values()) {
         if (bin.regional !== regional) continue;
         const { x, y, count } = bin;
-        const half = overview ? Math.min(2.5, (regional ? 1.8 : 1.1) + Math.log2(count) * .14)
-          : Math.min(3.8, (regional ? 2.1 : 1.4) + Math.log2(count) * .37);
-        if (overview) {
-          ctx.beginPath();
-          ctx.arc(x, y, half, 0, 2 * Math.PI);
-          ctx.fill();
-        } else ctx.fillRect(x - half, y - half, half * 2, half * 2);
+        const half = Math.min(3.8, (regional ? 2.1 : 1.4) + Math.log2(count) * .37);
+        ctx.fillRect(x - half, y - half, half * 2, half * 2);
         hitTargets.push({ ...bin, half });
       }
     }
