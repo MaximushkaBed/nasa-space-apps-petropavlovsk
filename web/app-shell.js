@@ -15,7 +15,7 @@ const viewNames = new Set(['atlas','analysis','cases']);
 const platformNames = new Set(['all','Aqua','Terra','Suomi-NPP','NOAA-20','NOAA-21']);
 const storageKey = 'nasa-space-apps-context-v1';
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
-let currentView = 'atlas', navigation = 0, statusTimer;
+let currentView = 'atlas', navigation = 0, statusTimer, entryReady = false;
 let context = { roi:null, history:{start:'2020-01-01',end:'2025-12-31'}, baseline:{start:2020,end:2023}, focus:null, platform:'all', quality:'sp', daynight:'all', study:null };
 let restored = null;
 try { restored = JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch { /* An unavailable storage does not prevent the app. */ }
@@ -40,6 +40,9 @@ function capture() {
 function persist() {
   const snapshot=capture();
   try { const value=JSON.stringify(snapshot);if(value.length<1500000)localStorage.setItem(storageKey,value); } catch { /* Private browsing and storage limits are supported. */ }
+  // This entry, including a shared URL's completed job IDs, survives Reload.
+  // Navigation keeps its destination snapshot until that controller is ready.
+  if(entryReady)try { history.replaceState({...history.state,app:true,view:currentView,snapshot},'',location.href); } catch { /* Browser history limits do not interrupt the app. */ }
   return snapshot;
 }
 function bridgeFor(owner) {
@@ -115,7 +118,8 @@ async function navigate(view,payload={}) {
   if(view==='analysis'&&currentView==='atlas'&&!payload.context&&!payload.state&&!payload.snapshot&&!payload.fromHistory&&controllers.get('atlas')?.getState?.().context?.roi){
     payload={...payload,context:analysisContext(),run:false,from:payload.from||'atlas'};
   }
-  const before=persist();
+  const before=payload.fromHistory?capture():persist();
+  entryReady=false;
   const oldKey=currentView==='cases'?'atlas':currentView;
   controllers.get(oldKey)?.deactivate?.();
   const token=++navigation;currentView=view;
@@ -137,10 +141,11 @@ async function navigate(view,payload={}) {
     if(token!==navigation)return;
     const local=controller.getState?.();if(local?.context)mergeContext(local.context);
     $('shell-loading').hidden=true;
+    entryReady=true;
     const settled=persist();
     history.replaceState({...history.state,app:true,view,snapshot:settled},'',location.href);
     if(payload.from==='analysis')notice('Атлас показывает исходные детекции. Территория и даты перенесены; шкала Aqua к пикселям не применяется.');
-  }catch(error){if(token===navigation){notice(error.message);$('shell-loading').textContent='Инструмент не загрузился. Выберите другой раздел или обновите страницу.';$('shell-loading').hidden=false;}}
+  }catch(error){if(token===navigation){entryReady=true;notice(error.message);$('shell-loading').textContent='Инструмент не загрузился. Выберите другой раздел или обновите страницу.';$('shell-loading').hidden=false;}}
 }
 function analysisContext() {
   const selected=controllers.get('atlas')?.getAnalysisContext?.();
@@ -199,14 +204,16 @@ window.addEventListener('popstate',event=>{
 
 (async()=>{
   try{
-    const url=new URL(location.href);let state=null;
-    if(url.searchParams.has('state'))state=JSON.parse(url.searchParams.get('state'));
-    const legacy=url.searchParams.has('analysis')?JSON.parse(url.searchParams.get('analysis')):null;
-    let view=url.searchParams.get('view')||(legacy?'analysis':url.hash==='#kishkenekol-case'?'cases':restored?.view||'atlas');
+    const snapshot=performance.getEntriesByType('navigation')[0]?.type==='reload'&&history.state?.app?history.state.snapshot:null;
+    const entry=snapshot?.version===1&&viewNames.has(snapshot.view)&&snapshot.context&&typeof snapshot.context==='object'&&snapshot.states&&typeof snapshot.states==='object'?snapshot:null;
+    const url=new URL(location.href);let state=entry?{...entry.states[entry.view==='cases'?'atlas':entry.view],version:1,context:clone(entry.context)}:null;
+    if(!entry&&url.searchParams.has('state'))state=JSON.parse(url.searchParams.get('state'));
+    const legacy=!entry&&url.searchParams.has('analysis')?JSON.parse(url.searchParams.get('analysis')):null;
+    let view=entry?.view||url.searchParams.get('view')||(legacy?'analysis':url.hash==='#kishkenekol-case'?'cases':restored?.view||'atlas');
     if(!viewNames.has(view))view='atlas';
     if(state?.version!==1)state=null;
     if(state?.context)mergeContext(state.context);else if(legacy)mergeContext(contextFromLegacy(legacy));else if(restored?.version===1&&restored.context)mergeContext(restored.context);
-    const pair=portableRevisions(state?.revisions);
+    const pair=entry?null:portableRevisions(state?.revisions);
     if(pair){
       view='analysis';state.revisions=pair;state.analysisId=null;
       try{
@@ -218,7 +225,7 @@ window.addEventListener('popstate',event=>{
         if(snapshot.method_status==='current')state.analysisId=pair.afterId;
       }catch{notice('Основной расчёт не восстановлен. Откроем доступные архивные значения пары без нового расчёта.');}
     }
-    const id=pair?null:url.searchParams.get('analysis_id');
+    const id=entry||pair?null:url.searchParams.get('analysis_id');
     if(id&&/^[0-9a-f]{32}$/.test(id)){
       const response=await fetch(`/api/v1/analyses/${id}`);if(!response.ok)throw new Error('Сохранённый расчёт больше недоступен. Выберите территорию заново.');
       const job=await response.json();if(job.status!=='done')throw new Error('Сохранённый расчёт ещё не завершён.');
@@ -228,7 +235,7 @@ window.addEventListener('popstate',event=>{
       mergeContext({...canonical,...provided,roi:provided.roi||canonical.roi,
         history:{...canonical.history,...provided.history},baseline:{...canonical.baseline,...provided.baseline}});
     }
-    currentView=view;history.replaceState({app:true,view,snapshot:null},'',location.href);visibility();
+    currentView=view;history.replaceState({app:true,view,snapshot:entry},'',location.href);visibility();
     const bootToken=navigation;
     const controller=await ensureView(view);
     if(bootToken!==navigation)return;
@@ -236,6 +243,6 @@ window.addEventListener('popstate',event=>{
     if(id&&saved)saved.analysisId=id;
     await controller.activate?.({view,state:saved,context:(state||legacy||id)?context:undefined,run:Boolean(legacy),caseId:view==='cases'?'kishkenekol-2025-04-12':undefined});
     if(bootToken!==navigation)return;
-    const local=controller.getState?.();if(local?.context)mergeContext(local.context);persist();
+    const local=controller.getState?.();if(local?.context)mergeContext(local.context);entryReady=true;persist();
   }catch(error){notice(error.message);$('shell-loading').textContent='Выберите раздел и территорию, чтобы продолжить.';}
 })();

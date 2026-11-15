@@ -85,7 +85,17 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
  let scatter,scatterWidth=0;
  new ResizeObserver(layoutScatter).observe(scatterHost);
  if(local)for(const selector of ['.matrix-intro','.matrix-status'])$(selector).hidden=true;
- let id=null,result=null,busy=false,paused=false,visible=false,epoch=0,pollEpoch=0,mode='within',platform=null,pair=[0,1],analysisId=null,lastSource=null,hasError=false,restorePlatform=null;
+ let id=null,result=null,busy=false,paused=false,visible=false,epoch=0,pollEpoch=0,mode='within',platform=null,pair=[0,1],analysisId=null,lastSource=null,hasError=false,restorePlatform=null,startPromise=null;
+ const pendingRequests=new Map();
+ function requestMatrix(analysis){
+  if(!pendingRequests.has(analysis)){
+   const pending=request(`/api/v1/analyses/${encodeURIComponent(analysis)}/matrix`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+   pendingRequests.set(analysis,pending);
+   const clear=()=>{if(pendingRequests.get(analysis)===pending)pendingRequests.delete(analysis);};
+   pending.then(clear,clear);
+  }
+  return pendingRequests.get(analysis);
+ }
  function status(message,error=false){hasError=error;$('.matrix-status').textContent=message;$('.matrix-status').classList.toggle('is-error',error);}
  function fields(){return mode==='space'?result?.space_factors||[]:result?.time_factors||[];}
  function cellAt(i,j){const value=result?.results?.[platform]?.[mode]?.[i]?.[j];return Array.isArray(value)?{rho:value[0],n:value[1]}:value&&typeof value==='object'?value:{rho:null,n:null};}
@@ -95,22 +105,34 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
   if(local)return;
   const analysis=getAnalysis();
   const config=result?.config||analysis?.result?.config;
-  $('.matrix-scope').textContent=config?`${roiName(config)} · ${config.start} — ${config.end} · сетка ${config.grid_km} км · исходные величины · ${config.quality==='all'?'SP + предварительные NRT':'SP'} · локальная видимость неизвестна`:'Матрица относится к территории и истории текущего анализа.';
+  $('.matrix-scope').textContent=config?`${analysis?.context?.roi?.name||roiName(config)} · ${config.start} — ${config.end} · сетка ${config.grid_km} км · исходные величины · ${config.quality==='all'?'SP + предварительные NRT':'SP'} · локальная видимость неизвестна`:'Матрица относится к территории и истории текущего анализа.';
   $('.matrix-run').disabled=busy||!analysis||analysis.platform==='all';
   $('.matrix-run').textContent=busy?'Матрица рассчитывается…':result?'Рассчитать заново':'Рассчитать матрицу';
   $('.matrix-progress').hidden=!busy;
   if(!automatic&&!busy&&!result&&analysis&&!hasError)status('Нажмите «Рассчитать матрицу», чтобы получить факторы для этой территории.');
   if(analysis?.platform!==lastSource){lastSource=analysis?.platform;if(result&&result.platforms?.includes(lastSource)){platform=lastSource;$('.matrix-platform').value=platform;if(visible)render();}}
-  onDataChange?.({id,result,platform});
+  onDataChange?.({id,result,platform,analysisId,busy});
  }
- async function start(){
+ function matchesAnalysis(snapshot,analysis){return Boolean(snapshot&&analysis?.id===analysisId&&(!snapshot.analysis_id||snapshot.analysis_id===analysisId)&&sameScientificConfig(snapshot.config,analysis.result?.config)&&snapshot.extract_id===analysis.result?.extract_id&&snapshot.snapshot_at===analysis.result?.snapshot_at);}
+ function start({refresh:force=false}={}){
   const analysis=getAnalysis();if(!analysis||analysis.platform==='all'){status('Для матрицы нужен готовый анализ и выбранный спутник.',true);return;}
-  const token=++epoch;analysisId=analysis.id;result=null;id=null;busy=true;hideResults();refresh();status('Создаю запрос факторов для выбранной территории…');$('.matrix-progress').value=0;
-  try{
-   const job=await request(`/api/v1/analyses/${encodeURIComponent(analysisId)}/matrix`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-   if(token!==epoch)return;id=job.id;if(!id)throw new Error('Сервис не вернул идентификатор матрицы.');
-   if(!paused)await poll(token);
-  }catch(error){if(token===epoch){busy=false;status(error.message,true);refresh();}}
+  if(busy&&analysis.id===analysisId)return startPromise;
+  // Opening another view reuses this immutable snapshot; an explicit rerun still
+  // asks the server to check source versions and repair temporarily missing factors.
+  if(!force&&matchesAnalysis(result,analysis)&&!result.warnings_sources?.length){refresh();if(visible)render();return;}
+  const token=++epoch;analysisId=analysis.id;result=null;id=null;busy=true;hideResults();refresh();status('Проверяю готовую матрицу для выбранной территории…');$('.matrix-progress').value=0;
+  const task=(async()=>{
+   try{
+    const job=await requestMatrix(analysisId);
+    if(token!==epoch)return;id=job.id;if(!id)throw new Error('Сервис не вернул идентификатор матрицы.');
+    if(job.status==='done'&&job.result){accept(job.result);return;}
+    refresh();
+    if(!paused)await poll(token);
+   }catch(error){if(token===epoch){busy=false;status(error.message,true);refresh();}}
+  })();
+  startPromise=task;
+  task.finally(()=>{if(startPromise===task)startPromise=null;});
+  return task;
  }
  async function poll(token=epoch){
   const polling=++pollEpoch;
@@ -249,7 +271,7 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
   localizeTree(doc);
   save(new Blob([new XMLSerializer().serializeToString(doc)],{type:'image/svg+xml;charset=utf-8'}),`nasa-space-apps-matrix-${platform}-${mode}.svg`);
  }
- function reset(){++epoch;++pollEpoch;id=result=analysisId=restorePlatform=null;busy=false;pair=[0,1];lastSource=null;hideResults();status(automatic?'Ожидаем данные календаря…':'Матрица рассчитывается отдельно по данным календаря.');refresh();}
+ function reset(){++epoch;++pollEpoch;id=result=analysisId=restorePlatform=null;startPromise=null;busy=false;pair=[0,1];lastSource=null;hideResults();status(automatic?'Ожидаем данные календаря…':'Матрица рассчитывается отдельно по данным календаря.');refresh();}
  function loadSnapshot(matrixId,snapshot){
   reset();analysisId=getAnalysis()?.id;id=matrixId;
   accept(snapshot);
@@ -264,9 +286,9 @@ export function mountMatrixPanel(root,{request,getAnalysis,bridge={},automatic=f
  function pause(){paused=true;++pollEpoch;}
  function resume(){paused=false;if(busy&&id&&!result)poll();}
  async function restore(matrixId,state={}){const analysis=getAnalysis();if(!analysis)return;reset();analysisId=analysis.id;id=String(matrixId);busy=true;restorePlatform=state?.platform||null;if(state&&['within','pooled','space'].includes(state.mode)){mode=state.mode;$('.matrix-mode').value=mode;}if(Array.isArray(state?.pair)&&state.pair.length===2&&state.pair.every(index=>Number.isInteger(index)&&index>=0))pair=[...state.pair];refresh();status('Восстанавливаю сохранённую матрицу…');if(!paused)await poll();}
- $('.matrix-run').addEventListener('click',start);
+ $('.matrix-run').addEventListener('click',()=>start({refresh:true}));
  $('.matrix-mode').addEventListener('change',()=>{mode=$('.matrix-mode').value;render();});
- $('.matrix-platform').addEventListener('change',()=>{platform=$('.matrix-platform').value;render();onDataChange?.({id,result,platform});});
+ $('.matrix-platform').addEventListener('change',()=>{platform=$('.matrix-platform').value;render();onDataChange?.({id,result,platform,analysisId,busy});});
  $('.matrix-export-csv').addEventListener('click',()=>exportData('csv'));$('.matrix-export-json').addEventListener('click',()=>exportData('json'));$('.matrix-export-image').addEventListener('click',exportImage);
  $('.matrix-on-map').addEventListener('click',()=>{const factors=fields();bridge.navigate?.('atlas',{context:getAnalysis()?.context,from:'matrix',matrixPair:{matrixId:id,platform,mode,factor_x:factors[pair[0]]?.id,factor_y:factors[pair[1]]?.id,unitIds:pairedValues().map(point=>point.unit.id)}});});
  refresh();return {refresh,reset,pause,resume,restore,start,loadSnapshot,loadFileResult,setVisible(value){visible=value;if(visible&&result)render();},getState:()=>({id,result,busy,platform,mode,pair:[...pair]}),exportData,exportImage};

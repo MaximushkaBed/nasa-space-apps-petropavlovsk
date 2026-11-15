@@ -37,7 +37,7 @@ const land = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Blu
 const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:17,attribution:'Esri World Imagery · дата мозаики не равна дате детекций'});
 cellsLayer=L.layerGroup().addTo(map);
 new ResizeObserver(()=>{if(active)map.invalidateSize({pan:false});}).observe($('analysis-map'));
-const matrixPanel=mountMatrixPanel($('matrix-panel'),{request,bridge,getAnalysis:()=>result&&jobId?{id:jobId,result,platform:source,context:getState().context}:null});
+const matrixPanel=mountMatrixPanel($('matrix-panel'),{request,bridge,getAnalysis:()=>result&&jobId?{id:jobId,result,platform:source,context:getState().context}:null,onDataChange:()=>{if(active)publishContext();}});
 const planner=mountStudyPlanner(root,{request,getInput:()=>({config:formConfig(),platform:source,focus:clone(retainedFocus)}),validate:validateInputs,isActive:()=>active,
  openSettings:step=>workflow?.open(step),
  applyOption:option=>{source=option.platform;$('platform').value=source;syncCanonicalConfig(option.config);if(retainedFocus&&(retainedFocus.start<option.config.start||retainedFocus.end>option.config.end)){retainedFocus=null;rangeFocus=null;}invalidate({keepStudy:true});publishContext();},
@@ -87,7 +87,7 @@ function validateInputs(){
  try{scientificSignature(config);}catch{$('form-status').textContent='Задайте допустимую территорию, историю и фильтры.';return false;}
  return true;
 }
-function areaName(config){if(!territorySelected)return 'Выберите территорию';return (config.preset==='sko'?settings?.presets.find(p=>p.id==='sko')?.name:config.roi_name)||settings?.presets.find(p=>p.id===config.preset&&p.id!=='custom')?.name || `Область ${config.bbox[1].toFixed(2)}°, ${config.bbox[0].toFixed(2)}°` ;}
+function areaName(config){if(!territorySelected)return 'Выберите территорию';return (config.preset==='sko'?settings?.presets.find(p=>p.id==='sko')?.name:roiName||config.roi_name)||settings?.presets.find(p=>p.id===config.preset&&p.id!=='custom')?.name || `Область ${config.bbox[1].toFixed(2)}°, ${config.bbox[0].toFixed(2)}°` ;}
 function syncTerritoryControls(){
  root.dataset.territorySelected=String(territorySelected);
  $('analysis-territory-selected').textContent=territorySelected?areaName(formConfig()):'Территория пока не выбрана';
@@ -187,28 +187,34 @@ async function startAnalysis(event){
   if(busy||!active||!validateInputs())return;
   if(source==='all'){$('error-banner').hidden=false;$('error-banner').textContent='Выберите один спутник для временного анализа. Данные разных платформ не суммируются.';return;}
   stopPlaying();drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';const config=formConfig();const current=++generation;
+  const resident=result&&sameScientificConfig(result.config,config)?{result,id:jobId}:null;
   analysisAbort?.abort();const controller=new AbortController();analysisAbort=controller;
-  planner.prepareRun();revisions.clear();showResultSurface(false);
-  $('error-banner').hidden=true;setBusy(true);result=null;matrixPanel.reset();++mapGeneration;mapYear=null;cellsLayer.clearLayers();publishContext();
+  planner.prepareRun();revisions.clear();if(!resident)showResultSurface(false);
+  $('error-banner').hidden=true;setBusy(true);if(!resident){result=null;matrixPanel.reset();++mapGeneration;mapYear=null;cellsLayer.clearLayers();}publishContext();
   workflow?.running();
   $('retry-map').hidden=true;
   $('analysis-area-title').textContent=areaName(config);$('context-note').textContent=`${config.start} — ${config.end} · базовые годы ${config.baseline_start}–${config.baseline_end}`;
-  $('job-message').textContent='Создаю пространственный запрос';$('job-progress').value=0;
+  $('job-message').textContent='Проверяю готовый расчёт для выбранных параметров…';$('job-progress').value=0;
   $('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=true;
   $('job-banner').tabIndex=-1;$('job-banner').focus({preventScroll:true});$('job-banner').scrollIntoView({block:'start'});
   try{
-    const job=await request('/api/v1/analyses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(config),signal:controller.signal});if(current!==generation||!active)return;jobId=job.id;
+    const job=await request('/api/v1/analyses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(config),signal:controller.signal});if(current!==generation||!active)return;
+    if(!job.id)throw new Error('Сервис не вернул идентификатор анализа.');
+    let completed=false;
+    let state=job.status==='done'&&job.result?job:null;
     while(current===generation&&active){
-      const state=await request(`/api/v1/analyses/${jobId}`,{signal:controller.signal});
+      if(!state)state=await request(`/api/v1/analyses/${encodeURIComponent(job.id)}`,{signal:controller.signal});
       if(current!==generation||!active)return;
-      $('job-message').textContent=state.message;$('job-progress').value=state.progress||0;
-      if(state.status==='error')throw new Error(state.message);
-      if(state.status==='done'){if(!sameScientificConfig(state.result?.config,config)||!sameScientificConfig(formConfig(),config))throw new Error('Результат относится к другим условиям. Проверьте параметры и повторите расчёт.');acceptResult(state.result);break;}
+      $('job-message').textContent=state.message||'Анализ рассчитывается…';$('job-progress').value=state.progress||0;
+      if(state.status==='error'||state.status==='failed')throw new Error(state.message);
+      if(state.status==='done'){if(!sameScientificConfig(state.result?.config,config)||!sameScientificConfig(formConfig(),config))throw new Error('Результат относится к другим условиям. Проверьте параметры и повторите расчёт.');if(resident&&(resident.id!==job.id||resident.result.extract_id!==state.result.extract_id||resident.result.snapshot_at!==state.result.snapshot_at))matrixPanel.reset();jobId=job.id;acceptResult(state.result);completed=true;break;}
+      state=null;
       await new Promise(resolve=>setTimeout(resolve,1200));
     }
-    if(!result||current!==generation||!active)return;
+    if(!completed||!result||current!==generation||!active)return;
     await displayResult({navigate:true});
-  }catch(error){if(current===generation&&active&&error.name!=='AbortError'){planner.runFailed();$('error-banner').hidden=false;$('error-banner').textContent=error.message;$('form-status').textContent='Условия сохранены. Измените параметры или повторите расчёт кнопкой ниже.';}}
+    if(job.cache_hit&&current===generation&&active)$('form-status').textContent='Готовый расчёт открыт из кэша. Параметры и версия данных проверены.';
+  }catch(error){if(current===generation&&active&&error.name!=='AbortError'){planner.runFailed();if(resident&&result===resident.result)$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=source==='all';$('error-banner').hidden=false;$('error-banner').textContent=error.message;$('form-status').textContent='Условия сохранены. Измените параметры или повторите расчёт кнопкой ниже.';}}
   finally{if(analysisAbort===controller)analysisAbort=null;if(current===generation&&active)setBusy(false);}
 }
 function acceptResult(candidate){
@@ -218,6 +224,8 @@ function acceptResult(candidate){
  result={...candidate,config:freeze(clone(candidate.config))};
 }
 function syncCanonicalConfig(config){
+ const keepLabel=territorySelected&&sameScientificConfig(config,formConfig());
+ const currentName=keepLabel?roiName:'',currentSource=keepLabel?roiSource:'';
  territorySelected=true;
  $('preset').value=config.preset;
  ['west','south','east','north'].forEach((key,index)=>$(key).value=config.bbox[index]);
@@ -225,7 +233,7 @@ function syncCanonicalConfig(config){
  roiCircle=config.circle?clone(config.circle):null;
  const geometry=config.geometry||(config.preset==='sko'?settings?.region_geometry:null);
  roiGeometry=roiCircle?null:geometry?clone(geometry.type==='Feature'?geometry.geometry:geometry):null;
- roiName=config.roi_name||'';roiSource=config.roi_source||'';
+ roiName=currentName||config.roi_name||'';roiSource=currentSource||config.roi_source||'';
  $('analysis-area-title').textContent=areaName(config);showBounds(false);
 }
 function rejectCachedResult(message){
@@ -691,7 +699,7 @@ function getState(){
  const config=result?.config||formConfig(),geometry=config.circle?null:config.geometry||(config.preset==='sko'?(roiGeometry||settings?.region_geometry):roiGeometry),circle=config.circle||roiCircle;
  const matrix=matrixPanel.getState();
  const study=planner.getState();
- return {context:{roi:territorySelected?{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),...(roiBoundaryRef?{boundary_ref:clone(roiBoundaryRef)}:{}),...(roiParentRef?{parent_ref:clone(roiParentRef)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')}:null,history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km,study},territoryParents:clone(territoryParents),territoryContext:territoryContext.getState(),workflow:workflow?.getState(),study,revisions:revisions.getState(),tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
+ return {context:{roi:territorySelected?{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),...(roiBoundaryRef?{boundary_ref:clone(roiBoundaryRef)}:{}),...(roiParentRef?{parent_ref:clone(roiParentRef)}:{}),source:roiSource||config.roi_source||(config.preset==='sko'?'canonical-sko':'user')}:null,history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km,study},territoryParents:clone(territoryParents),territoryContext:territoryContext.getState(),workflow:workflow?.getState(),study,revisions:revisions.getState(),tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result||matrix.busy?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
 }
 async function activate(options={}){
  const current=++activation;active=true;

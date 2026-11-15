@@ -1,7 +1,7 @@
 import { numberFormat, dateFormat } from './i18n.js';
 import { mountMatrixPanel } from './matrix-panel.js?v=file-matrix';
 import { mountFileMatrix } from './matrix-file-panel.js?v=file-matrix';
-import { sameScientificConfig } from './scientific-context.js';
+import { sameScientificConfig, scientificSignature } from './scientific-context.js';
 
 const sources = ['Aqua', 'Terra', 'Suomi-NPP', 'NOAA-20', 'NOAA-21'];
 const preferred = ['NOAA-20', 'NOAA-21', 'Suomi-NPP', 'Aqua', 'Terra'];
@@ -64,9 +64,16 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   const matrix = mountMatrixPanel(atlasMatrixRoot, {
     request, automatic: true, getAnalysis: () => {
       const analysis = allWorld && !roi ? worldSnapshot?.analysis : job;
-      return analysis && { ...analysis, platform: matrixSource() };
+      return analysis && { ...analysis, platform: matrixSource(), context: { roi } };
     },
-    onDataChange: importedMatrix.setAtlas,
+    onDataChange(data) {
+      importedMatrix.setAtlas(data);
+      // Keep the job ID before polling finishes so returning to a tab resumes it.
+      if (data.id && data.analysisId) {
+        matrices.set(data.analysisId, data.id);
+        if (matrices.size > 20) matrices.delete(matrices.keys().next().value);
+      }
+    },
   });
 
   function setScope(next) {
@@ -342,24 +349,31 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
           return;
         }
       }
-      key = JSON.stringify(body);
+      const expected = body.preset === 'world' ? { ...body, bbox: [-180, -85, 180, 85], grid_km: 250 } : body;
+      key = JSON.stringify({ scientific: scientificSignature(expected), bbox: expected.bbox });
       if (!analyses.has(key)) {
         const created = request('/api/v1/analyses', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: key,
-        }).then(job => job.id);
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
         analyses.set(key, created);
         if (analyses.size > 20) analyses.delete(analyses.keys().next().value);
       }
-      const id = await analyses.get(key);
-      let progress;
+      const created = await analyses.get(key);
+      const id = created.id;
+      if (!id) throw new Error('Сервис не вернул идентификатор анализа.');
+      let progress = created.status === 'done' && created.result ? created : null;
       while (!signal.aborted) {
-        progress = await request(`/api/v1/analyses/${encodeURIComponent(id)}?view=calendar`, { signal });
+        if (!progress) progress = await request(`/api/v1/analyses/${encodeURIComponent(id)}?view=calendar`, { signal });
         if (signal.aborted || !['queued', 'running'].includes(progress.status)) break;
         status.textContent = progress.message || 'Готовим календарь…';
+        progress = null;
         await new Promise(resolve => setTimeout(resolve, 1250));
       }
       if (signal.aborted) return;
       if (progress.status !== 'done' || !progress.result) throw new Error(progress.message || 'Расчёт календаря не завершился.');
+      const canonical = body.preset === 'sko' ? { ...expected, bbox: progress.result.config?.bbox } : expected;
+      if (!sameScientificConfig(progress.result.config, canonical)) throw new Error('Результат относится к другим условиям. Проверьте параметры и повторите расчёт.');
+      analyses.set(key, Promise.resolve({ id, status: 'done', result: progress.result }));
       showJob({ id, result: progress.result });
       const saved = matrices.get(id);
       if (saved) await matrix.restore(saved);
@@ -369,7 +383,8 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
       if (finished.result) {
         matrices.set(id, finished.id);
         if (matrices.size > 20) matrices.delete(matrices.keys().next().value);
-      } else {
+        retry.hidden = !finished.result.warnings_sources?.length;
+      } else if (!finished.busy) {
         matrices.delete(id);
         retry.hidden = false;
       }
@@ -389,7 +404,10 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     schedule(0);
   }
 
-  retry.addEventListener('click', () => schedule(0));
+  retry.addEventListener('click', () => {
+    if (job?.id) matrices.delete(job.id);
+    schedule(0);
+  });
   preparedSko.addEventListener('click', usePreparedSko);
   $('study-default-period').addEventListener('click', () => {
     allWorld = true;

@@ -1,7 +1,7 @@
 """Bounded asynchronous spatial queries against the shared FIRMS archive."""
 from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import csv
 from datetime import date, datetime, timedelta, timezone
 import fcntl
@@ -16,6 +16,7 @@ import re
 import shutil
 import threading
 import time
+import uuid
 from urllib.parse import urlsplit, parse_qs
 
 from api.analysis import analyze, PLATFORMS
@@ -24,6 +25,8 @@ from api.geometry_clip import clip_geometry
 from api.place_boundaries import BoundaryUnavailable, find_boundary
 from api.study_plan import build_plan, load_calendar, assess as assess_study, validate_choices
 from api.revisions import RevisionStore, RevisionError
+from api.result_cache import (ResultIndex, analysis_key, spatial_key, recorded_analysis_key,
+                             recorded_spatial_key, matrix_key, read_json, scientific_config, incomplete_day, source_identity)
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get('SPACEAPPS_DATA_DIR', ROOT / 'data/raw/firms/global'))
@@ -40,6 +43,9 @@ JOBS_LOCK = threading.Lock()
 POOL = ThreadPoolExecutor(max_workers=1)
 MATRIX_POOL=ThreadPoolExecutor(max_workers=1)
 MATRIX_JOBS={}
+ANALYSIS_REQUESTS={}
+MATRIX_REQUESTS={}
+PRIMED_RESULT_INDEXES=set()
 CACHE.mkdir(parents=True, exist_ok=True)
 MAP_LIMIT=threading.BoundedSemaphore(1)
 GEOMETRY_LIMIT=threading.BoundedSemaphore(1)
@@ -186,9 +192,9 @@ def pinned_sources(config):
             h.close()
 
 
-def outages():
+def outages(raw=None):
     result = set()
-    with (ROOT / 'docs/sko-validation/outages.csv').open() as stream:
+    with (io.StringIO(raw.decode()) if raw is not None else (ROOT / 'docs/sko-validation/outages.csv').open()) as stream:
         for row in csv.DictReader(stream):
             day, end = date.fromisoformat(row['start_utc']), date.fromisoformat(row['end_utc_inclusive'])
             while day <= end:
@@ -202,6 +208,16 @@ def archive_through(state):
     if (state.get('live_tail') or {}).get('end'):
         dates.append(state['live_tail']['end'])
     return max(dates) if dates else None
+
+
+def prepare_identity(config, state, sources):
+    """Capture small policy inputs alongside the already pinned source inodes."""
+    geometry = query_geometry(config)
+    shape = config.get('geometry') or (geometry if config['preset'] == 'sko' else config['bbox'])
+    raw_outages = (ROOT / 'docs/sko-validation/outages.csv').read_bytes()
+    return {'archive': (state, sources), 'geometry': geometry, 'excluded': outages(raw_outages),
+            'geometry_sha': hashlib.sha256(json.dumps(shape, sort_keys=True).encode()).hexdigest(),
+            'outages_sha': hashlib.sha256(raw_outages).hexdigest()}
 
 
 def ensure_space():
@@ -236,19 +252,138 @@ def set_progress(job, **fields):
         JOBS[job].update(fields)
 
 
-def extract(job, config, sources, key):
+def result_index(kind):
+    return ResultIndex(CACHE, kind, atomic_json)
+
+
+def load_analysis_result(identifier):
+    """Called under JOBS_LOCK when inspecting mutable in-process job state."""
+    info = JOBS.get(identifier)
+    if info:
+        return info.get('result') if info['status'] == 'done' else None
+    result = read_json(CACHE / 'jobs' / (identifier + '.json'))
+    if result is None and (CACHE / 'saved-analyses' / (identifier + '.json')).exists():
+        try:
+            result, _ = RevisionStore(CACHE).load(identifier)
+        except RevisionError:
+            return None
+    return result
+
+
+def valid_analysis_result(result):
+    return (isinstance(result, dict) and isinstance(result.get('config'), dict)
+            and all(isinstance(result.get(key), list) for key in ('monthly', 'daily', 'availability'))
+            and isinstance(result.get('provenance'), dict) and isinstance(result.get('extract_id'), str)
+            and isinstance(result.get('snapshot_at'), str))
+
+
+def parquet_ready(path):
+    """Reject missing/truncated map files without reading the archive or tables."""
+    try:
+        with path.open('rb') as stream:
+            size = os.fstat(stream.fileno()).st_size
+            if size < 12 or stream.read(4) != b'PAR1':
+                return False
+            stream.seek(-8, os.SEEK_END)
+            footer = stream.read(8)
+            return footer[4:] == b'PAR1' and int.from_bytes(footer[:4], 'little') <= size - 12
+    except OSError:
+        return False
+
+
+def extract_ready(result, years=None):
+    if not valid_analysis_result(result) or not re.fullmatch('[0-9a-f]{32}', result['extract_id']):
+        return False
+    folder = CACHE / 'extracts' / result['extract_id']
+    grid, daily = read_json(folder / 'grid.json'), read_json(folder / 'daily.json')
+    if not grid or not daily or not isinstance(daily.get('daily'), list) or not isinstance(daily.get('availability'), list):
+        return False
+    if scientific_config(grid.get('config', {}), spatial=True) != scientific_config(result['config'], spatial=True):
+        return False
+    if incomplete_day(result['config'], grid.get('through')) != incomplete_day(result['config'], result.get('through')):
+        return False
+    return all(parquet_ready(folder / f'{year}.parquet') for year in years) if years else any(parquet_ready(path) for path in folder.glob('*.parquet'))
+
+
+def prime_result_index(kind):
+    """Adopt pre-index results once; this scans cached JSON, never the archive."""
+    marker = (str(CACHE.resolve()), kind)
+    if marker in PRIMED_RESULT_INDEXES:
+        return
+    folder = CACHE / ('jobs' if kind == 'analysis' else 'matrix/jobs')
+    paths = sorted(folder.glob('*.json'), key=lambda p: p.stat().st_mtime, reverse=True)
+    # Existing retention is 128 analyses; bound migration even on old installations.
+    seen = set()
+    for path in paths[:256]:
+        if not re.fullmatch('[0-9a-f]{32}', path.stem):
+            continue
+        result = read_json(path)
+        try:
+            if kind == 'analysis':
+                if not valid_analysis_result(result):
+                    continue
+                key = recorded_analysis_key(result)
+                extract_key = recorded_spatial_key(result)
+                years = {source['year'] for source in source_identity(result['provenance']['sources'])}
+                if not extract_ready(result, years):
+                    continue
+                if not result_index('extract').get(extract_key):
+                    result_index('extract').put(extract_key, result['extract_id'])
+            else:
+                analysis = load_analysis_result(result['analysis_id']) if result else None
+                if not valid_analysis_result(analysis):
+                    continue
+                key = matrix_key(result['analysis_id'], analysis, result['version'])
+            if key not in seen:
+                result_index(kind).put(key, path.stem)
+                seen.add(key)
+        except (ValueError, KeyError, TypeError, OSError):
+            continue
+    PRIMED_RESULT_INDEXES.add(marker)
+
+
+def cached_analysis(key, years):
+    prime_result_index('analysis')
+    identifier = result_index('analysis').get(key)
+    result = load_analysis_result(identifier) if identifier else None
+    try:
+        if valid_analysis_result(result) and recorded_analysis_key(result) == key and extract_ready(result, years):
+            return identifier, result
+    except (ValueError, KeyError, TypeError):
+        pass
+    return None
+
+
+def cached_matrix(key, analysis_id, analysis, version):
+    prime_result_index('matrix')
+    identifier = result_index('matrix').get(key)
+    result = read_json(CACHE / 'matrix/jobs' / (identifier + '.json')) if identifier else None
+    try:
+        if (result and result.get('analysis_id') == analysis_id and result.get('version') == version
+                and result.get('extract_id') == analysis['extract_id'] and result.get('snapshot_at') == analysis['snapshot_at']
+                and scientific_config(result['config']) == scientific_config(analysis['config'])
+                and (not result.get('warnings_sources') or time.time() - (CACHE / 'matrix/jobs' / (identifier + '.json')).stat().st_mtime < 300)):
+            return identifier, result
+    except (ValueError, KeyError, TypeError, OSError):
+        pass
+    return None
+
+
+def extract(job, config, sources, key, *, geometry=None, excluded=None):
     folder = CACHE / 'extracts' / key
     summary = folder / 'daily.json'
-    if summary.exists():
+    stored = read_json(summary)
+    if (stored and isinstance(stored.get('daily'), list) and isinstance(stored.get('availability'), list)
+            and all(parquet_ready(folder / f'{year}.parquet') for year in {source['year'] for source in sources})):
         set_progress(job, progress=95, message='Использую сохранённый пространственный запрос')
-        return json.loads(summary.read_text())
+        return stored
     folder.mkdir(parents=True, exist_ok=True)
     atomic_json(folder/'grid.json',{'grid_km':config['grid_km'],'config':config})
     con = connection(folder / 'temporary')
     daily, availability = [], []
     try:
         con.execute('CREATE TEMP TABLE excluded(day DATE,platform VARCHAR)')
-        con.executemany('INSERT INTO excluded VALUES (?,?)',sorted(outages()))
+        con.executemany('INSERT INTO excluded VALUES (?,?)',sorted(outages() if excluded is None else excluded))
         grouped = {}
         for source in sources:
             grouped.setdefault(source['year'], []).append(source)
@@ -256,7 +391,7 @@ def extract(job, config, sources, key):
             ensure_space()
             set_progress(job, progress=round(90 * index / max(1, len(grouped))), message=f'Обрабатываю {year} год', year=year)
             paths = [a['fd'] for a in assets]
-            fingerprint = hashlib.sha256(''.join(a['sha256'] for a in assets).encode()).hexdigest()
+            fingerprint = hashlib.sha256(''.join(sorted(a['sha256'] for a in assets)).encode()).hexdigest()
             global_path = CACHE / 'availability' / (fingerprint + '.json')
             if global_path.exists():
                 available = json.loads(global_path.read_text())
@@ -272,7 +407,7 @@ def extract(job, config, sources, key):
             daytime = '' if config['daynight'] == 'all' else 'AND daynight=?'
             params = [config['grid_km'] * 1000, config['grid_km'] * 1000, paths, config['start'], config['end']]
             if not world:
-                params.append(json.dumps(query_geometry(config)))
+                params.append(json.dumps(geometry if geometry is not None else query_geometry(config)))
             if daytime:
                 params.append(config['daynight'])
             con.execute(f"""CREATE OR REPLACE TEMP TABLE selected AS WITH pixels AS (
@@ -308,26 +443,35 @@ def extract(job, config, sources, key):
         con.close()
 
 
-def run(job, config):
+def run(job, config, prepared=None, pins=None, request_key=None):
     fingerprint=None
+    active=False
     try:
-        ensure_space()
-        set_progress(job, status='running', message='Фиксирую снимок архива', progress=0)
-        with pinned_sources(config) as (state, sources):
+        with ExitStack() as scope:
+            if pins is not None:
+                scope.enter_context(pins)
+            ensure_space()
+            set_progress(job, status='running', message='Фиксирую снимок архива', progress=0)
+            state, sources = prepared['archive'] if prepared is not None else scope.enter_context(pinned_sources(config))
             if not sources:
                 raise ValueError('В выбранном периоде нет доступных файлов архива.')
-            spatial = {k:v for k,v in config.items() if not k.startswith('baseline_')}
-            geometry=json.dumps(config['geometry'],sort_keys=True) if config.get('geometry') else (json.dumps(region_geometry(),sort_keys=True) if config['preset']=='sko' else json.dumps(config['bbox']))
-            geometry_sha=hashlib.sha256(geometry.encode()).hexdigest()
-            outages_sha=hashlib.sha256((ROOT/'docs/sko-validation/outages.csv').read_bytes()).hexdigest()
-            fingerprint = hashlib.sha256(json.dumps({'config': spatial, 'sources': [a['sha256'] for a in sources],
-                'geometry_sha':geometry_sha,'outages_sha':outages_sha,'extract_version':EXTRACT_VERSION}, sort_keys=True).encode()).hexdigest()[:32]
-            with JOBS_LOCK:
-                ACTIVE_EXTRACTS[fingerprint]+=1
-            values = extract(job, config, sources, fingerprint)
-            set_progress(job, progress=96, message='Считаю сезонность и проверяю калибровку')
-            excluded = outages()
+            snapshot = prepared if prepared is not None else prepare_identity(config, state, sources)
+            geometry_sha, outages_sha = snapshot['geometry_sha'], snapshot['outages_sha']
             through=archive_through(state)
+            extract_key = spatial_key(config, sources, geometry_sha, outages_sha, EXTRACT_VERSION, through)
+            fingerprint = extract_key
+            with JOBS_LOCK:
+                candidate = result_index('extract').get(extract_key)
+                if candidate:
+                    candidate_result = {'config': config, 'extract_id': candidate, 'through': through,
+                                        'snapshot_at': state['updated_at'], 'provenance': {}, 'monthly': [], 'daily': [], 'availability': []}
+                    if extract_ready(candidate_result, {source['year'] for source in sources}):
+                        fingerprint = candidate
+                ACTIVE_EXTRACTS[fingerprint]+=1
+                active=True
+            values = extract(job, config, sources, fingerprint, geometry=snapshot['geometry'], excluded=snapshot['excluded'])
+            set_progress(job, progress=96, message='Считаю сезонность и проверяю калибровку')
+            excluded = snapshot['excluded']
             scoped={**config,'incomplete_utc_dates':[through[:10]] if through else []}
             atomic_json(CACHE/'extracts'/fingerprint/'grid.json',{'grid_km':config['grid_km'],'config':config,'through':through})
             result = analyze(values['daily'], values['availability'], scoped, excluded)
@@ -345,12 +489,19 @@ def run(job, config):
             result['provenance'].update(extract_version=EXTRACT_VERSION,geometry_sha256=geometry_sha,outages_sha256=outages_sha,
                 incomplete_utc_dates=scoped['incomplete_utc_dates'],week_basis='ISO year/week; profiles require 7 globally available dates')
             atomic_json(CACHE / 'jobs' / (job + '.json'), result)
-            set_progress(job, status='done', progress=100, message='Анализ готов', result=result)
+            with JOBS_LOCK:
+                result_index('analysis').put(recorded_analysis_key(result), job)
+                result_index('extract').put(extract_key, fingerprint)
+                JOBS[job].update(status='done', progress=100, message='Анализ готов', result=result)
     except Exception as error:
         print(f'Analysis {job} failed: {type(error).__name__}: {error}', flush=True)
         set_progress(job, status='error', message='Не удалось завершить запрос. ' + str(error)[:250], progress=0)
     finally:
-        if fingerprint:
+        if request_key:
+            with JOBS_LOCK:
+                if ANALYSIS_REQUESTS.get(request_key) == job:
+                    ANALYSIS_REQUESTS.pop(request_key, None)
+        if active:
             with JOBS_LOCK:
                 ACTIVE_EXTRACTS[fingerprint]-=1
                 if ACTIVE_EXTRACTS[fingerprint]<=0:
@@ -505,18 +656,25 @@ def anomaly_map(extract_id,month,platform,baseline_start,baseline_end):
             con.close()
 
 
-def run_matrix(identifier,analysis_id,analysis):
+def run_matrix(identifier,analysis_id,analysis,request_key=None):
     def progress(**values):
         with JOBS_LOCK:MATRIX_JOBS[identifier].update(values)
     try:
-        from api.matrix import build
+        from api.matrix import build, VERSION
         ensure_space();progress(status='running',message='Подготавливаю численную выборку территории',progress=1)
         result=build(analysis,analysis_id,progress)
         atomic_json(CACHE/'matrix'/'jobs'/(identifier+'.json'),result)
-        progress(status='done',progress=100,message='Матрица готова',result=result)
+        with JOBS_LOCK:
+            result_index('matrix').put(request_key or matrix_key(analysis_id, analysis, VERSION), identifier)
+            MATRIX_JOBS[identifier].update(status='done',progress=100,message='Матрица готова',result=result)
     except Exception as error:
         print(f'Matrix {identifier} failed: {type(error).__name__}: {error}',flush=True)
         progress(status='error',progress=0,message='Матрица не рассчитана. '+str(error)[:240])
+    finally:
+        if request_key:
+            with JOBS_LOCK:
+                if MATRIX_REQUESTS.get(request_key) == identifier:
+                    MATRIX_REQUESTS.pop(request_key, None)
 
 
 def job_status(info, compact=False):
@@ -588,40 +746,81 @@ class Handler(BaseHTTPRequestHandler):
                     options=json.loads(self.rfile.read(size))
                     if options!={}:return self.respond(400,{'error':'Матрица использует параметры готового анализа; передайте {}.'})
                 analysis_id=match[1]
-                with JOBS_LOCK:info=JOBS.get(analysis_id)
-                if info and info['status']!='done':return self.respond(409,{'error':'Сначала дождитесь готовности анализа.'})
-                saved=CACHE/'jobs'/(analysis_id+'.json')
-                analysis=info['result'] if info else json.loads(saved.read_text()) if saved.exists() else None
+                with JOBS_LOCK:
+                    info=JOBS.get(analysis_id)
+                    if info and info['status']!='done':return self.respond(409,{'error':'Сначала дождитесь готовности анализа.'})
+                    analysis=load_analysis_result(analysis_id)
                 if analysis is None:return self.respond(404,{'error':'Исходный анализ не найден.'})
                 if analysis.get('analysis_version')!=ANALYSIS_VERSION:return self.respond(409,{'error':'Методика обновлена. Сначала пересчитайте анализ.'})
-                identifier=hashlib.sha256((analysis_id+str(time.time_ns())).encode()).hexdigest()[:32]
+                from api.matrix import VERSION
+                request_key=matrix_key(analysis_id,analysis,VERSION)
                 with JOBS_LOCK:
+                    identifier=MATRIX_REQUESTS.get(request_key)
+                    pending=MATRIX_JOBS.get(identifier)
+                    if pending and pending['status'] in ('queued','running'):
+                        return self.respond(202,{**pending,'cache_hit':True})
+                    if cached:=cached_matrix(request_key,analysis_id,analysis,VERSION):
+                        identifier,result=cached
+                        return self.respond(200,{'id':identifier,'status':'done','progress':100,'message':'Матрица готова','cache_hit':True})
                     if sum(j['status'] in ('queued','running') for j in MATRIX_JOBS.values())>=3:return self.respond(429,{'error':'Очередь матриц занята. Повторите позже.'})
                     if len(MATRIX_JOBS)>16:
                         for old in [k for k,v in MATRIX_JOBS.items() if v['status'] in ('done','error')][:8]:MATRIX_JOBS.pop(old,None)
+                    identifier=uuid.uuid4().hex
                     MATRIX_JOBS[identifier]={'id':identifier,'status':'queued','progress':0,'message':'Матрица в очереди'}
-                MATRIX_POOL.submit(run_matrix,identifier,analysis_id,analysis)
-                return self.respond(202,{'id':identifier,'status':'queued'})
+                    MATRIX_REQUESTS[request_key]=identifier
+                try:
+                    MATRIX_POOL.submit(run_matrix,identifier,analysis_id,analysis,request_key)
+                except Exception:
+                    with JOBS_LOCK:
+                        MATRIX_JOBS[identifier].update(status='error',message='Не удалось поставить матрицу в очередь.')
+                        MATRIX_REQUESTS.pop(request_key,None)
+                    raise
+                return self.respond(202,{'id':identifier,'status':'queued','cache_hit':False})
             if self.path != '/api/v1/analyses':
                 return self.respond(404, {'error':'Неизвестный адрес API.'})
             size = int(self.headers.get('Content-Length',0))
             if not 0 < size <= 524288:
                 return self.respond(413, {'error':'Слишком большой или пустой запрос.'})
             config = validate(json.loads(self.rfile.read(size)))
-            job = hashlib.sha256((json.dumps(config,sort_keys=True)+str(time.time_ns())).encode()).hexdigest()[:32]
-            with JOBS_LOCK:
-                if sum(j['status'] in ('queued','running') for j in JOBS.values()) >= 8:
-                    return self.respond(429, {'error':'Очередь заполнена. Повторите запрос позже.'})
-                if len(JOBS)>32:
-                    for old in [key for key,value in JOBS.items() if value['status'] in ('done','error')][:16]:
-                        JOBS.pop(old,None)
-                JOBS[job] = {'id':job, 'status':'queued', 'progress':0, 'message':'Запрос в очереди'}
-            POOL.submit(run,job,config)
-            return self.respond(202, {'id':job, 'status':'queued'})
+            with ExitStack() as source_scope:
+                state,sources=source_scope.enter_context(pinned_sources(config))
+                if not sources:raise ValueError('В выбранном периоде нет доступных файлов архива.')
+                prepared=prepare_identity(config,state,sources)
+                request_key=analysis_key(config,sources,prepared['geometry_sha'],prepared['outages_sha'],
+                                         EXTRACT_VERSION,ANALYSIS_VERSION,archive_through(state))
+                with JOBS_LOCK:
+                    job=ANALYSIS_REQUESTS.get(request_key)
+                    pending=JOBS.get(job)
+                    if pending and pending['status'] in ('queued','running'):
+                        return self.respond(202,{**pending,'cache_hit':True})
+                    if cached:=cached_analysis(request_key,{source['year'] for source in sources}):
+                        job,result=cached
+                        return self.respond(200,{'id':job,'status':'done','progress':100,'message':'Анализ готов','cache_hit':True})
+                    if sum(j['status'] in ('queued','running') for j in JOBS.values()) >= 8:
+                        return self.respond(429, {'error':'Очередь заполнена. Повторите запрос позже.'})
+                    if len(JOBS)>32:
+                        for old in [key for key,value in JOBS.items() if value['status'] in ('done','error')][:16]:
+                            JOBS.pop(old,None)
+                    job=uuid.uuid4().hex
+                    JOBS[job]={'id':job,'status':'queued','progress':0,'message':'Запрос в очереди'}
+                    ANALYSIS_REQUESTS[request_key]=job
+                pins=source_scope.pop_all()
+                try:
+                    POOL.submit(run,job,config,prepared,pins,request_key)
+                except Exception:
+                    pins.close()
+                    with JOBS_LOCK:
+                        JOBS[job].update(status='error',message='Не удалось поставить анализ в очередь.')
+                        ANALYSIS_REQUESTS.pop(request_key,None)
+                    raise
+            return self.respond(202, {'id':job, 'status':'queued','cache_hit':False})
         except RevisionError as error:
             return self.respond(error.status, error.response())
         except (ValueError,TypeError,KeyError,OverflowError) as error:
             return self.respond(400, {'error':str(error)[:200]})
+        except Exception as error:
+            print(type(error).__name__,str(error),flush=True)
+            return self.respond(503,{'error':'Архив временно недоступен. Повторите запрос.'})
 
     def do_GET(self):
         parsed = urlsplit(self.path)

@@ -1,5 +1,10 @@
 // English UI strings. Numbered placeholders correspond to the runtime values in the Russian message.
 export default {
+  "Проверяю готовый расчёт для выбранных параметров…": "Checking for a completed analysis with these settings…",
+  "Готовый расчёт открыт из кэша. Параметры и версия данных проверены.": "Opened the cached analysis. Its settings and data version have been checked.",
+  "Проверяю готовую матрицу для выбранной территории…": "Checking for a completed matrix for the selected area…",
+  "Сервис не вернул идентификатор анализа.": "The service did not return an analysis ID.",
+  "Анализ рассчитывается…": "Analysis in progress…",
   "Полигон: отметьте точки и нажмите «Готово».": "Polygon: mark points, then tap Done.",
   "Данные для анализа": "Analysis data",
   "3. Данные для анализа": "3. Analysis data",
