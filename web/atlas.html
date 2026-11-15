@@ -8,7 +8,7 @@
   <title>Атлас пожаров · NASA FIRMS</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=fire-frame-date">
+  <link rel="stylesheet" href="styles.css?v=atlas-polish">
   <script src="vendor/leaflet.js" defer></script>
   <script src="legacy-atlas-entry.js" type="module"></script>
 </head>
@@ -126,6 +126,7 @@
       <aside id="selected-area-panel" class="atlas-panel selected-area-panel" aria-labelledby="selected-area-title" hidden>
         <div class="drawer-heading">
           <h2 id="selected-area-title">Выбранная область</h2>
+          <button type="button" class="quiet-button" data-expand-panel aria-pressed="false" aria-label="Развернуть панель" title="Развернуть панель">⤢</button>
           <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть обзор">×</button>
         </div>
         <section id="area-summary" class="area-summary" aria-live="polite">
@@ -142,12 +143,11 @@
       <aside id="map-layer-controls" class="map-layer-controls atlas-panel" aria-labelledby="layers-title" hidden>
         <div class="drawer-heading">
           <h2 id="layers-title">Слои карты</h2>
+          <button type="button" class="quiet-button" data-expand-panel aria-pressed="false" aria-label="Развернуть панель" title="Развернуть панель">⤢</button>
           <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть слои">×</button>
         </div>
         <p id="layer-scope" class="layer-caption">Слои на всей карте</p>
-        <p class="layer-caption">Наведите курсор или коснитесь карты, чтобы прочитать значение слоя.</p>
         <fieldset>
-          <legend>Подложка карты</legend>
           <div class="view-switch" role="group" aria-label="Подложка карты">
             <button type="button" id="satellite-view" aria-pressed="true" disabled>Снимок</button>
             <button type="button" id="vector-view" aria-pressed="false" disabled>Схема</button>
@@ -159,9 +159,9 @@
         </fieldset>
         <fieldset id="terrain-controls" disabled>
           <legend>Местность · мир</legend>
-          <label style="--layer-color:#a9d7ef"><input type="checkbox" id="terrain-layer"> Рельеф</label>
+          <label style="--layer-color:#a9d7ef"><input type="checkbox" id="terrain-layer"> Высота рельефа</label>
           <label class="terrain-strength" hidden>
-            <span>Интенсивность тени</span>
+            <span>Непрозрачность</span>
             <input type="range" id="terrain-opacity" min="15" max="85" value="45" step="5">
           </label>
           <p id="terrain-status" class="layer-caption" role="status" hidden>Слой рельефа загрузился не полностью.</p>
@@ -172,11 +172,11 @@
           <p class="layer-caption" id="world-wind-status" role="status" hidden></p>
         </fieldset>
         <div id="extra-layer-controls"></div>
+        <p id="temperature-status" class="layer-caption" role="status" hidden></p>
         <p id="map-layer-status" class="layer-caption" role="status" hidden></p>
         <ul id="visible-layer-summary" class="layer-summary" aria-live="polite" hidden></ul>
         <fieldset id="local-layers" disabled>
           <legend>Подробная погода · только СКО</legend>
-          <label style="--layer-color:#9ae3ef"><input type="checkbox" id="wind-layer"> Потоки ветра · СКО</label>
           <label class="weather-choice"><span>Цветовое поле</span>
             <select id="weather-field">
               <option value="">Выключено</option>
@@ -200,6 +200,7 @@
           </div>
           <div class="fire-key" id="world-point-legend"><i aria-hidden="true"></i> Пиксели MODIS / VIIRS</div>
           <div class="fire-key" id="heat-legend" hidden><i aria-hidden="true"></i> Плотность детекций</div>
+          <button id="show-period-days" class="quiet-button" type="button" hidden>Смотреть по дням</button>
           <button id="play-weather" class="quiet-button" type="button" aria-label="Воспроизвести или остановить погоду" aria-pressed="false" disabled>▶ Погода</button>
         </div>
         <div class="timeline-controls">
@@ -209,7 +210,6 @@
             <input type="range" id="day-slider" min="1" max="31" value="1" disabled>
           </label>
         </div>
-        <button id="show-period-days" class="quiet-button" type="button" hidden>Смотреть по дням</button>
         <div class="map-caption">
           <span id="fire-frame-date" role="status" hidden></span>
           <span id="map-summary" role="status"></span>
@@ -228,6 +228,7 @@
     <aside id="analysis-panel" class="atlas-panel analysis-panel" aria-labelledby="analysis-heading" hidden>
       <div class="drawer-heading">
         <h2 id="analysis-heading">Календарь активности</h2>
+        <button type="button" class="quiet-button" data-expand-panel aria-pressed="false" aria-label="Развернуть панель" title="Развернуть панель">⤢</button>
         <button type="button" class="quiet-button" data-close-panel aria-label="Свернуть анализ">×</button>
       </div>
 

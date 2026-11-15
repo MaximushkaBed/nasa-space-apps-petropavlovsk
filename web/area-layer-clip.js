@@ -1,5 +1,5 @@
 const svgNS = 'http://www.w3.org/2000/svg';
-const clipPanes = ['observation-rasters', 'terrain-shading', 'weather-field', 'activity-cells', 'event-layers', 'wind-flow', 'world-wind'];
+const clipPanes = ['temperature-background', 'observation-rasters', 'terrain-shading', 'weather-field', 'activity-cells', 'event-layers', 'wind-flow', 'world-wind'];
 const radians = Math.PI / 180;
 const wrapNear = (lon, center) => lon + 360 * Math.round((center - lon) / 360);
 

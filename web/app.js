@@ -1,15 +1,18 @@
 'use strict';
 
-import { createExtraLayers } from './map-layers.js?v=layer-values';
-import { createWorldWind } from './world-wind.js?v=layer-values';
+import { createExtraLayers } from './map-layers.js?v=atlas-polish';
+import { createWorldWind } from './world-wind.js?v=atlas-polish';
 import { createWeatherOverlay } from './weather-overlay.js?v=layer-values';
 import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=fire-contrast';
 import { createFireViewport } from './fire-viewport.js?v=paired-days';
-import { createAreaAnalysis, inRing } from './area-analysis.js?v=layer-values';
-import { createAreaLayerClip } from './area-layer-clip.js';
-import { createAtlasStudy } from './atlas-study.js?v=full-archive';
-import { createLayerReadout } from './layer-values.js?v=archive';
+import { createAreaAnalysis, inRing } from './area-analysis.js?v=atlas-polish';
 import { createMapNotice } from './map-notice.js';
+import { createAreaLayerClip } from './area-layer-clip.js?v=atlas-polish';
+import { createAtlasStudy } from './atlas-study.js?v=atlas-polish';
+import { createLayerReadout } from './layer-values.js?v=atlas-polish';
+import { addTerrainControl } from './terrain-layer.js';
+import { createTemperatureBackground } from './surface-temperature.js';
+import { setLayerBusy } from './layer-status.js';
 import { addDays, createPeriodPicker, daysBetween } from './period-picker.js?v=atlas-periods';
 
 export function mountAtlas(root, bridge = {}) {
@@ -47,6 +50,8 @@ let study;
 let clearLayerReadout;
 let detailNoticeRevision = 0;
 const detailNotice = createMapNotice($('fire-detail-notice'));
+let terrain;
+let temperature;
 let fireDisplay = 'points';
 let worldArchive;
 let worldFrame;
@@ -93,35 +98,6 @@ async function getJSON(path) {
   const response = await fetch(path);
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${path}`);
   return response.json();
-}
-
-function addTerrainControl(map) {
-  const pane = map.createPane('terrain-shading');
-  pane.style.zIndex = 405;
-  pane.style.pointerEvents = 'none';
-  const toggle = $('terrain-layer');
-  const opacity = $('terrain-opacity');
-  const strength = opacity.closest('label');
-  const status = $('terrain-status');
-  const tiles = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/ASTER_GDEM_Greyscale_Shaded_Relief/default/GoogleMapsCompatible_Level12/{z}/{y}/{x}.jpeg', {
-    pane: 'terrain-shading', maxNativeZoom: 12, maxZoom: map.getMaxZoom(),
-    opacity: opacity.valueAsNumber / 100,
-    attribution: '<a href="https://worldview.earthdata.nasa.gov/?l=ASTER_GDEM_Greyscale_Shaded_Relief">ASTER GDEM · NASA GIBS</a>',
-  });
-  tiles.on('loading', () => { status.hidden = true; });
-  tiles.on('tileerror', () => { status.hidden = false; });
-  const showTerrain = () => {
-    strength.hidden = !toggle.checked;
-    if (toggle.checked) tiles.addTo(map);
-    else {
-      tiles.remove();
-      status.hidden = true;
-    }
-  };
-  toggle.addEventListener('change', showTerrain);
-  opacity.addEventListener('input', () => tiles.setOpacity(opacity.valueAsNumber / 100));
-  $('terrain-controls').disabled = false;
-  showTerrain();
 }
 
 function createWorldOverview() {
@@ -275,9 +251,16 @@ function createMap(basemap, boundary, closePanel) {
   }));
   weatherOverlay = createWeatherOverlay(map, boundary, (date) => dayFormatter.format(new Date(date)), root);
   worldWind = createWorldWind(map, $('world-wind-status'));
+  temperature = createTemperatureBackground(map, $('temperature-status'),
+    busy => setLayerBusy($('overlay-world-temperature'), busy, 'gfs'));
   clearLayerReadout = createLayerReadout(map, $('layer-readout'), async event => {
     const wind = $('world-wind-flow').checked ? worldWind.inspect(event.latlng) : undefined;
-    return [wind, ...weatherOverlay.inspect(event.latlng), ...(await renderExtraLayers?.inspect(event) ?? [])];
+    const rasters = (await renderExtraLayers?.inspect(event) ?? []).filter(Boolean);
+    const satellite = rasters.find(item => item.id === 'world-temperature');
+    const estimate = $('overlay-world-temperature')?.checked && (!satellite || satellite.missing)
+      ? temperature.inspect(event.latlng) : undefined;
+    return [terrain?.inspect(event.latlng), wind, ...weatherOverlay.inspect(event.latlng),
+      ...rasters.filter(item => !(item === satellite && estimate)), estimate];
   }, latlng => active && !areaAnalysis.drawing() && areaAnalysis.contains(latlng));
 
   const labelPane = map.createPane('city-labels');
@@ -301,7 +284,7 @@ function createMap(basemap, boundary, closePanel) {
       icon: L.divIcon({ html: element('span', name), className: 'geo-region', iconSize: [0, 0] }),
     }).addTo(map);
   }
-  L.control.scale({ metric: true, imperial: false, position: 'bottomright', maxWidth: 88 }).addTo(map);
+  L.control.scale({ metric: true, imperial: false, position: 'bottomleft', maxWidth: 88 }).addTo(map);
   const reset = () => {
     map.fitBounds(regionalBounds, { padding: [30, Math.min(180, map.getSize().y * .23)], animate: false });
   };
@@ -331,7 +314,8 @@ function createMap(basemap, boundary, closePanel) {
   fitViewport();
   showWorld();
   new ResizeObserver(fitViewport).observe($('map'));
-  addTerrainControl(map);
+  terrain = addTerrainControl(map, $);
+  $('terrain-layer').addEventListener('change', clearLayerReadout);
   return reset;
 }
 
@@ -356,6 +340,7 @@ function updateFireLoading() {
       ? grouped ? 'Загружаем сводку за период…' : 'Загружаем детекции за день…' : '';
   const waitingForWeather = !grouped && dayWeather && dayWeather.day === activePeriod?.start && !dayWeather.ready;
   const label = visible && message ? message : waitingForWeather ? 'Загружаем погоду за день…' : '';
+  setLayerBusy($('fire-layer'), Boolean(visible && message));
   fireLoading(label ? `${label} ${firePeriodLabel(activePeriod)} UTC` : '');
 }
 
@@ -383,18 +368,20 @@ async function prepareLocalWeather(date) {
 
 function displayWeather({ day, world, local }) {
   worldWind.display(world);
-  if (local?.data) weatherOverlay.show(local.data, day, $('weather-field').value, $('wind-layer').checked);
+  if (local?.data) weatherOverlay.show(local.data, day, $('weather-field').value, false);
   else weatherOverlay.clear(local?.message);
 }
 
 function prepareDayWeather(day, previousDayAllowed) {
   const worldEnabled = $('world-wind-flow').checked;
-  const localEnabled = !$('local-layers').hidden && Boolean($('weather-field').value || $('wind-layer').checked);
+  const localEnabled = !$('local-layers').hidden && Boolean($('weather-field').value);
   const key = `${day}/${worldEnabled}/${localEnabled}/${previousDayAllowed}`;
   if (dayWeather?.key === key) return dayWeather;
   const current = { day, key, ready: !worldEnabled && !localEnabled };
   dayWeather = current;
   if (!worldEnabled) worldWind.display();
+  setLayerBusy($('world-wind-flow'), worldEnabled);
+  setLayerBusy($('weather-field'), localEnabled);
   if (!localEnabled) weatherOverlay.clear();
   if (current.ready) return current;
   current.promise = Promise.all([
@@ -402,6 +389,10 @@ function prepareDayWeather(day, previousDayAllowed) {
     localEnabled ? prepareLocalWeather(day) : undefined,
   ]).then(([world, local]) => {
     Object.assign(current, { world, local, ready: true });
+    if (dayWeather === current) {
+      setLayerBusy($('world-wind-flow'), false);
+      setLayerBusy($('weather-field'), false);
+    }
   });
   return current;
 }
@@ -411,6 +402,7 @@ async function renderLayers(day = $('world-date').value) {
   const date = typeof day === 'string' ? day : $('world-date').value;
   if (!date || !active) return;
   clearLayerReadout?.();
+  temperature.show($('overlay-world-temperature')?.checked ? date : undefined);
   const daily = activePeriod?.start === activePeriod?.end;
   const weather = prepareDayWeather(date, !daily);
   const month = date.slice(0, 7);
@@ -1001,6 +993,13 @@ function setupPanels() {
     });
   }
   for (const button of root.querySelectorAll('[data-close-panel]')) button.addEventListener('click', closePanel);
+  for (const button of root.querySelectorAll('[data-expand-panel]')) button.addEventListener('click', () => {
+    const expanded = button.closest('.atlas-panel').classList.toggle('is-expanded');
+    button.setAttribute('aria-pressed', String(expanded));
+    button.title = expanded ? 'Уменьшить панель' : 'Развернуть панель';
+    button.setAttribute('aria-label', button.title);
+    button.textContent = expanded ? '⤡' : '⤢';
+  });
   document.addEventListener('keydown', (event) => {
     if (!active) return;
     if (event.key === 'Escape' && !$('method').open && !$('period-picker').open

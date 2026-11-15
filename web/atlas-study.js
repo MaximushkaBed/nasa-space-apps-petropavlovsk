@@ -4,6 +4,7 @@ const sources = ['Aqua', 'Terra', 'Suomi-NPP', 'NOAA-20', 'NOAA-21'];
 const preferred = ['NOAA-20', 'NOAA-21', 'Suomi-NPP', 'Aqua', 'Terra'];
 const defaultStudyDates = { start: '2022-01-01', end: '2025-12-31', baseline_start: 2022, baseline_end: 2024 };
 const number = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
+const compactCount = new Intl.NumberFormat('ru', { notation: 'compact', maximumSignificantDigits: 3 });
 const monthName = new Intl.DateTimeFormat('ru', { month: 'short', timeZone: 'UTC' });
 
 async function request(path, options) {
@@ -103,12 +104,14 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
         const button = document.createElement('button');
         button.type = 'button';
         const value = document.createElement('span'), source = document.createElement('span');
-        value.textContent = number.format(row[metric]);
+        value.className = 'calendar-value';
+        value.textContent = row[metric] >= 10000 ? compactCount.format(row[metric]) : number.format(row[metric]);
         source.className = 'calendar-source';
-        source.textContent = row.platform;
+        source.textContent = row.platform === 'Suomi-NPP' ? 'S-NPP' : row.platform;
         if (row.preliminary) {
+          button.classList.add('preliminary');
           const badge = document.createElement('span');
-          badge.className = 'calendar-nrt';
+          badge.className = 'sr-only';
           badge.textContent = 'NRT';
           source.append(' ', badge);
         }
@@ -135,7 +138,7 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     }
     $('study-calendar').replaceChildren(table);
     $('study-calendar-detail').textContent = job.live
-      ? 'Детекции FIRMS по спутнику. Цвет показывает отклонение от нормы 2022–2024 при наличии сопоставимых данных. Нажмите месяц, чтобы открыть его на карте.'
+      ? 'Детекции FIRMS по спутнику. Цвет показывает отклонение от нормы 2022–2024 при наличии сопоставимых данных. Оранжевая точка означает предварительные данные (NRT). Нажмите месяц, чтобы открыть его на карте.'
       : 'Ячейко-дни · отклонение от нормы по тому же спутнику. Нажмите месяц, чтобы открыть его на карте.';
   }
 

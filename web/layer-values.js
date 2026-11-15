@@ -1,4 +1,27 @@
 const paletteHost = 'https://gibs.earthdata.nasa.gov/colormaps/v1.3/';
+const temperatureStops = [
+  [-45, [93, 74, 170]], [-20, [66, 144, 221]], [0, [62, 191, 207]],
+  [15, [133, 195, 107]], [30, [244, 190, 80]], [48, [233, 91, 63]],
+];
+
+export function temperatureColor(t) {
+  const upper = temperatureStops.findIndex(([stop]) => t <= stop);
+  const index = upper < 0 ? temperatureStops.length - 1 : Math.max(1, upper);
+  const [low, a] = temperatureStops[index - 1], [high, b] = temperatureStops[index];
+  const mix = Math.max(0, Math.min(1, (t - low) / (high - low)));
+  return a.map((channel, i) => channel + (b[i] - channel) * mix);
+}
+
+export function temperatureBin(value) {
+  if (!value) return NaN;
+  const limits = value.replace(/[\[\]()]/g, '').split(',').map(Number).filter(Number.isFinite);
+  return limits.length && Math.min(...limits) >= 170
+    ? limits.reduce((sum, n) => sum + n, 0) / limits.length - 273.15 : NaN;
+}
+export const floodClasses = {
+  2: { label: 'Повторяющийся разлив', rgb: [244, 202, 88] },
+  3: { label: 'Разлив', rgb: [65, 214, 255] },
+};
 export const paletteLayers = {
   'world-temperature': { palette: 'MODIS_Land_Surface_Temp', unit: '°C', offset: -273.15, decimals: 1 },
   'world-precip': { palette: 'GPM_Precipitation_Rate', unit: 'мм/ч', decimals: 4 },
@@ -6,7 +29,10 @@ export const paletteLayers = {
   'world-wind': { palette: 'MERRA2_Surface_Wind_Speed_Monthly', unit: 'м/с', decimals: 1 },
   'world-ndvi': { palette: 'MODIS_L3_NDVI', decimals: 3 },
   'world-flood': { palette: 'MODIS_Flood', classes: {
-    1: 'Поверхностная вода', 2: 'Повторяющееся затопление', 3: 'Затопление', 255: 'Недостаточно наблюдений',
+    1: 'Обычная поверхностная вода',
+    2: floodClasses[2].label,
+    3: floodClasses[3].label,
+    255: 'Недостаточно наблюдений',
   } },
 };
 const palettes = new Map();
@@ -50,6 +76,7 @@ export function formatPixel(values, spec) {
 }
 
 export function createLayerReadout(map, panel, source, allowed) {
+  const container = map.getContainer();
   let revision = 0;
   let mouseTimer;
 
@@ -57,6 +84,7 @@ export function createLayerReadout(map, panel, source, allowed) {
     ++revision;
     clearTimeout(mouseTimer);
     panel.hidden = true;
+    container.classList.remove('reading-layer');
   }
 
   async function show(event) {
@@ -74,6 +102,7 @@ export function createLayerReadout(map, panel, source, allowed) {
       return row;
     }));
     panel.hidden = !panel.childElementCount;
+    container.classList.toggle('reading-layer', !panel.hidden);
   }
 
   map.on('mousemove', event => {

@@ -1,5 +1,6 @@
 import { createGibsDates } from './gibs-dates.js?v=world-layers';
-import { colorKey, formatPixel, loadPalette, paletteLayers } from './layer-values.js?v=archive';
+import { colorKey, floodClasses, formatPixel, loadPalette, paletteLayers, temperatureBin, temperatureColor } from './layer-values.js?v=atlas-polish';
+import { setLayerBusy } from './layer-status.js';
 
 function externalLink(url, label) {
   try {
@@ -30,13 +31,15 @@ function eventPopup(feature, spec) {
   return root;
 }
 
-function inspectableTiles(url, options, clouds = false) {
+function inspectableTiles(url, options, layerId) {
   const layer = L.tileLayer(url, options);
   const read = document.createElement('canvas');
   read.width = read.height = 1;
   const probe = read.getContext('2d', { willReadFrequently: true });
   const original = new WeakMap();
-  if (clouds) layer.createTile = function (coords, done) {
+  const flood = layerId === 'world-flood';
+  const temperature = layerId === 'world-temperature';
+  if (flood || temperature || layerId === 'world-clouds') layer.createTile = function (coords, done) {
     const tile = document.createElement('canvas');
     const finish = (error) => {
       if (tile.isConnected) done(error, tile);
@@ -44,17 +47,37 @@ function inspectableTiles(url, options, clouds = false) {
     tile.width = tile.height = 256;
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onerror = () => finish(new Error('NASA cloud tile unavailable'));
+    img.onerror = () => finish(new Error('NASA GIBS tile unavailable'));
     img.onload = async () => {
       try {
-        const palette = await loadPalette('MODIS_Cloud_Fraction');
+        const palette = await loadPalette(paletteLayers[layerId].palette);
         const context = tile.getContext('2d', { willReadFrequently: true });
         context.drawImage(img, 0, 0);
         const image = context.getImageData(0, 0, 256, 256);
         const pixels = image.data;
+        const temperatureColors = new Map();
         for (let i = 0; i < pixels.length; i += 4) {
           if (!pixels[i + 3]) continue;
-          const cloud = Number(palette.get(colorKey(pixels[i], pixels[i + 1], pixels[i + 2]))?.values().next().value) || 0;
+          const key = colorKey(pixels[i], pixels[i + 1], pixels[i + 2]);
+          const values = palette.get(key);
+          if (temperature) {
+            if (!temperatureColors.has(key)) {
+              const t = values?.size === 1 ? temperatureBin(values.values().next().value) : NaN;
+              temperatureColors.set(key, Number.isFinite(t) ? temperatureColor(t) : null);
+            }
+            const color = temperatureColors.get(key);
+            if (color) pixels.set(color, i);
+            else pixels[i + 3] = 0;
+            continue;
+          }
+          const value = values?.size === 1 ? Number(values.values().next().value) : NaN;
+          if (flood) {
+            const category = floodClasses[value];
+            if (category) pixels.set(category.rgb, i);
+            else pixels[i + 3] = 0;
+            continue;
+          }
+          const cloud = Number.isFinite(value) ? value : 0;
           pixels[i] = 226;
           pixels[i + 1] = 239;
           pixels[i + 2] = 255;
@@ -87,6 +110,24 @@ function inspectableTiles(url, options, clouds = false) {
   return layer;
 }
 
+function floodLegend() {
+  const legend = document.createElement('div');
+  legend.className = 'layer-caption flood-legend';
+  for (const { label, rgb } of Object.values(floodClasses)) {
+    const row = document.createElement('div');
+    const swatch = document.createElement('span');
+    swatch.style.color = `rgb(${rgb.join(',')})`;
+    swatch.setAttribute('aria-hidden', 'true');
+    swatch.textContent = '■ ';
+    row.append(swatch, label);
+    legend.append(row);
+  }
+  const coverage = document.createElement('div');
+  coverage.textContent = 'Обычная вода и зоны с недостатком наблюдений прозрачны.';
+  legend.append(coverage);
+  return legend;
+}
+
 async function fetchEventMonth(feed, month) {
   const [year, monthNumber] = month.split('-').map(Number);
   const first = `${month}-01`;
@@ -109,7 +150,7 @@ async function fetchEventMonth(feed, month) {
 }
 
 export async function createExtraLayers(map, controls, getJSON, onChange) {
-  const manifest = await getJSON('data/layers.json?v=weather-motion');
+  const manifest = await getJSON('data/layers.json?v=atlas-polish');
   const cached = new Map();
   const groups = new Map();
   const layers = [];
@@ -141,7 +182,19 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
     label.append(input, document.createTextNode(spec.label));
     const group = groups.get(spec.group);
     group.append(label);
-    const entry = { spec, input, shown: L.layerGroup().addTo(map), key: undefined, order: index + 1 };
+    const status = document.createElement('p');
+    status.className = 'layer-caption';
+    status.setAttribute('role', 'status');
+    status.hidden = true;
+    group.append(status);
+    if (spec.id === 'world-temperature') group.append(controls.parentElement.querySelector('#temperature-status'));
+    const entry = { spec, input, status, shown: L.layerGroup().addTo(map), order: index + 1 };
+    if (spec.id === 'world-flood') {
+      const legend = floodLegend();
+      legend.hidden = true;
+      input.addEventListener('change', () => { legend.hidden = !input.checked; });
+      group.append(legend);
+    }
     if (spec.format === 'xyz') {
       const strength = document.createElement('label');
       strength.className = 'raster-opacity';
@@ -155,14 +208,26 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
       entry.opacity = slider;
       input.addEventListener('change', () => { strength.hidden = !input.checked; });
       slider.addEventListener('input', () => {
+        if (spec.id === 'world-temperature') {
+          map.getPane('temperature-background').style.opacity = slider.valueAsNumber / 100;
+          return;
+        }
         const active = entry.current ?? entry.shown.getLayers()[0];
         active?.setOpacity(slider.valueAsNumber / 100);
       });
     }
     layers.push(entry);
   }
-  let revision = 0;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+  function busy(entry) {
+    setLayerBusy(entry.input, entry.input.checked && Boolean(entry.request?.pending || entry.current?.isLoading()));
+  }
+
+  function issue(entry, message = '') {
+    entry.status.textContent = message;
+    entry.status.hidden = !message;
+  }
 
   function clearRaster(entry) {
     entry.stopTransition?.();
@@ -170,27 +235,33 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
     entry.current = entry.key = undefined;
   }
 
-  function showRaster(entry, path, next) {
+  function showRaster(entry, path, request) {
     if (entry.key === path) return Promise.resolve();
     entry.stopTransition?.();
     const { spec, shown, input } = entry;
     const previous = entry.current;
-    const opacity = entry.opacity.valueAsNumber / 100;
+    const temperature = spec.id === 'world-temperature';
+    const opacity = temperature ? 1 : entry.opacity.valueAsNumber / 100;
+    const pane = temperature ? 'temperature-background' : spec.underlay ? 'observation-rasters' : 'event-layers';
+    if (temperature) map.getPane(pane).style.opacity = entry.opacity.valueAsNumber / 100;
     const url = /^https:\/\//.test(path) ? path : `data/${path}`;
     const options = {
       maxNativeZoom: spec.maxNativeZoom ?? 8, maxZoom: map.getMaxZoom(), opacity: previous ? 0 : opacity,
-      pane: spec.underlay ? 'observation-rasters' : 'event-layers', zIndex: entry.order * 2 + 1,
+      pane, zIndex: entry.order * 2 + 1,
       attribution: `<a href="${spec.sourceUrl}">${spec.source}</a>`,
     };
-    const tiles = paletteLayers[spec.id] ? inspectableTiles(url, { ...options, crossOrigin: 'anonymous' }, spec.id === 'world-clouds')
+    const tiles = paletteLayers[spec.id] ? inspectableTiles(url, { ...options, crossOrigin: 'anonymous' }, spec.id)
       : L.tileLayer(url, options);
+    tiles.on('loading load', () => {
+      if (entry.current === tiles) busy(entry);
+    });
     return new Promise((resolve) => {
       let loaded = 0, timeout;
       function finish(swap) {
         clearTimeout(timeout);
         tiles.off('load', ready);
         entry.stopTransition = undefined;
-        if (swap && next === revision && input.checked) {
+        if (swap && entry.request === request && input.checked) {
           entry.current = tiles;
           entry.key = path;
           if (previous && !reducedMotion.matches && tiles.getContainer()) {
@@ -199,7 +270,7 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
             previous.setOpacity(0);
             setTimeout(() => shown.removeLayer(previous), 210);
           } else if (previous) shown.removeLayer(previous);
-          tiles.setOpacity(entry.opacity.valueAsNumber / 100);
+          tiles.setOpacity(temperature ? 1 : entry.opacity.valueAsNumber / 100);
           tiles.setZIndex(entry.order * 2);
         } else queueMicrotask(() => shown.removeLayer(tiles));
         resolve();
@@ -208,7 +279,7 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
       entry.stopTransition = () => finish(false);
       tiles.on('tileload', () => { loaded++; });
       tiles.on('tileerror', () => {
-        if (next === revision && input.checked) controls.dispatchEvent(new CustomEvent('layer-tile-error', { detail: spec.label }));
+        if (input.checked && (entry.request === request || entry.current === tiles)) issue(entry, 'Часть плиток недоступна.');
       });
       tiles.once('load', ready);
       timeout = setTimeout(ready, 4500);
@@ -231,17 +302,13 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
     return cached.get(path);
   }
 
-  async function render(month, date) {
-    const next = ++revision;
-    return Promise.all(layers.map(async (entry) => {
-      const { spec, input, shown } = entry;
-      if (!input.checked || input.closest('fieldset').hidden) {
-        clearRaster(entry);
-        return null;
-      }
-      const prefix = `${spec.label} · ${spec.source}`;
+  async function loadLayer(entry, month, date, request) {
+    const { spec, shown } = entry;
+    const prefix = `${spec.label} · ${spec.source}`;
+    try {
       if (spec.range && (month < spec.range[0] || (spec.range[1] && month > spec.range[1]))) {
         clearRaster(entry);
+        issue(entry, 'Архив для этой даты недоступен.');
         return `${prefix} · архив для этой даты недоступен.`;
       }
       let path = spec.url.replaceAll('{month}', month).replaceAll('{date}', date);
@@ -251,9 +318,10 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
         if (gibsPath) {
           const [, layer, target] = gibsPath;
           const available = await gibsDate(layer, target, spec.maxLagDays);
-          if (next !== revision) return null;
+          if (entry.request !== request) return null;
           if (!available.day) {
             clearRaster(entry);
+            issue(entry, 'В архиве нет кадров на эту дату.');
             return `${prefix} · в архиве нет кадров для этой даты.`;
           }
           path = path.replace(`/default/${target}/`, `/default/${available.day}/`);
@@ -262,55 +330,88 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
           dateLabel = ` · ${caption} ${shownDate}${available.day < target && !spec.composite ? ' · ближайший предыдущий' : ''}`;
           if (!available.verified) dateLabel += ' · доступность даты не проверена';
         }
-        await showRaster(entry, path, next);
-        if (next !== revision) return null;
+        await showRaster(entry, path, request);
+        if (entry.request !== request) return null;
         if (entry.key !== path) {
           clearRaster(entry);
+          issue(entry, 'Кадр не загрузился.');
           return `${prefix} · кадр не загрузился.`;
         }
         return prefix + dateLabel;
       }
+      const dataset = await load(`data/${path}`, spec, month);
+      if (entry.request !== request) return null;
       shown.clearLayers();
-      try {
-        const dataset = await load(`data/${path}`, spec, month);
-        if (next !== revision) return null;
-        const categories = spec.categories ?? (spec.category ? [spec.category] : null);
-        const active = (spec.eventFeed ? dataset : dataset.features).filter(({ properties }) =>
-          (spec.static || !date || properties.date === date) && (!categories || categories.includes(properties.category)));
-        const style = { renderer, pane: 'event-layers', color: spec.color,
-          opacity: .95, weight: 1.2, fill: true, fillColor: spec.color, fillOpacity: .42 };
-        if (active.length) {
-          for (const offset of spec.eventFeed ? [-360, 0, 360] : [0]) {
-            L.geoJSON(active, {
-              ...style, style,
-              coordsToLatLng: ([lon, lat]) => L.latLng(lat, lon + offset),
-              pointToLayer: (feature, latlng) => L.circleMarker(latlng,
-                { ...style, radius: 5, weight: 1.5, fillOpacity: .82 }),
+      const categories = spec.categories ?? (spec.category ? [spec.category] : null);
+      const active = (spec.eventFeed ? dataset : dataset.features).filter(({ properties }) =>
+        (spec.static || !date || properties.date === date) && (!categories || categories.includes(properties.category)));
+      const style = { renderer, pane: 'event-layers', color: spec.color,
+        opacity: .95, weight: 1.2, fill: true, fillColor: spec.color, fillOpacity: .42 };
+      if (active.length) {
+        for (const offset of spec.eventFeed ? [-360, 0, 360] : [0]) {
+          L.geoJSON(active, {
+            ...style, style,
+            coordsToLatLng: ([lon, lat]) => L.latLng(lat, lon + offset),
+            pointToLayer: (feature, latlng) => L.circleMarker(latlng,
+              { ...style, radius: 5, weight: 1.5, fillOpacity: .82 }),
             onEachFeature: (feature, layer) => {
               layer.bindPopup(() => eventPopup(feature, spec));
               layer.bindTooltip(() => {
                 const caption = document.createElement('span');
-                caption.textContent = `${feature.properties.title || spec.label} · ${feature.properties.date ?? date}`;
+                caption.textContent = `${feature.properties.name || spec.label} · ${feature.properties.date ?? date}`;
                 return caption;
               });
             },
-            }).addTo(shown);
-          }
+          }).addTo(shown);
         }
-        if (spec.coverage === 'observations') {
-          const observations = dataset.observations ?? {};
-          if (!date) return `${prefix} · охват по ${Object.keys(observations).length} датам, затопления на ${active.length} датах.`;
-          if (!observations[date]) return `${prefix} · за этот день нет покрытия.`;
-          const [value, coverage] = observations[date];
-          return `${prefix} · ${value.toLocaleString('ru', { maximumFractionDigits: 2 })}% обследованных ячеек с сигналом затопления, охват СКО ${coverage.toLocaleString('ru', { maximumFractionDigits: 1 })}%.`;
-        }
-        const records = new Set(active.map(({ properties }) => properties.id)).size;
-        return `${prefix} · ${records ? `записей о событиях — ${records}` : 'в каталоге за период записей нет'}.`;
-      } catch (error) {
-        if (next !== revision) return null;
-        console.error(error);
-        return `${prefix} · слой не загрузился.`;
       }
+      if (spec.coverage === 'observations') {
+        const observations = dataset.observations ?? {};
+        if (!date) return `${prefix} · охват по ${Object.keys(observations).length} датам, затопления на ${active.length} датах.`;
+        if (!observations[date]) {
+          issue(entry, 'Нет наблюдений за этот день.');
+          return `${prefix} · за этот день нет покрытия.`;
+        }
+        const [value, coverage] = observations[date];
+        return `${prefix} · ${value.toLocaleString('ru', { maximumFractionDigits: 2 })}% обследованных ячеек с сигналом затопления, охват СКО ${coverage.toLocaleString('ru', { maximumFractionDigits: 1 })}%.`;
+      }
+      const records = new Set(active.map(({ properties }) => properties.id)).size;
+      return `${prefix} · ${records ? `записей о событиях — ${records}` : 'в каталоге за период записей нет'}.`;
+    } catch (error) {
+      if (entry.request !== request) return null;
+      issue(entry, 'Слой не загрузился.');
+      console.error(error);
+      return `${prefix} · слой не загрузился.`;
+    } finally {
+      if (entry.request === request) {
+        request.pending = false;
+        if (entry.status.textContent && !entry.current) entry.request = undefined;
+        busy(entry);
+      }
+    }
+  }
+
+  function render(month, date) {
+    return Promise.all(layers.map((entry) => {
+      if (!entry.input.checked || entry.input.closest('fieldset').hidden) {
+        entry.request = undefined;
+        clearRaster(entry);
+        issue(entry);
+        busy(entry);
+        return null;
+      }
+      if (entry.request?.date === date) return entry.request.promise;
+      const request = { date, pending: true };
+      entry.request = request;
+      entry.stopTransition?.();
+      if (entry.spec.id === 'world-temperature') {
+        clearRaster(entry);
+        map.getPane('temperature-background').style.opacity = entry.opacity.valueAsNumber / 100;
+      }
+      issue(entry);
+      busy(entry);
+      request.promise = loadLayer(entry, month, date, request);
+      return request.promise;
     }));
   }
 
@@ -322,15 +423,21 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
       if (!palette || !input.checked || input.closest('fieldset').hidden || !current?.pixelAt) return;
       const date = key.match(/\/default\/(\d{4}-\d{2}-\d{2})\//)?.[1];
       const shownDate = spec.composite ? `Композит с ${date}` : spec.id === 'world-wind' ? date?.slice(0, 7) : date;
-      const result = { label: spec.label, source: spec.source, date: shownDate };
+      const result = { id: spec.id, label: spec.label, source: spec.source, date: shownDate };
       try {
         const pixel = current.pixelAt(point);
         if (pixel === undefined) return;
-        if (pixel === null) return { ...result, value: 'Нет данных в пикселе' };
+        if (pixel === null) {
+          return { ...result, missing: true, value: spec.id === 'world-temperature' ? 'Спутникового измерения нет' : 'Нет данных в пикселе' };
+        }
         const colors = await loadPalette(palette.palette);
-        return { ...result, value: formatPixel(colors.get(pixel), palette) };
+        const values = colors.get(pixel);
+        if (spec.id === 'world-temperature' && (values?.size !== 1 || !Number.isFinite(temperatureBin(values.values().next().value)))) {
+          return { ...result, missing: true, value: 'Спутникового измерения нет' };
+        }
+        return { ...result, value: formatPixel(values, palette) };
       } catch {
-        return { ...result, value: 'Не удалось прочитать значение' };
+        return { ...result, missing: true, value: 'Не удалось прочитать значение' };
       }
     }));
   };

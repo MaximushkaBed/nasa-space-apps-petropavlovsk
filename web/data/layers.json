@@ -17,7 +17,7 @@
     },
     {
       "id": "world-flood",
-      "label": "Затопления со спутника",
+      "label": "Разливы со спутника · 3 дня",
       "group": "Спутниковые наблюдения · мир",
       "color": "#47d5ff",
       "format": "xyz",
@@ -68,7 +68,7 @@
       "sourceUrl": "https://worldview.earthdata.nasa.gov/?l=MODIS_Terra_Land_Surface_Temp_Day",
       "maxNativeZoom": 7,
       "opacity": 0.55,
-      "maxLagDays": 2,
+      "maxLagDays": 0,
       "underlay": true
     },
     {
@@ -103,8 +103,8 @@
     },
     {
       "id": "gfm",
-      "label": "Затопления · СКО",
-      "group": "Дополнительные слои · СКО",
+      "label": "Разливы по радару · СКО",
+      "group": "Радарные наблюдения · СКО",
       "color": "#3adaff",
       "format": "geojson",
       "url": "hazards/gfm/{month}.geojson",
@@ -115,7 +115,7 @@
     },
     {
       "id": "flood-reports",
-      "label": "Наводнения",
+      "label": "Сообщения о наводнениях",
       "group": "События NASA EONET · мир",
       "color": "#479dff",
       "format": "geojson",
