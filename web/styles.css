@@ -224,7 +224,6 @@ body:not(.leaflet-dragging) #map.reading-layer:not(.selecting-area) { cursor: de
 .timeline-heading:has(#show-period-days:not([hidden])) .fire-key { display: none; }
 .fire-key { color: var(--muted); display: inline-flex; gap: 5px; align-items: center; font-size: 10px; }
 .fire-key i { width: 6px; height: 6px; background: #ff382d; }
-#world-point-legend.grouped i { border-radius: 50%; }
 .fire-detail-caption { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 11px; color: var(--sky); }
 .fire-detail-caption > :not([hidden]) { margin-top: 5px; }
 #fire-detail-retry { padding: 2px 5px; font-size: inherit; }

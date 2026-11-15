@@ -4,7 +4,7 @@ import { numberFormat, dateFormat } from './i18n.js';
 import { createExtraLayers } from './map-layers.js?v=atlas-polish';
 import { createWorldWind } from './world-wind.js?v=atlas-polish';
 import { createWeatherOverlay } from './weather-overlay.js?v=layer-values';
-import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=period-detail';
+import { createFireOverlay, fireDetailZoom } from './fire-overlay.js?v=pixel-periods';
 import { createFireViewport } from './fire-viewport.js?v=paired-days';
 import { createAreaAnalysis, inRing } from './area-analysis.js?v=atlas-polish';
 import { createMapNotice } from './map-notice.js';
@@ -349,7 +349,7 @@ function updateFireLoading() {
   const grouped = activePeriod && activePeriod.start !== activePeriod.end;
   const viewport = requestedFire?.local || (grouped && map.getZoom() >= fireDetailZoom);
   const message = viewport && viewportFrame?.status === 'loading' ? 'Загружаем детекции на этом участке…'
-    : worldRequest && (!viewport || !viewportFrame || viewportFrame.status === 'ok')
+    : worldRequest
       ? grouped ? 'Загружаем сводку за период…' : 'Загружаем детекции за день…' : '';
   const waitingForWeather = !grouped && dayWeather && dayWeather.day === activePeriod?.start && !dayWeather.ready;
   const label = visible && message ? message : waitingForWeather ? 'Загружаем погоду за день…' : '';
@@ -449,13 +449,12 @@ function firePoints() {
 
 function renderFireLayer(points = firePoints()) {
   const visible = $('fire-layer').checked;
-  const grouped = Boolean(worldFrame && worldFrame.start !== worldFrame.end);
-  const detail = displayedViewport?.status === 'ok' ? displayedViewport.points : undefined;
-  const waitingForDetail = grouped && !detail && map.getZoom() >= fireDetailZoom;
-  $('heat-legend').hidden = !visible || fireDisplay !== 'heat' || waitingForDetail;
+  const days = worldFrame ? daysBetween(worldFrame.start, worldFrame.end) + 1 : 1;
+  const grouped = days > 1;
+  const detail = displayedViewport?.status === 'ok' && displayedViewport.coversView() ? displayedViewport.points : undefined;
+  $('heat-legend').hidden = !visible || fireDisplay !== 'heat';
   $('heat-legend').lastChild.textContent = grouped && !detail ? ' Плотность по сводке' : ' Плотность детекций';
-  $('world-point-legend').hidden = !visible || fireDisplay !== 'points' || waitingForDetail;
-  $('world-point-legend').classList.toggle('grouped', grouped && !detail);
+  $('world-point-legend').hidden = !visible || fireDisplay !== 'points';
   $('world-point-legend').lastChild.textContent = grouped && !detail ? ' Группы детекций' : ' Пиксели MODIS / VIIRS';
   const status = viewportFrame?.status;
   const coverage = viewportFrame?.missing?.length ? ' В архиве есть пропуски дат.' : '';
@@ -485,7 +484,7 @@ function renderFireLayer(points = firePoints()) {
   retry.hidden = !visible || (!retryPending && !['error', 'too_slow'].includes(status));
   retry.setAttribute('aria-disabled', String(retryPending));
   retry.setAttribute('aria-busy', String(retryPending));
-  const regionalCount = fireOverlay(points, fireDisplay, visible, grouped, detail);
+  const regionalCount = fireOverlay(points, fireDisplay, visible, days, detail);
   updateFireLoading();
   return regionalCount;
 }
@@ -507,8 +506,9 @@ function viewportQuery(start, end, satellite) {
 function updateFireViewport() {
   if (!active || !requestedFire) return fireViewport.select(undefined);
   const { start, end, satellite, local } = requestedFire;
-  return fireViewport.select(local || (start !== end && $('fire-layer').checked)
-    ? viewportQuery(start, end, satellite) : undefined, local);
+  const periodDetail = start !== end && $('fire-layer').checked;
+  return fireViewport.select(local || periodDetail ? viewportQuery(start, end, satellite) : undefined,
+    local || (periodDetail && useLocalDay()));
 }
 
 function renderAreaFrame(points = firePoints(), failed = false) {
@@ -577,11 +577,8 @@ function presentFireFrame() {
   } else {
     if (loadedFrame?.path !== path || (daily && (!dayWeather?.ready || dayWeather.day !== start))) return false;
     const needsDetail = !daily && map.getZoom() >= fireDetailZoom && $('fire-layer').checked;
-    const sameFrame = worldFrame?.path === path && worldFrame.satellite === satellite;
-    const detailReady = viewportFrame?.status === 'ok';
-    if (needsDetail && !detailReady && (!viewportFrame || viewportFrame.status === 'loading' || (worldFrame && !sameFrame))) return false;
     worldFrame = { ...loadedFrame, start, end, satellite };
-    displayedViewport = needsDetail && detailReady ? viewportFrame : undefined;
+    displayedViewport = needsDetail && viewportFrame?.status === 'ok' && viewportFrame.coversView() ? viewportFrame : undefined;
   }
   if (daily) displayWeather(dayWeather);
   mapStatus('');

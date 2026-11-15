@@ -18,6 +18,49 @@ function createPalette(stops) {
   return colors.getImageData(0, 0, 256, 1).data;
 }
 
+function mergePixelBins(bins, spacing, width) {
+  const stride = Math.ceil(width / spacing) + 4;
+  const cells = new Map();
+  const groups = [];
+  const ordered = [...bins.values()].sort((a, b) => b.count - a.count || a.y - b.y || a.x - b.x);
+  const busyCount = ordered[Math.floor(ordered.length * .10)]?.count ?? 1;
+  for (const bin of ordered) {
+    const key = Math.floor(bin.y / spacing) * stride + Math.floor(bin.x / spacing);
+    let nearest;
+    // Keep neighboring strong detections distinct while reducing clutter in lighter periods of activity.
+    const radius = spacing * (1 - .52 * Math.sqrt(Math.min(1, bin.count / busyCount)));
+    let distance = radius * radius;
+    for (let row = -1; row <= 1; row++) {
+      for (let col = -1; col <= 1; col++) {
+        for (const group of cells.get(key + row * stride + col) ?? []) {
+          if (group.regional !== bin.regional) continue;
+          const squared = (group.x - bin.x) ** 2 + (group.y - bin.y) ** 2;
+          if (squared < distance) {
+            nearest = group;
+            distance = squared;
+          }
+        }
+      }
+    }
+    if (nearest) {
+      nearest.count += bin.count;
+      nearest.offsetX += (bin.x - nearest.x) * bin.count;
+      nearest.offsetY += (bin.y - nearest.y) * bin.count;
+    } else {
+      const group = { ...bin, offsetX: 0, offsetY: 0 };
+      groups.push(group);
+      const cell = cells.get(key);
+      if (cell) cell.push(group);
+      else cells.set(key, [group]);
+    }
+  }
+  for (const group of groups) {
+    group.x += group.offsetX / group.count;
+    group.y += group.offsetY / group.count;
+  }
+  return groups;
+}
+
 export function createFireOverlay(map, platformNames, number, withinRegion, allowPopup) {
   const canvas = L.DomUtil.create('canvas', 'fire-canvas', map.getPane('activity-cells'));
   const heat = document.createElement('canvas');
@@ -42,7 +85,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
   let regionalCount = 0;
   let mode = 'points';
   let visible = true;
-  let aggregated = false;
+  let periodDays = 1;
   let hitTargets = [];
   let input;
   let detailInput;
@@ -72,70 +115,12 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     ctx.drawImage(heat, 0, 0, width, height);
   }
 
-  function drawOverview(ctx, bins, width, spacing, wideView) {
-    const stride = Math.ceil(width / spacing) + 4;
-    const cells = new Map();
-    const groups = [];
-    const ordered = [...bins.values()].sort((a, b) => b.count - a.count || a.y - b.y || a.x - b.x);
-    const busyGroup = ordered[Math.floor(ordered.length * .10)]?.count ?? 1;
-    for (const bin of ordered) {
-      const col = Math.floor(bin.x / spacing);
-      const row = Math.floor(bin.y / spacing);
-      const key = row * stride + col;
-      let nearest;
-      // Keep more detail where adjacent bins each have substantial activity.
-      const radius = spacing * (1 - .52 * Math.sqrt(Math.min(1, bin.count / busyGroup)));
-      let distance = radius * radius;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const candidates = cells.get(key + dy * stride + dx);
-          if (!candidates) continue;
-          for (const group of candidates) {
-            const squared = (group.x - bin.x) ** 2 + (group.y - bin.y) ** 2;
-            if (squared < distance) {
-              nearest = group;
-              distance = squared;
-            }
-          }
-        }
-      }
-      if (nearest) {
-        nearest.count += bin.count;
-        nearest.offsetX += (bin.x - nearest.x) * bin.count;
-        nearest.offsetY += (bin.y - nearest.y) * bin.count;
-      }
-      else {
-        // The first bin stays the spatial index anchor while the drawn centre follows the data.
-        const group = { ...bin, offsetX: 0, offsetY: 0 };
-        groups.push(group);
-        const cell = cells.get(key);
-        if (cell) cell.push(group);
-        else cells.set(key, [group]);
-      }
-    }
-
-    groups.sort((a, b) => a.count - b.count);
-    const reference = groups[Math.floor((groups.length - 1) * .95)]?.count ?? 1;
-    const minOpacity = wideView ? .66 : .48;
-    ctx.fillStyle = '#ff4538';
-    for (const group of groups) {
-      const x = group.x + group.offsetX / group.count;
-      const y = group.y + group.offsetY / group.count;
-      const strength = Math.min(1, (group.count / reference) ** .36);
-      const half = 1.25 + 1.9 * strength;
-      ctx.globalAlpha = minOpacity + (.96 - minOpacity) * strength;
-      ctx.beginPath();
-      ctx.arc(x, y, half, 0, 2 * Math.PI);
-      ctx.fill();
-      hitTargets.push({ ...group, x, y, half });
-    }
-    ctx.globalAlpha = 1;
-  }
-
   function draw() {
     const zoom = map.getZoom();
     const detailZoom = zoom >= fireDetailZoom;
-    const frame = aggregated && detailZoom ? detail : points;
+    const grouped = periodDays > 1;
+    const exactFrame = detailZoom ? (grouped ? detail : points) : undefined;
+    const frame = exactFrame ?? points;
     canvas.hidden = !visible || !frame?.length;
     hitTargets = [];
     if (canvas.hidden) return;
@@ -154,13 +139,11 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     const scale = map.getZoomScale(zoom, 0);
     const origin = map.getPixelBounds().min;
     const worldWidth = 256 * scale;
-    const overview = aggregated && !detailZoom;
-    const wideView = zoom < 4;
-    const overviewSpacing = wideView ? 18 : zoom < 5 ? 24 : 28;
-    const detailed = mode === 'points' && detailZoom;
-    const heatRadius = overview ? Math.min(34, Math.max(13, worldWidth / 460)) : zoom < 6 ? 17 : 23;
+    const detailed = mode === 'points' && exactFrame !== undefined;
+    const spacing = grouped ? Math.min(zoom < 4 ? 18 : 24, step + 2 * Math.log2(periodDays)) : 0;
+    const heatRadius = grouped && !exactFrame ? Math.min(34, Math.max(13, worldWidth / 460)) : zoom < 6 ? 17 : 23;
     const margin = detailed ? Math.max(4, maxPixelWidth * scale / 2)
-      : mode === 'heat' ? heatRadius : overview ? overviewSpacing + 4 : 8;
+      : mode === 'heat' ? heatRadius : spacing + 8;
     const firstCopy = Math.floor((origin.x - margin) / worldWidth);
     const lastCopy = Math.floor((origin.x + width + margin) / worldWidth);
     const stride = Math.ceil((width + 2 * margin) / step) + 1;
@@ -194,15 +177,14 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
       return;
     }
     if (detailed) return;
-    if (overview) {
-      drawOverview(ctx, bins, width, overviewSpacing, wideView);
-      return;
-    }
+    const pixels = grouped ? mergePixelBins(bins, spacing, width) : bins;
     for (const regional of [false, true]) {
-      for (const bin of bins.values()) {
+      for (const bin of pixels.values()) {
         if (bin.regional !== regional) continue;
         const { x, y, count } = bin;
-        const half = Math.min(3.8, (regional ? 2.1 : 1.4) + Math.log2(count) * .37);
+        // Keep the day-style size range as observations accumulate across a period.
+        const dailyCount = Math.max(1, count / periodDays);
+        const half = Math.min(3.8, (regional ? 2.1 : 1.4) + Math.log2(dailyCount) * .37);
         ctx.fillRect(x - half, y - half, half * 2, half * 2);
         hitTargets.push({ ...bin, half });
       }
@@ -240,7 +222,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     if (!selected) return;
     const content = document.createElement('div');
     const title = document.createElement('strong');
-    const isGroup = aggregated && map.getZoom() < fireDetailZoom;
+    const isGroup = periodDays > 1 && (map.getZoom() < fireDetailZoom || detail === undefined);
     const isPixel = !isGroup && selected.count === 1;
     const samePosition = isPixel ? hitTargets.filter(({ x, y }) => x === selected.x && y === selected.y) : [];
     title.textContent = isGroup ? `Детекций в группе — ${number.format(selected.count)}`
@@ -257,7 +239,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     L.popup().setLatLng(latlng).setContent(content).openOn(map);
   });
 
-  return (data, display, show, grouped, detailPoints) => {
+  return (data, display, show, days, detailPoints) => {
     if (input !== data) {
       points = mercatorPoints(data);
       regionalCount = points.reduce((total, point) => total + (point.regional ? point.weight : 0), 0);
@@ -267,7 +249,7 @@ export function createFireOverlay(map, platformNames, number, withinRegion, allo
     detailInput = detailPoints;
     mode = display;
     visible = show;
-    aggregated = grouped;
+    periodDays = days;
     draw();
     return regionalCount;
   };
