@@ -20,6 +20,7 @@ from urllib.parse import urlsplit, parse_qs
 
 from api.analysis import analyze, PLATFORMS
 from api.geometry import circle_polygon, normalize_geometry
+from api.study_plan import build_plan, load_calendar, assess as assess_study, validate_choices
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get('SPACEAPPS_DATA_DIR', ROOT / 'data/raw/firms/global'))
@@ -543,6 +544,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
+            if self.path == '/api/v1/study-plan':
+                size = int(self.headers.get('Content-Length', 0))
+                if not 0 < size <= 524288:
+                    return self.respond(413, {'error': 'Слишком большой или пустой запрос.'})
+                request = json.loads(self.rfile.read(size))
+                if not isinstance(request, dict):
+                    raise ValueError('Ожидается объект условий исследования.')
+                question, platform = request.get('question'), request.get('platform', 'auto')
+                validate_choices(question, platform)
+                config = validate(request.get('config'))
+                snapshot, source, revision = load_calendar(CACHE, ROOT)
+                return self.respond(200, build_plan(config, question, platform, snapshot, source, revision))
             if match:=re.fullmatch(r'/api/v1/analyses/([0-9a-f]{32})/matrix',self.path):
                 size=int(self.headers.get('Content-Length',0))
                 if not 0<=size<=1024:return self.respond(413,{'error':'Матрица использует параметры готового анализа.'})
@@ -586,6 +599,24 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlsplit(self.path)
         try:
+            if match := re.fullmatch(r'/api/v1/analyses/([0-9a-f]{32})/study-assessment', parsed.path):
+                identifier = match[1]
+                query = parse_qs(parsed.query)
+                question, platform = query.get('question', ['anomaly'])[0], query.get('platform', [''])[0]
+                validate_choices(question, platform, allow_auto=False)
+                with JOBS_LOCK:
+                    info = dict(JOBS[identifier]) if identifier in JOBS else None
+                saved = CACHE / 'jobs' / (identifier + '.json')
+                if info is None and saved.exists():
+                    info = {'status': 'done', 'result': json.loads(saved.read_text())}
+                if info is None:
+                    return self.respond(404, {'error': 'Исходный анализ не найден.'})
+                if info['status'] != 'done':
+                    return self.respond(409, {'error': 'Сначала дождитесь готовности анализа.'})
+                result = info['result']
+                if result.get('analysis_version') != ANALYSIS_VERSION:
+                    return self.respond(409, {'error': 'Методика анализа обновлена. Сначала пересчитайте анализ.'})
+                return self.respond(200, assess_study(result, question, platform, month=query.get('month', [None])[0], analysis_id=identifier))
             if parsed.path == '/api/v1/world-calendar':
                 saved = CACHE / 'world-calendar' / 'published.json'
                 try:

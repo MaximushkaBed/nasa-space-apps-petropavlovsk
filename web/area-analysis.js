@@ -387,7 +387,13 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     const extents = selection.extents;
     const bbox = [Math.min(...extents.map(e => e.west)), Math.min(...extents.map(e => e.south)), Math.max(...extents.map(e => e.east)), Math.max(...extents.map(e => e.north))];
     const roi = { preset: selection.geometry === skoGeometry ? 'sko' : 'custom', name: selection.name, bbox, source: selection.details };
-    if (selection.circle) roi.circle = { center: [L.Util.wrapNum(selection.center.lng, [-180,180]), selection.center.lat], radius_km: selection.radius };
+    if (selection.circle) {
+      const longitude = selection.center.lng;
+      // Keep already canonical input exact: modulo-wrapping 179.8 introduces a
+      // rounding change and invalidates a scientifically identical saved study.
+      const canonical = longitude >= -180 && longitude <= 180 ? longitude : L.Util.wrapNum(longitude, [-180,180]);
+      roi.circle = { center: [canonical, selection.center.lat], radius_km: selection.radius };
+    }
     else roi.geometry = selection.geometry;
     return roi;
   }

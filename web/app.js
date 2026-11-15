@@ -22,6 +22,7 @@ let activation = 0;
 let showPanel;
 let currentPanel;
 let savedCamera;
+let analysisPreferences = { grid_km:10, quality:'sp', daynight:'all', study:null };
 const sources = ['Aqua / MODIS', 'Suomi NPP / VIIRS', 'NOAA-20 / VIIRS'];
 const sourceTags = ['MODIS', 'Suomi', 'NOAA‑20'];
 const detailedImageryMinZoom = 6;
@@ -237,7 +238,8 @@ function createMap(basemap, boundary, closePanel) {
   areaAnalysis = createAreaAnalysis(map, () => { map.closePopup(); closePanel(); }, getJSON, boundary.geometry, {
     scope: root,
     onChange: roi => {
-      bridge.setContext?.({ roi });
+      analysisPreferences.study = analysisPreferences.study ? { ...analysisPreferences.study, optionId:null, stage:'idle', appliedSignature:null } : null;
+      bridge.setContext?.({ roi, study:analysisPreferences.study });
       study.setScope(roi);
       scopedLayers(roi);
       if (roi) showPanel('#selected-area');
@@ -1175,13 +1177,19 @@ function normalizePlatform(value) {
 function getState() {
   const selected = $('world-satellite')?.value;
   const platform = selected === '' ? 'all' : normalizePlatform(worldArchive?.platforms?.[Number(selected)] || 'all');
+  const roi = areaAnalysis?.getSelection?.() || null;
+  const settings = study?.getSettings?.();
+  const research = settings && (roi || settings.explicit) ? {
+    history:{start:settings.start,end:settings.end},baseline:{start:settings.baseline_start,end:settings.baseline_end},
+    analysisPlatform:settings.platform === 'auto' ? analysisPreferences.platform || null : settings.platform,
+  } : {};
   return {
-    context: { roi: areaAnalysis?.getSelection?.() || null,
+    context: { roi, ...research, ...analysisPreferences,
       focus: activePeriod ? { start: activePeriod.start, end: activePeriod.end, grain: activePeriod.mode || 'day', basis: 'UTC' } : null,
       platform, atlasQuality: worldFrame?.method === 'publisher' || viewportFrame?.method === 'archive' ? 'publisher_all' : 'atlas_filtered',
     },
     camera: map ? { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() } : null,
-    fireDisplay, localPanel: currentPanel,
+    fireDisplay, localPanel: currentPanel, atlasStudy:settings,
   };
 }
 function publishContext() {
@@ -1192,7 +1200,7 @@ function getAnalysisContext() {
   if (!selected.roi) return null;
   const inherited = bridge.getContext?.() || {};
   const next = { ...inherited, ...selected, history: { ...inherited.history }, baseline: { ...inherited.baseline },
-    grid_km: 10, quality: 'sp', daynight: 'all' };
+    ...analysisPreferences };
   const start = $('study-start').value, end = $('study-end').value;
   if (start && end) {
     next.history = { start, end };
@@ -1217,10 +1225,22 @@ return {
     map?.invalidateSize({ pan: false });
     const state = options.state;
     const context = options.context || state?.context;
+    if (context) {
+      for (const field of ['grid_km','quality','daynight','study']) {
+        if (Object.hasOwn(context,field)) analysisPreferences[field] = structuredClone(context[field]);
+      }
+      const preferred = context.analysisPlatform || context.platform;
+      if (['Aqua','Terra','Suomi-NPP','NOAA-20','NOAA-21'].includes(preferred)) analysisPreferences.platform = preferred;
+    }
     if (context && Object.hasOwn(context, 'roi')) {
       if (context.roi) areaAnalysis?.setSelection(context.roi);
       else if (areaAnalysis?.getSelection()) areaAnalysis.clearSelection();
     }
+    if (context?.history && context?.baseline) {
+      study.restoreSettings({start:context.history.start,end:context.history.end,
+        baseline_start:context.baseline.start,baseline_end:context.baseline.end,
+        platform:context.analysisPlatform || context.platform || 'auto',explicit:true});
+    } else if (state?.atlasStudy) study.restoreSettings(state.atlasStudy);
     if (context?.platform && worldArchive) {
       const id = context.platform === 'all' ? -1 : worldArchive.platforms.findIndex(p => normalizePlatform(p) === context.platform);
       if (context.platform !== 'all' && id < 0) bridge.notice?.('Эта платформа недоступна в текущем архиве атласа. Фильтр не изменён.');
@@ -1250,6 +1270,7 @@ return {
     if (options.caseId || options.view === 'cases') showPanel?.('#kishkenekol-case');
     else if (state?.localPanel) showPanel?.(state.localPanel);
     else if(options.view==='atlas'&&root.querySelector('#kishkenekol-case')&&!root.querySelector('#kishkenekol-case').hidden)showPanel?.('#observations');
+    study.resume();
     weatherOverlay?.resume?.();
     if(worldArchive)renderLayers();
     if (worldArchive) await loadWorldFrame();
@@ -1257,6 +1278,7 @@ return {
   deactivate() {
     active = false;++activation;
     detailNotice.clear();
+    study?.pause();
     worldRequest?.controller.abort();
     worldRequest = undefined;
     if (map) savedCamera = { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() };

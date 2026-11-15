@@ -7,7 +7,7 @@ const platformNames = new Set(['all','Aqua','Terra','Suomi-NPP','NOAA-20','NOAA-
 const storageKey = 'nasa-space-apps-context-v1';
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
 let currentView = 'atlas', navigation = 0, statusTimer;
-let context = { roi:null, history:{start:'2020-01-01',end:'2025-12-31'}, baseline:{start:2020,end:2023}, focus:null, platform:'all', quality:'sp', daynight:'all' };
+let context = { roi:null, history:{start:'2020-01-01',end:'2025-12-31'}, baseline:{start:2020,end:2023}, focus:null, platform:'all', quality:'sp', daynight:'all', study:null };
 let restored = null;
 try { restored = JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch { /* An unavailable storage does not prevent the app. */ }
 
@@ -99,6 +99,10 @@ function urlFor(view) {const url=new URL(location.href);url.search='';url.search
 async function navigate(view,payload={}) {
   if(!viewNames.has(view))return;
   if(payload.share)return share(view,payload.state);
+  if(!payload.fromHistory&&!payload.context&&!payload.state){
+    if(view==='analysis'&&(currentView==='atlas'||currentView==='cases'))payload={...payload,context:analysisContext(),run:false};
+    else if(view==='atlas'&&currentView==='analysis')payload={...payload,context:controllers.get('analysis')?.getState?.().context||clone(context)};
+  }
   if(view==='analysis'&&currentView==='atlas'&&!payload.context&&!payload.state&&!payload.snapshot&&!payload.fromHistory&&controllers.get('atlas')?.getState?.().context?.roi){
     payload={...payload,context:analysisContext(),run:false,from:payload.from||'atlas'};
   }
@@ -110,7 +114,9 @@ async function navigate(view,payload={}) {
   visibility();
   if(!payload.fromHistory){
     history.replaceState({...history.state,snapshot:before},'',location.href);
-    history.pushState({app:true,view,snapshot:null},'',urlFor(view));
+    // Keep the destination intent even if the user goes Back before its lazy
+    // controller finishes loading. Forward must not reopen default parameters.
+    history.pushState({app:true,view,snapshot:{version:1,view,context:clone(context),states:{}}},'',urlFor(view));
   }
   try{
     const controller=await ensureView(view);
@@ -122,7 +128,8 @@ async function navigate(view,payload={}) {
     if(token!==navigation)return;
     const local=controller.getState?.();if(local?.context)mergeContext(local.context);
     $('shell-loading').hidden=true;
-    persist();
+    const settled=persist();
+    history.replaceState({...history.state,app:true,view,snapshot:settled},'',location.href);
     if(payload.from==='analysis')notice('Атлас показывает исходные детекции. Территория и даты перенесены; шкала Aqua к пикселям не применяется.');
   }catch(error){if(token===navigation){notice(error.message);$('shell-loading').textContent='Инструмент не загрузился. Выберите другой раздел или обновите страницу.';$('shell-loading').hidden=false;}}
 }
@@ -132,14 +139,21 @@ function analysisContext() {
   const from=controllers.get('atlas')?.getState?.().context || {};
   const next={...clone(context),...clone(from)};
   next.history={...context.history};next.baseline={...context.baseline};
-  if(next.focus?.end>next.history.end)next.history.end=next.focus.end;
-  if(next.focus?.start<next.history.start)next.history.start=next.focus.start;
+  if(next.focus&&(next.focus.end>next.history.end||next.focus.start<next.history.start)){
+    next.focus=null;notice('Дата карты вне выбранной истории. Период исследования сохранён; измените его в условиях сравнения.');
+  }
   return next;
+}
+function portableStudy(study){
+  if(!study||typeof study!=='object')return null;
+  return {question:study.question,optionId:study.optionId,stage:study.stage};
 }
 async function share(view,state) {
   try{
     const selected=state||controllers.get(view==='cases'?'atlas':view)?.getState?.();
-    const portable={version:1,context:selected?.context||context,tab:selected?.tab,step:selected?.step,month:selected?.month,mapMode:selected?.mapMode,mapYear:selected?.mapYear,compareYearA:selected?.compareYearA,compareYearB:selected?.compareYearB,seriesMode:selected?.seriesMode,analysisId:selected?.analysisId,matrixId:selected?.matrixId,matrixState:selected?.matrixState};
+    const sourceContext=selected?.context||context;
+    const study=portableStudy(selected?.study||sourceContext.study);
+    const portable={version:1,context:{...sourceContext,study},study,atlasStudy:selected?.atlasStudy,tab:selected?.tab,step:selected?.step,month:selected?.month,mapMode:selected?.mapMode,mapYear:selected?.mapYear,compareYearA:selected?.compareYearA,compareYearB:selected?.compareYearB,seriesMode:selected?.seriesMode,analysisId:selected?.analysisId,matrixId:selected?.matrixId,matrixState:selected?.matrixState};
     let encoded=JSON.stringify(portable);const url=urlFor(view);
     if(encodeURIComponent(encoded).length>6000){
       if(!selected?.analysisId)throw new Error('Для ссылки с подробной границей сначала завершите расчёт территории.');
@@ -166,7 +180,7 @@ window.addEventListener('hashchange',renderHeaderContext);
 window.addEventListener('popstate',event=>{
   const snapshot=event.state?.snapshot;const view=event.state?.view||new URL(location.href).searchParams.get('view')||'atlas';
   if(snapshot?.context)mergeContext(snapshot.context);
-  navigate(viewNames.has(view)?view:'atlas',{fromHistory:true,snapshot});
+  navigate(viewNames.has(view)?view:'atlas',{fromHistory:true,snapshot,context:snapshot?.context});
 });
 
 (async()=>{
@@ -182,7 +196,11 @@ window.addEventListener('popstate',event=>{
     if(id&&/^[0-9a-f]{32}$/.test(id)){
       const response=await fetch(`/api/v1/analyses/${id}`);if(!response.ok)throw new Error('Сохранённый расчёт больше недоступен. Выберите территорию заново.');
       const job=await response.json();if(job.status!=='done')throw new Error('Сохранённый расчёт ещё не завершён.');
-      const cfg=job.result.config;mergeContext(contextFromLegacy({...cfg,platform:state?.context?.platform}));
+      const cfg=job.result.config,canonical=contextFromLegacy({...cfg,platform:state?.context?.platform}),provided=state?.context||{};
+      // Large shared geometries may be restored by ID. Explicit shared filters
+      // still reach the workbench, which checks them against the saved result.
+      mergeContext({...canonical,...provided,roi:provided.roi||canonical.roi,
+        history:{...canonical.history,...provided.history},baseline:{...canonical.baseline,...provided.baseline}});
     }
     currentView=view;history.replaceState({app:true,view,snapshot:null},'',location.href);visibility();
     const bootToken=navigation;
@@ -190,7 +208,7 @@ window.addEventListener('popstate',event=>{
     if(bootToken!==navigation)return;
     const saved=state||restored?.states?.[view==='cases'?'atlas':view]||(id?{context:clone(context),analysisId:id}:undefined);
     if(id&&saved)saved.analysisId=id;
-    await controller.activate?.({view,state:saved,context:(state||legacy||id)?context:undefined,run:Boolean(legacy||state||id),caseId:view==='cases'?'kishkenekol-2025-04-12':undefined});
+    await controller.activate?.({view,state:saved,context:(state||legacy||id)?context:undefined,run:Boolean(legacy),caseId:view==='cases'?'kishkenekol-2025-04-12':undefined});
     if(bootToken!==navigation)return;
     const local=controller.getState?.();if(local?.context)mergeContext(local.context);persist();
   }catch(error){notice(error.message);$('shell-loading').textContent='Выберите раздел и территорию, чтобы продолжить.';}

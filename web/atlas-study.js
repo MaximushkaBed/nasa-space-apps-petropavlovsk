@@ -25,6 +25,8 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   for (const source of sources) platform.add(new Option(source, source));
   let roi, scopeKey, archive, job, timer, controller, worldSnapshot, worldDownload, worldCalendar, calendarTimer;
   let allWorld = true;
+  let explicitDates = false;
+  let suspended = false;
   let openTab;
   const analyses = new Map();
   const matrices = new Map();
@@ -51,8 +53,8 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     scopeKey = key;
     allWorld = !roi;
     $('study-area').textContent = roi?.name || 'Весь мир';
-    if (!roi && worldCalendar) setWorldDates();
-    else if (roi && archive) setArchiveDates();
+    if (!roi && worldCalendar && !explicitDates) setWorldDates();
+    else if (roi && archive && !explicitDates) setArchiveDates();
     $('study-default-period').hidden = Boolean(roi);
     schedule();
   }
@@ -252,6 +254,12 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   }
 
   async function load() {
+    if (suspended) return;
+    if (roi && !openTab) {
+      $('study-spinner').hidden = true;
+      status.textContent = 'Откройте календарь или перейдите к условиям исследования выбранной территории.';
+      return;
+    }
     const signal = (controller = new AbortController()).signal;
     let key;
     if (!roi && allWorld) {
@@ -329,10 +337,12 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
   retry.addEventListener('click', () => schedule(0));
   $('study-default-period').addEventListener('click', () => {
     allWorld = true;
+    explicitDates = false;
     schedule(0);
   });
   for (const input of [start, end]) input.addEventListener('change', () => {
     allWorld = false;
+    explicitDates = true;
     if (start.value && end.value && start.value <= end.value) {
       const first = Number(start.value.slice(0, 4));
       const last = Number(end.value.slice(0, 4));
@@ -344,16 +354,44 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
     }
     schedule(750);
   });
-  for (const input of [baselineStart, baselineEnd]) input.addEventListener('change', () => { allWorld = false; schedule(750); });
+  for (const input of [baselineStart, baselineEnd]) input.addEventListener('change', () => { allWorld = false; explicitDates = true; schedule(750); });
   platform.addEventListener('change', () => { renderCalendar(); matrix.refresh(); });
 
   return {
     setScope,
+    pause() {
+      suspended = true;
+      clearTimeout(timer);
+      clearTimeout(calendarTimer);
+      controller?.abort();
+      matrix.pause();
+    },
+    resume() {
+      suspended = false;
+      matrix.resume();
+      if ((!roi && allWorld) || (openTab && !job)) schedule(0);
+    },
+    getSettings() {
+      if (!start.value || !end.value) return null;
+      return { start:start.value, end:end.value, baseline_start:baselineStart.valueAsNumber,
+        baseline_end:baselineEnd.valueAsNumber, platform:platform.value, explicit:explicitDates };
+    },
+    restoreSettings(value) {
+      if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value.start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(value.end || '')
+          || !Number.isInteger(value.baseline_start) || !Number.isInteger(value.baseline_end)) return;
+      const previous = JSON.stringify([start.value,end.value,baselineStart.valueAsNumber,baselineEnd.valueAsNumber,platform.value]);
+      setDates(value);
+      if (value.platform === 'auto' || sources.includes(value.platform)) platform.value = value.platform;
+      explicitDates = value.explicit !== false;
+      if (explicitDates) allWorld = false;
+      const next = JSON.stringify([start.value,end.value,baselineStart.valueAsNumber,baselineEnd.valueAsNumber,platform.value]);
+      if (next !== previous) schedule();
+    },
     setArchive(value) {
       archive = value;
       start.min = end.min = archive.first;
       start.max = end.max = archive.last;
-      if (!start.value || end.value > archive.last || start.value < archive.first) {
+      if (!start.value || (!explicitDates && (end.value > archive.last || start.value < archive.first))) {
         if (roi) setArchiveDates();
         else setDates(worldSnapshot?.analysis.result.config ?? defaultStudyDates);
       }
@@ -366,6 +404,11 @@ export function createAtlasStudy(root, getPlatform, selectMonth) {
       $('activity-calendar').hidden = tab !== '#activity-calendar';
       $('external-factors').hidden = tab !== '#external-factors';
       matrix.setVisible(tab === '#external-factors');
+      if (roi && !tab) {
+        clearTimeout(timer);
+        controller?.abort();
+        $('study-spinner').hidden = true;
+      } else if (roi && !job) schedule(0);
       if (!roi && allWorld) worldStatus();
     },
   };

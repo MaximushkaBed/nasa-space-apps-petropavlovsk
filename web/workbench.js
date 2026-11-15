@@ -1,9 +1,11 @@
 import { mountMatrixPanel } from './matrix-panel.js?v=dark';
 import { sameScientificConfig, scientificSignature } from './scientific-context.js';
+import { mountStudyPlanner } from './study-planner.js';
 
 export function mountWorkbench(root, bridge={}) {
 if (!(root instanceof Element)) throw new TypeError('Workbench root is required');
 root.classList.add('analysis-workbench');
+root.dataset.bootstrapPending='true';
 const $ = (id) => root.querySelector('#'+CSS.escape(id));
 const ns = 'http://www.w3.org/2000/svg';
 const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
@@ -14,6 +16,7 @@ let settings, result, jobId, source='NOAA-20', view='calendar', step='month', mo
 let drawStart=null, drawing=false, roiLayer, cellsLayer, frame=0, playing=false, busy=false;
 let mapMode='activity', mapYear=null, compareYearA=null, compareYearB=null;
 let active=false, settingsPromise, pendingAnalysis, activation=0, pendingViewState=null;
+let analysisAbort=null,pendingQuestionNavigation=false,bootstrapPending=true;
 let roiGeometry=null, roiCircle=null, roiName='', roiSource='', retainedFocus=null, rangeFocus=null;
 const clone=value=>value==null?value:structuredClone(value);
 const formatMonth = (key) => `${longMonths[Number(key.slice(5))-1]} ${key.slice(0,4)}`;
@@ -25,6 +28,13 @@ const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/servi
 cellsLayer=L.layerGroup().addTo(map);
 new ResizeObserver(()=>{if(active)map.invalidateSize({pan:false});}).observe($('analysis-map'));
 const matrixPanel=mountMatrixPanel($('matrix-panel'),{request,bridge,getAnalysis:()=>result&&jobId?{id:jobId,result,platform:source,context:getState().context}:null});
+const planner=mountStudyPlanner(root,{request,getInput:()=>({config:formConfig(),platform:source,focus:clone(retainedFocus)}),validate:validateInputs,isActive:()=>active,
+ applyOption:option=>{source=option.platform;$('platform').value=source;syncCanonicalConfig(option.config);if(retainedFocus&&(retainedFocus.start<option.config.start||retainedFocus.end>option.config.end)){retainedFocus=null;rangeFocus=null;}invalidate({keepStudy:true});publishContext();},
+ onPlanning:()=>{showResultSurface(false);$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=true;},
+ onExistingResult:()=>{if(result&&source!=='all'&&sameScientificConfig(result.config,formConfig())){showResultSurface(true);$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=false;renderAll();planner.resultReady({id:jobId,platform:source,month});}},
+ onQuestion:(tab,action)=>{if(action?.invalidate){pendingQuestionNavigation=true;if(result&&source!=='all'&&sameScientificConfig(result.config,formConfig())){showResultSurface(true);$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=false;planner.resultReady({id:jobId,platform:source,month},{navigate:true});pendingQuestionNavigation=false;}else if(!result)invalidate();publishContext();}else if(tab)activateTab(tab);},onChange:publishContext});
+showResultSurface(false);
+setBootstrapPending(true);
 
 function svgElement(tag, attrs={}, text){const node=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,v));if(text!==undefined)node.textContent=text;return node;}
 function empty(id,text){const node=document.createElement('div');node.className='empty-state';const p=document.createElement('p');p.textContent=text;node.append(p);$(id).replaceChildren(node);}
@@ -36,6 +46,24 @@ async function request(url, options={}){
 }
 function formConfig(){return {preset:$('preset').value,bbox:['west','south','east','north'].map(k=>Number($(k).value)),start:$('start').value,end:$('end').value,baseline_start:Number($('baseline-start').value),baseline_end:Number($('baseline-end').value),grid_km:Number($('grid').value),quality:$('include-nrt').checked?'all':'sp',daynight:$('daynight').value,...(roiGeometry?{geometry:clone(roiGeometry)}:{}),...(roiCircle?{circle:clone(roiCircle)}:{}),...(roiName?{roi_name:roiName}:{}),...(roiSource?{roi_source:roiSource}:{})};}
 function selectedPreset(){return settings?.presets.find(p=>p.id===$('preset').value);}
+function validateInputs(){
+ if(bootstrapPending){$('form-status').textContent='Дождитесь подключения к архиву.';return false;}
+ const form=$('analysis-form');
+ for(const input of form.querySelectorAll('input'))input.setCustomValidity('');
+ const config=formConfig();
+ if(config.start>config.end)$('end').setCustomValidity('Конец истории должен быть не раньше начала.');
+ if(config.baseline_start>config.baseline_end)$('baseline-end').setCustomValidity('Последний базовый год должен быть не раньше первого.');
+ if(config.baseline_start<Number(config.start.slice(0,4))||config.baseline_end>Number(config.end.slice(0,4)))$('baseline-start').setCustomValidity('Базовые годы должны входить в выбранную историю.');
+ if(config.bbox[0]>=config.bbox[2])$('east').setCustomValidity('Восточная граница должна быть восточнее западной.');
+ if(config.bbox[1]>=config.bbox[3])$('north').setCustomValidity('Северная граница должна быть севернее южной.');
+ if(!form.checkValidity()){
+  if([...$('manual-conditions').querySelectorAll('input,select')].some(input=>!input.validity.valid))$('manual-conditions').open=true;
+  if([...$('coordinate-details').querySelectorAll('input')].some(input=>!input.validity.valid))$('coordinate-details').open=true;
+  form.reportValidity();$('form-status').textContent='Проверьте отмеченные условия исследования.';return false;
+ }
+ try{scientificSignature(config);}catch{$('form-status').textContent='Задайте допустимую территорию, историю и фильтры.';return false;}
+ return true;
+}
 function areaName(config){return (config.preset==='sko'?settings?.presets.find(p=>p.id==='sko')?.name:config.roi_name)||settings?.presets.find(p=>p.id===config.preset&&p.id!=='custom')?.name || `Область ${config.bbox[1].toFixed(2)}°, ${config.bbox[0].toFixed(2)}°` ;}
 function showBounds(fit=true){
   if(roiLayer)roiLayer.remove();const bbox=formConfig().bbox;
@@ -49,8 +77,11 @@ function showBounds(fit=true){
 function clearShape(){roiGeometry=roiCircle=null;roiName=roiSource='';}
 function publishContext(){if(active)bridge.setContext?.(getState().context);}
 function setPreset(){clearShape();const p=selectedPreset();if(p)['west','south','east','north'].forEach((k,i)=>$(k).value=p.bbox[i]);showBounds();invalidate();publishContext();}
-function invalidate(){
-  if(busy)return;
+function showResultSurface(value){root.dataset.hasResult=String(value);$('study-results').hidden=!value;$('study-next-step').hidden=value;root.querySelector('.insights').hidden=!value;root.querySelector('.timeline-bar').hidden=!value;}
+function invalidate({keepStudy=false}={}){
+  ++generation;analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);
+  if(!keepStudy)planner.invalidate();showResultSurface(false);
+  $('error-banner').hidden=true;
   matrixPanel.reset();
   result=null;jobId=null;++mapGeneration;mapYear=null;cellsLayer.clearLayers();$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=true;
   $('focus-month').disabled=true;$('focus-month').replaceChildren(new Option('Сначала построить анализ',''));
@@ -65,30 +96,35 @@ function invalidate(){
   $('calendar-grid').replaceChildren();$('validation-summary').replaceChildren();$('compare-metrics').replaceChildren();$('compare-year-a').disabled=$('compare-year-b').disabled=$('compare-map-a').disabled=$('compare-map-b').disabled=true;$('reference-disagreement').hidden=true;stopPlaying();
   renderFocusScope();
 }
-function setBusy(value){busy=value;$('run').disabled=value;$('run').firstChild.textContent=value?'Считаю… ':'Построить анализ ';root.querySelectorAll('#analysis-form fieldset').forEach(f=>f.disabled=value);$('job-banner').hidden=!value;}
+function setBootstrapPending(value){bootstrapPending=value;root.dataset.bootstrapPending=String(value);$('analysis-form').setAttribute('aria-busy',String(value));$('run').disabled=value||busy;$('study-plan-request').disabled=value||busy;root.querySelectorAll('#analysis-form fieldset').forEach(field=>field.disabled=value||busy);if(value){$('form-status').textContent='Подключаем сведения об архиве…';$('study-plan-status').textContent='Загружаем настройки. Территория будет сохранена до выбора условий.';}}
+function setBusy(value){busy=value;$('run').disabled=value||bootstrapPending;$('run').firstChild.textContent=value?'Считаю… ':'Построить анализ ';root.querySelectorAll('#analysis-form fieldset').forEach(f=>f.disabled=value||bootstrapPending);$('study-plan-request').disabled=value||bootstrapPending;$('job-banner').hidden=!value;}
 async function startAnalysis(event){
   event?.preventDefault();
+  if(busy||!active||!validateInputs())return;
   if(source==='all'){$('error-banner').hidden=false;$('error-banner').textContent='Выберите один спутник для временного анализа. Данные разных платформ не суммируются.';return;}
   stopPlaying();drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';const config=formConfig();const current=++generation;
+  analysisAbort?.abort();const controller=new AbortController();analysisAbort=controller;
+  planner.prepareRun();showResultSurface(false);
   $('error-banner').hidden=true;setBusy(true);result=null;matrixPanel.reset();++mapGeneration;mapYear=null;cellsLayer.clearLayers();publishContext();
   $('retry-map').hidden=true;
   $('analysis-area-title').textContent=areaName(config);$('context-note').textContent=`${config.start} — ${config.end} · базовые годы ${config.baseline_start}–${config.baseline_end}`;
   $('job-message').textContent='Создаю пространственный запрос';$('job-progress').value=0;
   $('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=true;
+  $('job-banner').tabIndex=-1;$('job-banner').focus({preventScroll:true});$('job-banner').scrollIntoView({block:'start'});
   try{
-    const job=await request('/api/v1/analyses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(config)});if(current!==generation)return;jobId=job.id;
-    while(current===generation){
-      const state=await request(`/api/v1/analyses/${jobId}`);
-      if(current!==generation)return;
+    const job=await request('/api/v1/analyses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(config),signal:controller.signal});if(current!==generation||!active)return;jobId=job.id;
+    while(current===generation&&active){
+      const state=await request(`/api/v1/analyses/${jobId}`,{signal:controller.signal});
+      if(current!==generation||!active)return;
       $('job-message').textContent=state.message;$('job-progress').value=state.progress||0;
       if(state.status==='error')throw new Error(state.message);
-      if(state.status==='done'){acceptResult(state.result);break;}
+      if(state.status==='done'){if(!sameScientificConfig(state.result?.config,config)||!sameScientificConfig(formConfig(),config))throw new Error('Результат относится к другим условиям. Проверьте параметры и повторите расчёт.');acceptResult(state.result);break;}
       await new Promise(resolve=>setTimeout(resolve,1200));
     }
-    if(!result||current!==generation)return;
-    await displayResult();
-  }catch(error){if(current===generation){$('error-banner').hidden=false;$('error-banner').textContent=error.message;$('form-status').textContent='Измените параметры или повторите запрос.';}}
-  finally{if(current===generation)setBusy(false);}
+    if(!result||current!==generation||!active)return;
+    await displayResult({navigate:true});
+  }catch(error){if(current===generation&&active&&error.name!=='AbortError'){planner.runFailed();$('error-banner').hidden=false;$('error-banner').textContent=error.message;$('form-status').textContent='Условия сохранены. Измените параметры или повторите расчёт кнопкой ниже.';}}
+  finally{if(analysisAbort===controller)analysisAbort=null;if(current===generation&&active)setBusy(false);}
 }
 function acceptResult(candidate){
  if(!candidate?.config)throw new Error('В расчёте отсутствуют научные параметры.');
@@ -110,18 +146,21 @@ function rejectCachedResult(message){
  if(busy)setBusy(false);invalidate();pendingViewState=null;
  $('error-banner').hidden=false;$('error-banner').textContent=message;$('form-status').textContent='Параметры выбранной территории сохранены. Нажмите «Построить анализ», чтобы получить соответствующие данные.';bridge.notice?.(message);
 }
-async function displayResult(){
+async function displayResult({navigate=false}={}){
     const config=result.config;syncCanonicalConfig(config);
     const rows=result.monthly.filter(r=>r.platform===source&&r.cells!==null);
     const lastYear=rows.at(-1)?.month.slice(0,4);
     month=rows.filter(r=>r.month.startsWith(lastYear)).sort((a,b)=>(b.cells||0)-(a.cells||0))[0]?.month||rows.at(-1)?.month;
-    const keys=[...new Set(result.monthly.map(r=>r.month))];$('focus-month').replaceChildren(...keys.map(k=>new Option(formatMonth(k),k)));$('focus-month').disabled=false;
+    const keys=[...new Set(result.monthly.map(r=>r.month))];$('focus-month').replaceChildren(...keys.map(k=>new Option(formatMonth(k),k)));$('focus-month').disabled=!keys.length;if(!keys.length)$('focus-month').append(new Option('Нет доступных месяцев',''));
     $('focus-month').value=month||keys.at(-1);month=$('focus-month').value;
     $('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=$('play-days').disabled=$('day-range').disabled=$('reset-day').disabled=$('last-month').disabled=false;
-    $('form-status').textContent='Анализ готов. Сменить спутник или месяц можно без повторного расчёта.';
+    $('form-status').textContent='Анализ готов. Выберите месяц календаря или откройте другие представления результата.';
     $('context-note').textContent=`${config.start} — ${config.end} · сетка ${config.grid_km} км · ${config.quality==='sp'?'стандартный архив SP':'SP + предварительные NRT'}`;
     $('provenance-details').textContent=JSON.stringify({parameters:result.config,snapshot_at:result.snapshot_at,calculated_at:result.calculated_at,provenance:result.provenance},null,2);
-    frame=0;mapYear=null;populateCompareYears();applyFocus(retainedFocus);restoreView(pendingViewState);pendingViewState=null;renderAll();matrixPanel.refresh();if(active)await updateMap();publishContext();
+    frame=0;mapYear=null;populateCompareYears();applyFocus(retainedFocus);restoreView(pendingViewState);pendingViewState=null;showResultSurface(source!=='all');
+    if(source!=='all'){renderAll();planner.resultReady({id:jobId,platform:source,month},{navigate});if(navigate){pendingQuestionNavigation=false;$('study-assessment').tabIndex=-1;$('study-assessment').focus({preventScroll:true});$('study-assessment').scrollIntoView({block:'start'});}matrixPanel.refresh();if(active)await updateMap();}
+    else{$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=true;$('form-status').textContent='Расчёт сохранён. Выберите один спутник для просмотра; платформы не суммируются.';$('map-count').textContent='Выберите один спутник';}
+    publishContext();
 }
 
 function calibrated(){return $('series-mode').value==='calibrated';}
@@ -172,7 +211,7 @@ function renderFocusScope(){
  mapMode='activity';$('map-mode').value='activity';$('map-mode').disabled=true;$('play-days').disabled=$('day-range').disabled=$('reset-day').disabled=true;$('map-mode').title='Диапазон UTC показывается в исходной шкале. Для карты отклонений выберите месяц.';
 }
 function renderInsights(){
- const row=currentRow();if(!row)return;
+ const row=currentRow();if(!row){['activity-value','baseline-value','anomaly-value','season-months'].forEach(id=>$(id).textContent='—');$('points-value').textContent='Нет доступного ряда выбранной платформы.';$('anomaly-context').textContent='Сравнение недоступно для этого спутника и месяца. Локальная видимость неизвестна.';$('reference-disagreement').hidden=true;return;}
  const value=monthlyValue(row),baseline=monthlyBaseline(row),unvalidated=calibrated()&&value===null;
  const anomalyAvailable=!unvalidated&&comparisonAvailable(row)&&Number.isFinite(row.anomaly_pct)&&Number.isFinite(baseline);
  $('activity-value').textContent=n(value);
@@ -230,6 +269,7 @@ function renderCalendar(){
  const add=(text,cls)=>{const node=document.createElement('span');node.textContent=text;node.className=cls;host.append(node);};
  add('UTC','calendar-label');months.forEach(m=>add(m,'calendar-label'));
  const rows=sourceRows(),lookup=new Map(rows.map(r=>[r.month,r])),max=Math.max(1,...rows.map(r=>monthlyValue(r)||0));
+ if(!rows.length){const note=document.createElement('p');note.className='calendar-empty';note.textContent='Для выбранного спутника в этой истории нет доступных месяцев. Измените условия или выберите другой ряд.';host.replaceChildren(note);return;}
  const anomalies=$('calendar-anomalies').checked,years=[...new Set(rows.map(r=>r.month.slice(0,4)))];
  for(const year of years){
   add(year,'calendar-label');
@@ -254,7 +294,7 @@ function renderCalendar(){
    if(key===month)button.classList.add('focus');
    button.disabled=!row;button.setAttribute('aria-label',`${formatMonth(key)}: ${button.title}`);
    button.dataset.month=key;
-   button.addEventListener('click',()=>{selectMonth(key);step='week';syncStepControls();activateTab('series');});
+   button.addEventListener('click',()=>{selectMonth(key);step='week';syncStepControls();activateTab('series');$('tab-series').focus({preventScroll:true});});
    host.append(button);
   }
  }
@@ -331,13 +371,13 @@ function renderComparison(){
 function renderValidation(){
  if(!result)return;const model=result.models[source],host=$('validation-summary');host.replaceChildren();
  if(!model){const p=document.createElement('p');p.textContent='Aqua — выбранная опорная шкала. Выберите VIIRS или Terra для отдельной проверки сопоставимости.';host.append(p);empty('validation-chart','Опорный прибор сравнивается с выбранной второй платформой.');return;}
- const status=document.createElement('div');status.className='validation-status'+(model.accepted?'':' warn');status.textContent=model.accepted?'Локальная проверка пройдена · результат экспериментальный':'Калибровка не допущена: не выполнены условия отложенной проверки.';host.append(status);
+ const status=document.createElement('div');status.className='validation-status'+(model.accepted?'':' warn');status.textContent=model.accepted?'Отложенная проверка согласования пройдена · результат экспериментальный':'Калибровка не допущена: не выполнены условия отложенной проверки.';host.append(status);
  for(const [name,value] of [['Коэффициент',coefficient(model.coefficient)],['MAE до → после',`${n(model.mae_before)} → ${n(model.mae_after)}`],['Обучение / тест',`${model.fit_months} / ${model.test_months} мес.`],['Смещение на тесте',model.bias_pct===undefined?'—':`${n(model.bias_pct)}%`]]){const block=document.createElement('div');block.append(document.createTextNode(name));const strong=document.createElement('strong');strong.textContent=value;block.append(strong);host.append(block);}
  const pairs=model.pairs.filter(p=>Number(p.month.slice(0,4))>result.config.baseline_end);
  chart('validation-chart',[{name:'Aqua на общих SP-датах',values:pairs.map(p=>p.aqua),color:'#70c1ff'},{name:'Исходный '+source,values:pairs.map(p=>p.partner),color:'#b0bedb',width:1},{name:'Оценка Aqua по '+source,values:pairs.map(p=>model.coefficient===null?null:p.partner*model.coefficient),color:'#ffa46e'}],{labels:pairs.map(p=>p.month.slice(2)),tooltips:pairs.map(p=>p.month),label:'Отложенная проверка калибровки: Aqua, исходный и скорректированный спутник'});
  $('validation-note').textContent=`Обучение ${model.fit_start}–${model.fit_end}; контроль — только последующие годы. Общие SP-даты, ≥10 дней в месяце. Условия прототипа: ≥24 месяца обучения, ≥12 теста, MAE ниже исходной и не выше сезонной модели (${n(model.seasonal_mae)}), смещение ≤35%.${model.coefficient_interval?` Разброс коэффициента по выборкам целых лет: ${coefficient(model.coefficient_interval[0])}–${coefficient(model.coefficient_interval[1])}.`:''} Локальная видимость неизвестна.`;
 }
-function selectMonth(key){if(!result||!key)return;stopPlaying();clearRangeFocus();month=key;frame=0;mapYear=null;$('focus-month').value=month;renderAll();updateMap();publishContext();}
+function selectMonth(key){if(!result||!key)return;stopPlaying();clearRangeFocus();month=key;frame=0;mapYear=null;$('focus-month').value=month;renderAll();planner.updateMonth({platform:source,month});updateMap();publishContext();}
 function selectFrame(index){if(!result)return;stopPlaying();clearRangeFocus();mapYear=null;frame=index;renderAll();updateMap();publishContext();}
 async function updateMap(){
  if(!active||!result||!month)return;
@@ -458,9 +498,18 @@ async function play(){if(!result||mapMode!=='activity'||mapYear||rangeFocus)retu
 function openMethod(){$('method-dialog').showModal();}
 $('analysis-form').addEventListener('submit',startAnalysis);
 $('preset').addEventListener('change',setPreset);
-['start','end','baseline-start','baseline-end','grid','daynight','include-nrt'].forEach(id=>$(id).addEventListener('change',()=>{invalidate();publishContext();}));
+['start','end','baseline-start','baseline-end','grid','daynight','include-nrt'].forEach(id=>{const events=['grid','daynight','include-nrt'].includes(id)?['change']:['input','change'];for(const event of events)$(id).addEventListener(event,()=>{for(const input of $('analysis-form').querySelectorAll('input'))input.setCustomValidity('');invalidate();publishContext();});});
+$('analysis-form').addEventListener('input',event=>{if(['west','south','east','north'].includes(event.target.id)){event.target.setCustomValidity('');clearShape();$('preset').value='custom';invalidate();publishContext();}});
 $('apply-bounds').addEventListener('click',()=>{clearShape();$('preset').value='custom';showBounds();invalidate();publishContext();});
-$('platform').addEventListener('change',()=>{source=$('platform').value;stopPlaying();frame=0;mapYear=null;if(source==='all'){invalidate();$('form-status').textContent='Для анализа выберите один спутник; разные платформы не суммируются.';}else{populateCompareYears();renderAll();updateMap();}matrixPanel.refresh();publishContext();});
+$('platform').addEventListener('change',()=>{
+ source=$('platform').value;stopPlaying();frame=0;mapYear=null;planner.invalidate();++mapGeneration;cellsLayer.clearLayers();$('error-banner').hidden=true;
+ if(result&&sameScientificConfig(result.config,formConfig())){
+  showResultSurface(source!=='all');
+  if(source==='all'){$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=true;$('form-status').textContent='Расчёт сохранён. Выберите один спутник для просмотра; платформы не суммируются.';$('map-count').textContent='Выберите один спутник';$('map-key-text').textContent='Разные платформы не суммируются.';$('map-period').textContent='Область исследования';}
+  else{$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=false;populateCompareYears();renderAll();planner.resultReady({id:jobId,platform:source,month},{navigate:pendingQuestionNavigation});pendingQuestionNavigation=false;updateMap();$('form-status').textContent='Открыт исходный ряд выбранного спутника из готового расчёта.';}
+ }else{invalidate();if(source==='all')$('form-status').textContent='Для ручного анализа выберите один спутник или получите предложение условий.';}
+ matrixPanel.refresh();publishContext();
+});
 $('focus-month').addEventListener('change',()=>selectMonth($('focus-month').value));
 $('series-mode').addEventListener('change',renderAll);
 $('export-image').addEventListener('click',exportImage);
@@ -481,8 +530,9 @@ for(const button of root.querySelectorAll('[data-step]'))button.addEventListener
 function download(url){const link=document.createElement('a');link.href=url;link.download='';root.append(link);link.click();link.remove();}
 $('export-csv').addEventListener('click',()=>{if(view==='matrix')matrixPanel.exportData('csv');else if(jobId)download(`/api/v1/analyses/${jobId}/export?format=csv`);});$('export-json').addEventListener('click',()=>{if(view==='matrix')matrixPanel.exportData('json');else if(jobId)download(`/api/v1/analyses/${jobId}/export?format=json`);});
 $('share').addEventListener('click',async()=>{try{await bridge.navigate?.('analysis',{share:true,state:getState()});}catch(error){$('error-banner').hidden=false;$('error-banner').textContent=error.message;}});
+$('study-config-retry').addEventListener('click',async()=>{const snapshot=getState();$('study-config-retry').disabled=true;try{await activate({state:snapshot,context:snapshot.context,run:false});}finally{$('study-config-retry').disabled=false;}});
 $('show-atlas').addEventListener('click',()=>bridge.navigate?.('atlas',{context:getState().context,from:'analysis',analysisState:getState()}));
-$('draw-area').addEventListener('click',()=>{if(busy)return;drawing=!drawing;drawStart=null;$('draw-instruction').hidden=!drawing;map.getContainer().style.cursor=drawing?'crosshair':'';});
+$('draw-area').addEventListener('click',()=>{if(busy)return;drawing=!drawing;drawStart=null;$('draw-instruction').hidden=!drawing;map.getContainer().style.cursor=drawing?'crosshair':'';if(drawing){$('analysis-map').focus({preventScroll:true});$('analysis-map').scrollIntoView({block:'center'});}});
 map.on('click',event=>{if(!active||busy||!drawing)return;const point=event.latlng;if(!drawStart){drawStart=point;return;}const a=drawStart,b=point;const bbox=[Math.min(a.lng,b.lng),Math.min(a.lat,b.lat),Math.max(a.lng,b.lng),Math.max(a.lat,b.lat)];['west','south','east','north'].forEach((k,i)=>$(k).value=bbox[i].toFixed(5));clearShape();$('preset').value='custom';drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';showBounds(false);invalidate();publishContext();});
 root.addEventListener('keydown',event=>{if(event.key==='Escape'){drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';}});
 let resizeTimer;new ResizeObserver(()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(active&&result)renderAll();},120);}).observe($('workbench'));
@@ -517,10 +567,11 @@ function applyContext(context){
  if(['all','D','N'].includes(context.daynight))$('daynight').value=context.daynight;
  if(context.platform==='all'||labels[context.platform]){source=context.platform;$('platform').value=source;}
  retainedFocus=clone(context.focus)||null;rangeFocus=isRangeFocus(retainedFocus)?clone(retainedFocus):null;showBounds();invalidate();
- if(source==='all')$('form-status').textContent='Передано «все спутники». Выберите один для временного анализа.';
+ if(source==='all')$('form-status').textContent='Передано «все спутники». План предложит отдельный ряд; для ручного расчёта выберите один спутник.';
 }
 function applyFocus(focus){
  if(!focus||!result)return;
+ if(focus.start<result.config.start||focus.end>result.config.end){retainedFocus=null;rangeFocus=null;return;}
  rangeFocus=isRangeFocus(focus)?clone(focus):null;
  const key=focus.start?.slice(0,7);
  if(sourceRows().some(row=>row.month===key)){month=key;$('focus-month').value=key;if(focus.grain==='day')frame=Math.max(0,frameDates().indexOf(focus.start)+1);}
@@ -536,36 +587,52 @@ function focusState(){
 function getState(){
  const config=result?.config||formConfig(),geometry=config.circle?null:config.geometry||(config.preset==='sko'?(roiGeometry||settings?.region_geometry):roiGeometry),circle=config.circle||roiCircle;
  const matrix=matrixPanel.getState();
- return {context:{roi:{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')},history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km},tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
+ const study=planner.getState();
+ return {context:{roi:{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')},history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km,study},study,tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
 }
 async function activate(options={}){
  const current=++activation;active=true;
+ const residentResult=result,residentId=jobId,residentView=result?getState():null;
+ setBootstrapPending(true);
+ const intended=options.context||options.state?.context;
+ let contextApplied=false;
  try{
+  if(intended){applyContext(intended);planner.restore(intended.study||options.state?.study||planner.getState());contextApplied=true;setBootstrapPending(true);}
   await initialize();
   if(!active||current!==activation)return;
+  setBootstrapPending(false);
+  $('study-config-retry').hidden=true;$('error-banner').hidden=true;
   const saved=options.state||options,matching=saved.analysisId&&saved.analysisId===jobId&&result;
   const incoming=options.context||saved.context;
-  if(incoming)applyContext(incoming);
+  if(incoming){applyContext(incoming);contextApplied=true;}
   else if(matching&&saved.context){if(labels[saved.context.platform]){source=saved.context.platform;$('platform').value=source;}retainedFocus=clone(saved.context.focus);applyFocus(retainedFocus);}
-  matrixPanel.resume();
+  planner.restore(incoming?.study||saved.study||saved.context?.study||planner.getState());planner.resume();matrixPanel.resume();
   pendingViewState=incoming||options.run?saved:null;
   if(result)restoreView(saved);
   if(options.tab||saved.tab)activateTab(options.tab||saved.tab);
   map.invalidateSize({pan:false});
+  let residentReused=false;
+  if(!result&&residentResult&&(!saved.analysisId||saved.analysisId===residentId)&&sameScientificConfig(residentResult.config,formConfig())){
+   result=residentResult;jobId=residentId;residentReused=true;
+   pendingViewState={...residentView,...saved};
+   if(incoming?.focus&&JSON.stringify(incoming.focus)!==JSON.stringify(residentView?.context?.focus)){delete pendingViewState.month;delete pendingViewState.mapYear;}
+   await displayResult();if(!active||current!==activation)return getState();$('form-status').textContent=source==='all'?'Расчёт сохранён. Выберите один спутник для просмотра; платформы не суммируются.':'Восстановлен готовый расчёт этих условий; новый запрос не выполнялся.';
+  }
   if(saved.analysisId&&!result){
    const restoringGeneration=generation;
    const intended=clone(formConfig());
-   try{const job=await request(`/api/v1/analyses/${encodeURIComponent(saved.analysisId)}`);if(current!==activation||!active||restoringGeneration!==generation)return;if(job.status!=='done'||!job.result)throw new Error('Сохранённый расчёт ещё не готов.');if(!sameScientificConfig(job.result.config,intended)||!sameScientificConfig(formConfig(),intended)){rejectCachedResult('Сохранённый расчёт относится к другой территории или другим научным параметрам. Данные не показаны; выполните новый расчёт.');return getState();}jobId=saved.analysisId;acceptResult(job.result);await displayResult();$('form-status').textContent='Восстановлен сохранённый расчёт; новый запрос не выполнялся.';}
+   try{const job=await request(`/api/v1/analyses/${encodeURIComponent(saved.analysisId)}`);if(current!==activation||!active||restoringGeneration!==generation)return;if(job.status!=='done'||!job.result)throw new Error('Сохранённый расчёт ещё не готов.');if(!sameScientificConfig(job.result.config,intended)||!sameScientificConfig(formConfig(),intended)){rejectCachedResult('Сохранённый расчёт относится к другой территории или другим научным параметрам. Данные не показаны; выполните новый расчёт.');return getState();}jobId=saved.analysisId;acceptResult(job.result);await displayResult();if(!active||current!==activation||restoringGeneration!==generation)return getState();$('form-status').textContent='Восстановлен сохранённый расчёт; новый запрос не выполнялся.';}
    catch(error){if(current===activation){$('form-status').textContent='Сохранённый расчёт недоступен. Параметры восстановлены; нажмите «Построить анализ», чтобы рассчитать заново.';$('error-banner').hidden=false;$('error-banner').textContent=error.message;}}
   }
-  else if(options.run===true){pendingAnalysis=startAnalysis();await pendingAnalysis;}
-  else if(result){renderAll();await updateMap();}
-  else if(source!=='all')$('form-status').textContent='Параметры готовы. Постройте анализ выбранной территории.';
+  else if(options.run===true&&!result){pendingAnalysis=startAnalysis();await pendingAnalysis;}
+  else if(result&&!residentReused&&source!=='all'){showResultSurface(true);renderAll();planner.resultReady({id:jobId,platform:source,month});await updateMap();}
+  else if(!result&&source!=='all')$('form-status').textContent='Получите условия по архиву либо запустите расчёт с ручными настройками.';
   if(current!==activation||!active)return;
-  if(saved.matrixId&&result&&saved.matrixId!==matrixPanel.getState().id)await matrixPanel.restore(saved.matrixId,saved.matrixState);
+  const matrixId=saved.matrixId||(residentReused?residentView?.matrixId:null),matrixState=saved.matrixState||(residentReused?residentView?.matrixState:null);
+  if(matrixId&&result&&matrixId!==matrixPanel.getState().id)await matrixPanel.restore(matrixId,matrixState);
   matrixPanel.setVisible(view==='matrix');
   return getState();
- }catch(error){if(current===activation&&active){$('error-banner').hidden=false;$('error-banner').textContent='Сервис анализа недоступен: '+error.message;}return getState();}
+ }catch(error){if(current===activation&&active){if(!settings&&intended&&!contextApplied){applyContext(intended);planner.restore(intended.study||options.state?.study||planner.getState());}planner.resume();setBootstrapPending(false);$('error-banner').hidden=false;$('error-banner').textContent='Сервис анализа недоступен: '+error.message;$('study-config-retry').hidden=Boolean(settings);$('form-status').textContent='Территория и условия сохранены. Повторите подключение к архиву.';if(!settings)$('archive-info').textContent='Подключение к архиву недоступно';}return getState();}
 }
 function restoreView(state){
  if(!state||!result)return;
@@ -577,7 +644,7 @@ function restoreView(state){
  if(['raw','calibrated'].includes(state.seriesMode))$('series-mode').value=state.seriesMode;
 }
 function deactivate(){
- active=false;++activation;stopPlaying();++mapGeneration;drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';$('method-dialog').close();matrixPanel.pause();
+ active=false;++activation;++generation;analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);planner.pause();stopPlaying();++mapGeneration;drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';$('method-dialog').close();matrixPanel.pause();
 }
 
 /* Lifecycle is owned by the application shell; importing this module is inert. */

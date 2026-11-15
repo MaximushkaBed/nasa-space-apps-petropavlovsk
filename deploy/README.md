@@ -164,16 +164,20 @@ docker build -f deploy/Dockerfile.data -t nasa-space-apps-data:current .
 
 ```bash
 docker image tag nasa-space-apps-web:current nasa-space-apps-web:rollback
+docker image tag nasa-space-apps-analysis:current nasa-space-apps-analysis:rollback
 ```
 
-`update-checkout.sh` перед деплоем автоматически сохраняет предыдущий образ
-как `rollback`. Отключить вебхук stack в Komodo, восстановить образ и запустить без сборки:
+`update-checkout.sh` перед деплоем автоматически сохраняет предыдущие образы
+веба и API анализа как `rollback`. Отключить процедуру автодеплоя в Komodo,
+восстановить образы и запустить эти два сервиса без сборки:
 
 ```bash
 docker image tag nasa-space-apps-web:rollback nasa-space-apps-web:current
+docker image tag nasa-space-apps-analysis:rollback nasa-space-apps-analysis:current
 cd /root/platforms/projects/nasa-space-apps/repository
-docker compose -f deploy/compose.yml up -d --no-build
+docker compose -f deploy/compose.yml up -d --no-build web analysis
 curl -f http://127.0.0.1:18088/health
+curl -f http://127.0.0.1:18088/api/v1/health
 ```
 
 Затем исправить код обычным коммитом и включить вебхук. Постоянное хранилище

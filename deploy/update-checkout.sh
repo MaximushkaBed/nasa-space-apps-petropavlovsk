@@ -9,3 +9,6 @@ git -c safe.directory="$project/repository" -C "$project/repository" rev-parse H
 if docker image inspect nasa-space-apps-web:current >/dev/null 2>&1; then
     docker image tag nasa-space-apps-web:current nasa-space-apps-web:rollback
 fi
+if docker image inspect nasa-space-apps-analysis:current >/dev/null 2>&1; then
+    docker image tag nasa-space-apps-analysis:current nasa-space-apps-analysis:rollback
+fi

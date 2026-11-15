@@ -12,6 +12,11 @@ The project scope is **global**. North Kazakhstan Region (Северо-Каза�
 
 ## Web MVP
 
+The [development goal](docs/development-goal.md) defines the ordered worldwide
+study journey. The [study planner](docs/study-planner.md) proposes comparison
+conditions before computation and assesses their suitability against the completed
+regional result; the existing atlas, calendar, maps and exports remain its tools.
+
 Shared-server deployment, global dataset paths and Komodo autodeploy are documented in [deploy/README.md](deploy/README.md). Large world archives are downloaded on `unik`, not on the laptop.
 
 The application shares a persistent header and study context across Atlas, Area Analysis and Cases. It selects an exact area and dates, builds a years-by-month calendar and weekly seasonal profile, compares years, maps monthly deviations, and exports CSV, JSON and SVG. A bounded asynchronous API queries real archive files on the shared server. See [workbench/API documentation](docs/workbench.md) for setup, units, validation and current scientific limits.

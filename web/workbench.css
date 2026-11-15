@@ -143,3 +143,92 @@ button:hover:not(:disabled) { background: var(--app-hover); }
 .focus-scope { border-left-color: var(--teal); }
 dialog::backdrop { background: #020918b8; }
 }
+
+/* The study planner follows the existing atlas panels and control palette. */
+:where(.analysis-workbench) {
+  .study-conditions { padding:18px 20px; border-bottom:1px solid var(--line); min-width:0; }
+  .study-conditions h2,.study-run-label { display:flex; align-items:center; gap:8px; margin:0 0 12px; font-size:12px; font-weight:650; color:var(--ink); }
+  .study-current-conditions { font-size:10px; line-height:1.7; color:var(--muted); margin:0 0 12px; overflow-wrap:anywhere; }
+  #study-question { font-size:11px; }
+  #study-plan-status { min-height:2.8em; }
+  #study-plan-options { display:grid; gap:10px; margin-top:12px; }
+  .study-option { border:1px solid var(--app-control-line); border-radius:5px; padding:12px; background:var(--app-bg); min-width:0; }
+  .study-option h3 { margin:0 0 6px; font-size:12px; font-weight:600; line-height:1.5; overflow-wrap:anywhere; }
+  .study-option-label { display:block; color:var(--teal); font-size:9px; margin:0 0 8px; }
+  .study-option-description,.study-option-config,.study-option-reason { font-size:10px; line-height:1.7; margin:6px 0; overflow-wrap:anywhere; }
+  .study-option-description,.study-option-config { color:var(--muted); }
+  .study-option-reason { color:var(--app-warning); }
+  .study-option ul,.study-applied ul,.study-plan-evidence ul,.study-assessment ul { padding-left:17px; font-size:10px; line-height:1.7; margin:8px 0; overflow-wrap:anywhere; }
+  .study-option li+li,.study-assessment li+li { margin-top:5px; }
+  .study-option button { margin-top:12px; line-height:1.5; white-space:normal; min-height:38px; }
+  #study-options-wide #study-plan-options { margin-top:0; }
+  #study-options-wide .study-option { padding:13px 15px; }
+  #study-options-wide .study-option-description,#study-options-wide .study-option-config { font-size:11px; }
+  #study-options-wide .study-option button { width:auto; min-height:35px; padding:8px 12px; margin-top:8px; }
+  #study-options-wide .study-option details { margin-top:6px; }
+  #study-options-wide .study-option h3 { font-size:13px; margin-bottom:4px; }
+  #study-options-wide .study-option-label { display:inline-block; margin-bottom:3px; }
+  #study-options-wide .study-option ul { margin:6px 0; }
+  #study-options-wide .study-applied { margin:0; }
+  .study-config-retry { align-self:flex-start; font-size:11px; min-height:40px; }
+  .study-option details,.study-plan-evidence { line-height:1.7; margin-top:9px; }
+  .study-plan-evidence p { overflow-wrap:anywhere; font-size:10px; }
+  .study-applied { border-left:2px solid var(--teal); padding:10px 0 10px 11px; margin:13px 0; line-height:1.7; }
+  .study-applied>strong { color:var(--teal); font-size:11px; }
+  .study-applied>p { font-size:10px; margin:7px 0 0; overflow-wrap:anywhere; }
+  .manual-conditions { margin-top:15px; border-top:1px solid var(--line); padding-top:12px; }
+  .manual-conditions>summary { font-weight:550; color:var(--app-accent); font-size:10px; line-height:1.6; min-height:26px; }
+  .filters .manual-conditions fieldset { padding:16px 0 12px; }
+  .manual-conditions fieldset legend { font-size:11px; margin-bottom:10px; }
+  .manual-run-note { margin-top:12px; }
+  .study-run-label { font-size:11px; }
+  .study-next-step { padding:24px; border:1px solid var(--line); border-radius:6px; background:var(--app-surface); min-width:0; align-self:start; }
+  .study-next-step h3 { font-size:19px; line-height:1.4; letter-spacing:-.4px; max-width:320px; margin:12px 0; }
+  .study-next-step>p { font-size:12px; color:var(--muted); line-height:1.8; max-width:440px; }
+  .study-next-step>button { font-size:11px; margin:7px 0 13px; white-space:normal; min-height:40px; }
+  .study-next-step>p.hint { font-size:10px; border-top:1px solid var(--line); padding-top:15px; margin-top:10px; }
+  &[data-study-stage=proposed] .study-next-step>p.hint { margin-bottom:0; }
+  &[data-study-stage=proposed] .study-next-step>p:not(.hint) { margin-bottom:16px; }
+  &[data-has-result=false] .work-panels>.workspace-top { display:flex; align-self:start; width:100%; }
+  &[data-has-result=false] .map-frame { width:100%; }
+  .study-assessment { border:1px solid var(--line); border-left:3px solid var(--teal); background:var(--app-surface); border-radius:5px; padding:13px 16px; min-width:0; }
+  .study-assessment[data-status=limited],.study-assessment[data-status=unavailable],.study-assessment[data-status=error] { border-left-color:var(--app-warning); }
+  .study-assessment-heading { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .study-assessment-heading h3 { font-size:12px; margin:0; line-height:1.5; }
+  .study-badge { font-size:9px; color:var(--teal); border:1px solid currentColor; padding:3px 6px; border-radius:3px; }
+  .study-assessment:is([data-status=limited],[data-status=unavailable],[data-status=error]) .study-badge { color:var(--app-warning); }
+  #study-assessment-summary { font-size:11px; line-height:1.7; margin:8px 0 0; overflow-wrap:anywhere; }
+  #study-assessment-details { line-height:1.8; margin-top:8px; }
+  #study-assessment-facts { font-size:10px; color:var(--muted); overflow-wrap:anywhere; }
+  .study-assessment-actions { display:flex; flex-wrap:wrap; gap:15px; margin-top:8px; }
+  .study-assessment-actions button { white-space:normal; text-align:left; }
+  #job-banner,#study-assessment,#study-question,#run,#study-plan-request { scroll-margin-top:calc(var(--app-header-height,56px) + 16px); }
+  .calendar-empty { grid-column:1/-1; line-height:1.8; color:var(--muted); font-size:11px; padding:14px 0; }
+  .study-question-field:disabled,.manual-conditions fieldset:disabled { opacity:.65; }
+  @media(max-width:1100px) { .study-conditions { padding-left:16px; padding-right:16px; } }
+  @media(max-width:1000px) { .study-next-step { order:-1; padding:20px; } .study-next-step h3 { max-width:none; font-size:17px; } }
+  @media(max-width:620px) {
+    #analysis-form { display:block; }
+    .filters .study-question-field,.study-conditions { padding:14px 12px; border-bottom:1px solid var(--line); }
+    #analysis-form fieldset:first-child>label { display:block; }
+    #preset { width:100%; margin-right:0; }
+    #draw-area { width:100%; font-size:10px; }
+    .study-conditions h2,.study-run-label { font-size:12px; }
+    .study-current-conditions { font-size:11px; }
+    .study-question-field label,.study-question-field .hint,.study-option-description,.study-option-config,.study-option-reason { font-size:11px; }
+    .study-option { padding:12px; }
+    .study-option button,.filters #study-plan-request { font-size:11px; min-height:40px; }
+    .manual-conditions>summary { font-size:11px; min-height:32px; }
+    .filters .manual-conditions fieldset { padding:14px 0 10px; }
+    .submit-area { margin-top:14px; }
+    .study-next-step { padding:18px; }
+    .study-next-step>p { font-size:11px; }
+    .study-assessment { padding:12px; }
+    .contextbar { flex-wrap:wrap; }
+    .contextbar .context-actions { max-width:none; width:100%; justify-content:flex-start; }
+    .context-actions #show-atlas,.context-actions #share { display:block; }
+    .context-actions #export-csv,.context-actions #export-image { width:auto; }
+    .job-banner { flex-wrap:wrap; }
+    .job-banner progress { width:100%; margin-left:27px; }
+  }
+}
