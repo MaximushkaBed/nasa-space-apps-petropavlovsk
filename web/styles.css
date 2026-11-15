@@ -253,6 +253,9 @@ body:not(.leaflet-dragging) #map.reading-layer:not(.selecting-area) { cursor: de
 .weather-frame-fade { transition: opacity 180ms linear; }
 .world-wind-canvas { position: absolute; inset: 0; pointer-events: none; filter: drop-shadow(0 0 1px #102c46); }
 #play-weather { margin-left: auto; color: var(--sky); }
+.timeline-weather-controls { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+#map:not(.show-sko-context) :is(.leaflet-local-geography-pane, .leaflet-selected-region-pane, .leaflet-city-labels-pane) { display: none; }
+.workspace:has(#map:not(.show-sko-context)) #regional-count { display: none; }
 #play-weather[aria-pressed='true'] { background: #1c385c; border-color: var(--sky); }
 #world-wind-status { margin: 2px 6px 0; }
 #terrain-status { grid-column: 1 / -1; margin: 0 6px; }
@@ -460,6 +463,7 @@ dialog strong { color: var(--text); }
   .calendar button { font-size: 9px; }
   .timeline .fire-key { display: none; }
   .timeline-heading { flex-wrap: nowrap; gap: 4px; }
+  .timeline-heading:has(#weather-off:not([hidden])) { flex-wrap: wrap; }
   .timeline .view-switch { gap: 2px; }
   .timeline-heading :is(.view-switch button, .quiet-button) { padding-inline: 4px; font-size: 10px; }
 }

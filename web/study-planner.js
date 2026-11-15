@@ -1,9 +1,9 @@
 import { scientificSignature } from './scientific-context.js';
 
 const questions = {
-  anomaly: {note:'Сравнение выбранного месяца с тем же временем года. Оцениваемый год исключается из базы.', tab:'calendar'},
-  'compare-years': {note:'Сопоставление одинаковых частей года на исходном ряду одной платформы.', tab:'compare'},
-  'sensor-transition': {note:'Проверка согласования с Aqua на отложенных годах. Допуск определяется после расчёта.', tab:'validation'},
+  anomaly: {title:'Отклонение от сезонной нормы',note:'Активность по месяцам, сезонная норма и отклонение от неё. Для сравнения используются те же дни других базовых лет.', tab:'calendar'},
+  'compare-years': {title:'Сравнение активности по годам',note:'Недельные профили двух лет, пики активности и доступные периоды на исходном ряду одного спутника.', tab:'compare'},
+  'sensor-transition': {title:'Сопоставимость спутниковых данных',note:'Ошибка сопоставления с Aqua, проверка на отложенных годах и допуск модели для выбранной территории.', tab:'validation'},
 };
 const fieldNames = {start:'Начало истории',end:'Конец истории',baseline_start:'Первый базовый год',baseline_end:'Последний базовый год',platform:'Спутник',quality:'Архив',grid_km:'Сетка, км',daynight:'Время суток',focus:'Фокус карты'};
 const make = (tag, className, text) => {const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;};
@@ -33,7 +33,7 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
     $('study-question-note').textContent=questions[state.question].note;
     $('study-current-conditions').textContent=conditionText(config,platform);
     $('study-plan-request').disabled=loading||state.stage==='running'||root.dataset.bootstrapPending==='true';
-    $('study-plan-request').textContent=loading?'Подбираю условия…':plan?'Обновить варианты':'Предложить условия';
+    $('study-plan-request').textContent=loading?'Подбираю условия…':'Подобрать условия';
     $('study-plan-options').setAttribute('aria-busy',String(loading));
     const applied=Boolean(state.appliedSignature&&state.appliedSignature===safeSignature());
     $('study-applied').hidden=!applied;
@@ -46,9 +46,9 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
     $('study-applied').querySelector('.hint').textContent=running?'Расчёт выполняется с этими условиями.':state.stage==='result'?'Условия этого расчёта. Изменение научных параметров потребует нового расчёта.':'Проверьте условия и запустите расчёт ниже.';
     if(running)$('study-plan-status').textContent='Расчёт запущен с выбранными условиями.';
     else if(state.stage==='result')$('study-plan-status').textContent='Условия использованы в расчёте. Пригодность сравнения показана рядом с результатом.';
-    $('study-next-title').textContent=running?'Считаем выбранную территорию':applied?'Условия выбраны — можно считать':plan?'Выберите условия сравнения':'Выберите вопрос к этой территории';
-    $('study-next-note').textContent=running?'Прогресс показан над картой. Расчёт использует выбранную границу, историю, сетку и фильтры.':applied?'Проверьте историю, базовые годы и спутник в выбранных условиях. Кнопка «Построить анализ» запустит расчёт.':plan?'Каждый вариант предварительный. Сначала примените подходящие условия; расчёт и проверка выполняются следующим шагом.':'Предложим условия по доступной истории спутников. После расчёта здесь появятся календарь, сравнение лет и проверка согласования.';
-    $('study-next-action').textContent=running?'К прогрессу расчёта ↑':applied?'К запуску расчёта ↑':plan?'К предложенным условиям ↑':'К вопросу исследования ↑';
+    $('study-next-title').textContent=running?'Рассчитываем активность территории':applied?'Условия готовы к расчёту':plan?'Выберите условия расчёта':questions[state.question].title;
+    $('study-next-note').textContent=running?'Прогресс показан над картой. Расчёт использует выбранную границу, историю, сетку и фильтры.':applied?'Проверьте историю, базовые годы и спутник в выбранных условиях. Кнопка «Построить анализ» запустит расчёт.':plan?'Варианты показывают доступную историю, спутник и базу сравнения. Примените подходящие условия, затем запустите расчёт.':questions[state.question].note+' Подберите условия по доступному архиву, затем запустите расчёт.';
+    $('study-next-action').textContent=running?'К прогрессу расчёта ↑':applied?'К запуску расчёта ↑':plan?'К вариантам условий ↑':'Подобрать условия ↑';
     $('study-next-action').hidden=Boolean(plan&&wideLayout.matches);
     $('study-existing-result').hidden=!resultRef||state.stage==='result'||running;
     root.dataset.studyStage=state.stage;
@@ -57,7 +57,7 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
     cancelPlan();cancelAssessment();resultRef=null;plan=null;planSignature=null;
     state={...state,optionId:null,stage:'question',appliedSignature:null};appliedChanges=[];
     $('study-plan-options').replaceChildren();$('study-assessment').hidden=true;
-    $('study-plan-status').textContent='Условия изменены. Получите новое предложение или рассчитайте ручные настройки.';
+    $('study-plan-status').textContent='Условия изменены. Подберите их заново или используйте ручные настройки.';
     render();
   }
   function renderPlan(){
@@ -157,7 +157,7 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
     state={question,optionId:saved?.optionId||null,stage:'question',appliedSignature:saved?.appliedSignature||null};
     if(state.appliedSignature===safeSignature()&&state.optionId)state.stage='applied';
     else{state.optionId=null;state.appliedSignature=null;}
-    $('study-plan-status').textContent=state.stage==='applied'?'Выбранные условия восстановлены. Проверка будет выполнена по результату расчёта.':saved?.stage==='proposed'?'Вопрос и условия восстановлены. Получите варианты заново по текущему архиву.':'Получите предварительные условия либо используйте ручные настройки.';render();
+    $('study-plan-status').textContent=state.stage==='applied'?'Выбранные условия восстановлены. Проверка будет выполнена по результату расчёта.':saved?.stage==='proposed'?'Режим и условия восстановлены. Подберите варианты заново по текущему архиву.':'Подберите условия по архиву либо используйте ручные настройки.';render();
   }
   $('study-question').addEventListener('change',()=>{state.question=$('study-question').value;invalidate();onQuestion?.(null,{invalidate:true});changed();});
   $('study-plan-request').addEventListener('click',requestPlan);
@@ -165,7 +165,7 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
   $('manual-conditions').addEventListener('toggle',render);
   $('study-assessment-retry').addEventListener('click',()=>assess(true));
   $('study-change-conditions').addEventListener('click',()=>{$('study-question').scrollIntoView({block:'center'});$('study-question').focus({preventScroll:true});});
-  $('study-next-action').addEventListener('click',()=>{const id=state.stage==='running'?'job-banner':state.stage==='applied'?'run':plan?'study-plan-request':'study-question';$(id).scrollIntoView({block:'center'});if(id!=='job-banner')$(id).focus({preventScroll:true});});
+  $('study-next-action').addEventListener('click',()=>{const id=state.stage==='running'?'job-banner':state.stage==='applied'?'run':'study-plan-request';$(id).scrollIntoView({block:'center'});if(id!=='job-banner')$(id).focus({preventScroll:true});});
   render();
   return {invalidate,prepareRun,runFailed,resultReady,updateMonth,restore,getState:()=>({...state}),pause(){suspended=true;cancelPlan();cancelAssessment();if(state.stage==='running')state.stage='applied';},resume(){suspended=false;render();if(resultRef)assess();}};
 }

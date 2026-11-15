@@ -24,7 +24,7 @@ NRT_LIMIT = 'SP и предварительные NRT не являются об
 
 def validate_choices(question, platform, *, allow_auto=True):
     if question not in QUESTIONS:
-        raise ValueError('Неизвестный исследовательский вопрос.')
+        raise ValueError('Неизвестный режим анализа.')
     if platform not in (*PLATFORMS, 'auto') or platform == 'auto' and not allow_auto:
         raise ValueError('Выберите один спутник для исследования.' if not allow_auto else 'Неизвестный спутник.')
 
@@ -149,7 +149,7 @@ def _candidate(config, question, platform, requested_platform, rows):
             else:
                 reason = reason or 'Для тех же календарных месяцев не найдены минимум три других базовых года этого спутника. Даты запуска прибора не заменяют наличие продукта.'
         score = len(eligible)
-        title = f'{platform}: необычность последнего выбранного года'
+        title = f'{platform}: отклонение от сезонной нормы'
         description = 'Исходный ряд одного спутника; последний выбранный год сравнивается с теми же частями месяцев в других годах. Условия предварительные.'
         if proposed['end'] != config['end']:
             limitations.append(f'Исходный конец {config["end"]} не поддержан полным SP-месяцем или имеет предварительные/неполные данные. Этот вариант явно меняет конец на {proposed["end"]}.')
@@ -158,11 +158,11 @@ def _candidate(config, question, platform, requested_platform, rows):
         score = len(eligible)
         if len({key[:4] for key in eligible}) < 2:
             reason = 'В выбранной истории метаданные не подтверждают два года с полными месяцами одного источника. Ручной исходный ряд остаётся доступен.'
-        title = f'{platform}: сравнение двух лет'
+        title = f'{platform}: сравнение активности по годам'
         description = 'История и база сохранены. После расчёта выберите два года в существующем сравнении; используется один исходный спутниковый ряд.'
         limitations.append('Наличие отдельных полных месяцев в двух годах ещё не подтверждает одинаковое покрытие выбранных частей года.')
     else:
-        title = f'{platform}: отложенная проверка относительно Aqua'
+        title = f'{platform}: сопоставимость спутниковых данных'
         description = 'Сначала региональный расчёт, затем проверка SP-согласования на последующих годах. До результата переход между спутниками не считается проверенным.'
         limitations += [NRT_LIMIT, 'Положительный постоянный коэффициент не улучшает собственные проценты аномалии и ранги источника. Ранние Terra, Aqua и VIIRS не образуют автоматически проверенный мост.']
         common = sorted(key for key, row in in_history.items() if _complete(row) and _complete(rows.get(('Aqua', key))))
@@ -294,8 +294,8 @@ def assess(analysis, question, platform, *, month=None, analysis_id=None):
             status = 'limited'
         reasons.append('В оцениваемом периоде есть предварительные NRT; результат остаётся исходным предварительным рядом, а SP-проверка на него не переносится.')
     if not reasons:
-        reasons.append('Условия выбранного вопроса выполнены в оцениваемой части сохранённого результата; локальная наблюдаемость остаётся неизвестной.')
-    titles = {'ready': 'Условия сравнения выполнены', 'limited': 'Сравнение доступно с ограничениями', 'unavailable': 'Для выбранного вопроса данных недостаточно'}
+        reasons.append('Условия выбранного режима анализа выполнены в оцениваемой части сохранённого результата; локальная наблюдаемость остаётся неизвестной.')
+    titles = {'ready': 'Условия сравнения выполнены', 'limited': 'Сравнение доступно с ограничениями', 'unavailable': 'Для выбранного режима анализа данных недостаточно'}
     if question == 'sensor-transition' and status == 'ready':
         titles['ready'] = 'Региональная SP-проверка пройдена'
     return dict(version=VERSION, question=question, platform=platform, status=status, title=titles[status], summary=reasons[0],

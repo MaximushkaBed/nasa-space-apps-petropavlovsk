@@ -2,6 +2,7 @@ import { mountMatrixPanel } from './matrix-panel.js?v=dark';
 import { sameScientificConfig, scientificSignature } from './scientific-context.js';
 import { mountStudyPlanner } from './study-planner.js';
 import { mountStudyRevisions } from './study-revisions.js';
+import { createTerritorySearch, fitTerritory } from './territory-search.js';
 
 export function mountWorkbench(root, bridge={}) {
 if (!(root instanceof Element)) throw new TypeError('Workbench root is required');
@@ -19,10 +20,11 @@ let mapMode='activity', mapYear=null, compareYearA=null, compareYearB=null;
 let active=false, settingsPromise, pendingAnalysis, activation=0, pendingViewState=null;
 let analysisAbort=null,pendingQuestionNavigation=false,bootstrapPending=true;
 let roiGeometry=null, roiCircle=null, roiName='', roiSource='', retainedFocus=null, rangeFocus=null;
+let territorySelected=false, territoryRevision=0, territoryTimer;
 const clone=value=>value==null?value:structuredClone(value);
 const formatMonth = (key) => `${longMonths[Number(key.slice(5))-1]} ${key.slice(0,4)}`;
 const n = (value) => value===null || value===undefined ? '—' : num.format(value);
-const map = L.map($('analysis-map'), {preferCanvas:true, minZoom:2, maxZoom:17, worldCopyJump:false}).setView([53.8,69.5],6);
+const map = L.map($('analysis-map'), {preferCanvas:true, minZoom:1, maxZoom:17, worldCopyJump:false}).setView([18,0],1);
 map.attributionControl.setPrefix(false);
 const land = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg', {maxNativeZoom:8,maxZoom:17,noWrap:true,attribution:'NASA GIBS'}).addTo(map);
 const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:17,attribution:'Esri World Imagery · дата мозаики не равна дате детекций'});
@@ -39,6 +41,8 @@ const revisions=mountStudyRevisions($('study-revisions'),{request,isActive:()=>a
  onArchive:()=>{$('analysis-area-title').textContent='Сравнение сохранённых расчётов';$('context-note').textContent='Архивные значения показаны ниже. Новый расчёт не запускался.';$('study-next-title').textContent='Архивное сравнение';$('study-next-note').textContent='Текущий анализ этой версии не восстановлен. Сохранённые числа и ограничения доступны в сравнении выше.';}});
 showResultSurface(false);
 setBootstrapPending(true);
+const territorySearch=createTerritorySearch(request,()=>settings?.region_geometry||request('data/region.geojson').then(value=>value.features?.[0]?.geometry||value.geometry||value));
+for(const id of ['run','study-plan-request'])new MutationObserver(()=>{if(!territorySelected&&!$(id).disabled)$(id).disabled=true;}).observe($(id),{attributes:true,attributeFilter:['disabled']});
 
 function svgElement(tag, attrs={}, text){const node=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,v));if(text!==undefined)node.textContent=text;return node;}
 function empty(id,text){const node=document.createElement('div');node.className='empty-state';const p=document.createElement('p');p.textContent=text;node.append(p);$(id).replaceChildren(node);}
@@ -52,6 +56,7 @@ function formConfig(){return {preset:$('preset').value,bbox:['west','south','eas
 function selectedPreset(){return settings?.presets.find(p=>p.id===$('preset').value);}
 function validateInputs(){
  if(bootstrapPending){$('form-status').textContent='Дождитесь подключения к архиву.';return false;}
+ if(!territorySelected){$('form-status').textContent='Сначала найдите территорию или выделите область на карте.';$('analysis-territory-query').focus();return false;}
  const form=$('analysis-form');
  for(const input of form.querySelectorAll('input'))input.setCustomValidity('');
  const config=formConfig();
@@ -68,19 +73,51 @@ function validateInputs(){
  try{scientificSignature(config);}catch{$('form-status').textContent='Задайте допустимую территорию, историю и фильтры.';return false;}
  return true;
 }
-function areaName(config){return (config.preset==='sko'?settings?.presets.find(p=>p.id==='sko')?.name:config.roi_name)||settings?.presets.find(p=>p.id===config.preset&&p.id!=='custom')?.name || `Область ${config.bbox[1].toFixed(2)}°, ${config.bbox[0].toFixed(2)}°` ;}
+function areaName(config){if(!territorySelected)return 'Выберите территорию';return (config.preset==='sko'?settings?.presets.find(p=>p.id==='sko')?.name:config.roi_name)||settings?.presets.find(p=>p.id===config.preset&&p.id!=='custom')?.name || `Область ${config.bbox[1].toFixed(2)}°, ${config.bbox[0].toFixed(2)}°` ;}
+function syncTerritoryControls(){
+ root.dataset.territorySelected=String(territorySelected);
+ $('analysis-territory-selected').textContent=territorySelected?areaName(formConfig()):'Территория пока не выбрана';
+ $('run').disabled=$('study-plan-request').disabled=bootstrapPending||busy||!territorySelected;
+}
+function cancelTerritorySearch(){++territoryRevision;clearTimeout(territoryTimer);$('analysis-territory-results').replaceChildren();$('analysis-territory-results').hidden=true;$('analysis-territory-query').setAttribute('aria-expanded','false');}
+async function searchTerritory(){
+ clearTimeout(territoryTimer);const text=$('analysis-territory-query').value.trim();cancelTerritorySearch();
+ if(text.length<2){$('analysis-territory-status').textContent='Введите хотя бы две буквы названия.';return;}
+ const revision=territoryRevision;$('analysis-territory-status').textContent='Поиск границ…';
+ try{
+  const matches=await territorySearch.search(text);if(revision!==territoryRevision||!active)return;
+  const results=$('analysis-territory-results');
+  for(const match of matches){
+   const button=document.createElement('button');button.type='button';button.role='option';button.textContent=match.label;
+   button.addEventListener('click',async()=>{
+    if(revision!==territoryRevision)return;$('analysis-territory-status').textContent='Загружаем точную границу…';
+    try{
+     const roi=await match.load();if(revision!==territoryRevision||!active)return;
+     territorySelected=true;clearShape();$('preset').value=roi.preset||'custom';roiGeometry=clone(roi.geometry)||null;roiCircle=clone(roi.circle)||null;roiName=roi.name;roiSource=roi.source;
+     ['west','south','east','north'].forEach((key,i)=>$(key).value=roi.bbox[i]);
+     cancelTerritorySearch();$('analysis-territory-query').value=roi.name;$('analysis-territory-status').textContent=roi.source;
+     drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';showBounds(false);if(roiGeometry)fitTerritory(map,roiGeometry);else showBounds();invalidate();publishContext();
+    }catch(error){if(revision===territoryRevision)$('analysis-territory-status').textContent='Не удалось загрузить границу. Повторите поиск или выделите область на карте.';}
+   });results.append(button);
+  }
+  results.hidden=!matches.length;$('analysis-territory-query').setAttribute('aria-expanded',String(Boolean(matches.length)));
+  $('analysis-territory-status').textContent=matches.length?'Выберите территорию из списка.':'Место не найдено. Уточните название или выделите область на карте.';
+ }catch(error){if(revision===territoryRevision)$('analysis-territory-status').textContent='Поиск недоступен. Повторите запрос или выделите область на карте.';}
+}
 function showBounds(fit=true){
-  if(roiLayer)roiLayer.remove();const bbox=formConfig().bbox;
+  if(roiLayer)roiLayer.remove();roiLayer=null;syncTerritoryControls();
+  if(!territorySelected){if(fit)map.setView([18,0],1,{animate:false});$('area-note').textContent='Найдите территорию или выделите область на карте.';return;}
+  const bbox=formConfig().bbox;
   if($('preset').value==='sko'&&(roiGeometry||settings?.region_geometry))roiLayer=L.geoJSON(roiGeometry||settings.region_geometry,{style:{color:'#8bc6ff',weight:1.8,fillOpacity:.04}}).addTo(map);
   else if(roiCircle)roiLayer=L.circle([roiCircle.center[1],roiCircle.center[0]],{radius:roiCircle.radius_km*1000,color:'#8bc6ff',weight:1.8,fillOpacity:.04}).addTo(map);
   else if(roiGeometry)roiLayer=L.geoJSON(roiGeometry,{style:{color:'#8bc6ff',weight:1.8,fillOpacity:.04}}).addTo(map);
   else roiLayer=L.rectangle([[bbox[1],bbox[0]],[bbox[3],bbox[2]]],{color:'#8bc6ff',weight:1.8,fillOpacity:.04}).addTo(map);
-  if(fit)map.fitBounds(roiLayer.getBounds(),{padding:[35,35],maxZoom:8});
+  if(fit){if(roiGeometry)fitTerritory(map,roiGeometry);else map.fitBounds(roiLayer.getBounds(),{padding:[35,35],maxZoom:8});}
   $('area-note').textContent=$('preset').value==='sko'?'Анализ по исходной границе СКО, не по прямоугольнику.':roiGeometry?'Анализ по переданной геометрии территории; прямоугольник показывает только её охват.':roiCircle?`Анализ по окружности радиусом ${n(roiCircle.radius_km)} км.`:'Анализ по выделенному прямоугольнику; административные границы могут отличаться.';
 }
 function clearShape(){roiGeometry=roiCircle=null;roiName=roiSource='';}
 function publishContext(){if(active)bridge.setContext?.(getState().context);}
-function setPreset(){clearShape();const p=selectedPreset();if(p)['west','south','east','north'].forEach((k,i)=>$(k).value=p.bbox[i]);showBounds();invalidate();publishContext();}
+function setPreset(){cancelTerritorySearch();territorySelected=true;clearShape();const p=selectedPreset();if(p)['west','south','east','north'].forEach((k,i)=>$(k).value=p.bbox[i]);showBounds();invalidate();publishContext();}
 function showResultSurface(value){root.dataset.hasResult=String(value);$('study-results').hidden=!value;$('study-next-step').hidden=value;root.querySelector('.insights').hidden=!value;root.querySelector('.timeline-bar').hidden=!value;$('study-revisions').hidden=!value;}
 function invalidate({keepStudy=false}={}){
   ++generation;analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);
@@ -100,9 +137,10 @@ function invalidate({keepStudy=false}={}){
   ['series-chart','season-chart','calendar-season-chart','validation-chart','compare-chart'].forEach(id=>empty(id,'Запустите анализ с выбранными параметрами.'));
   $('calendar-grid').replaceChildren();$('validation-summary').replaceChildren();$('compare-metrics').replaceChildren();$('compare-year-a').disabled=$('compare-year-b').disabled=$('compare-map-a').disabled=$('compare-map-b').disabled=true;$('reference-disagreement').hidden=true;stopPlaying();
   renderFocusScope();
+  syncTerritoryControls();
 }
-function setBootstrapPending(value){bootstrapPending=value;root.dataset.bootstrapPending=String(value);$('analysis-form').setAttribute('aria-busy',String(value));$('run').disabled=value||busy;$('study-plan-request').disabled=value||busy;root.querySelectorAll('#analysis-form fieldset').forEach(field=>field.disabled=value||busy);if(value){$('form-status').textContent='Подключаем сведения об архиве…';$('study-plan-status').textContent='Загружаем настройки. Территория будет сохранена до выбора условий.';}}
-function setBusy(value){busy=value;$('run').disabled=value||bootstrapPending;$('run').firstChild.textContent=value?'Считаю… ':'Построить анализ ';root.querySelectorAll('#analysis-form fieldset').forEach(f=>f.disabled=value||bootstrapPending);$('study-plan-request').disabled=value||bootstrapPending;$('job-banner').hidden=!value;}
+function setBootstrapPending(value){bootstrapPending=value;root.dataset.bootstrapPending=String(value);$('analysis-form').setAttribute('aria-busy',String(value));syncTerritoryControls();root.querySelectorAll('#analysis-form fieldset').forEach(field=>field.disabled=value||busy);if(value){$('form-status').textContent='Подключаем сведения об архиве…';$('study-plan-status').textContent='Загружаем настройки. Территория будет сохранена до выбора условий.';}}
+function setBusy(value){busy=value;syncTerritoryControls();$('run').firstChild.textContent=value?'Считаю… ':'Построить анализ ';root.querySelectorAll('#analysis-form fieldset').forEach(f=>f.disabled=value||bootstrapPending);$('job-banner').hidden=!value;}
 async function startAnalysis(event){
   event?.preventDefault();
   if(busy||!active||!validateInputs())return;
@@ -138,6 +176,7 @@ function acceptResult(candidate){
  result={...candidate,config:freeze(clone(candidate.config))};
 }
 function syncCanonicalConfig(config){
+ territorySelected=true;
  $('preset').value=config.preset;
  ['west','south','east','north'].forEach((key,index)=>$(key).value=config.bbox[index]);
  $('start').value=config.start;$('end').value=config.end;$('baseline-start').value=config.baseline_start;$('baseline-end').value=config.baseline_end;$('grid').value=config.grid_km;$('include-nrt').checked=config.quality==='all';$('daynight').value=config.daynight;
@@ -210,7 +249,7 @@ function isRangeFocus(focus){return Boolean(focus?.start&&focus?.end&&focus.basi
 function clearRangeFocus(){rangeFocus=null;retainedFocus=null;renderFocusScope();}
 function renderFocusScope(){
  $('focus-scope').hidden=!rangeFocus;
- $('insight-title').textContent=rangeFocus?'Выбранный месяц календаря':'Что необычного в периоде?';
+ $('insight-title').textContent=rangeFocus?'Выбранный месяц календаря':'Активность выбранного месяца';
  if(!rangeFocus){$('map-mode').title='';return;}
  $('focus-scope-label').textContent=`Карта: ${rangeFocus.start} — ${rangeFocus.end} · UTC включительно`;
  $('focus-scope-note').textContent=`${result?'Карта показывает':'После расчёта карта покажет'} исходные ячейко-дни за выбранный диапазон. Календарь и карточка остаются помесячными; их выбранный месяц указан отдельно. Согласование применяется только к месяцам. Месячная карта отклонений и суточное воспроизведение для диапазона отключены.`;
@@ -225,7 +264,8 @@ function renderInsights(){
  $('baseline-value').textContent=n(comparisonAvailable(row)?baseline:null);
  $('anomaly-value').textContent=anomalyAvailable?`${row.anomaly_pct>0?'+':''}${n(row.anomaly_pct)}%`:'—';
  $('anomaly-value').style.color=row.anomaly_pct>50?'var(--orange)':'var(--app-accent)';
- $('anomaly-context').textContent=!comparisonAvailable(row)?comparisonMessage(row):unvalidated?'Этот месяц не допущен к SP-калибровке. Оперативные и непроверенные периоды доступны в исходном режиме.':row.cells===null?'В этом периоде у выбранной платформы нет доступного продукта.':comparisonMessage(row);
+ const conclusion=anomalyAvailable?(row.anomaly_pct>0?'Зарегистрированная активность выше исторического уровня. ':row.anomaly_pct<0?'Зарегистрированная активность ниже исторического уровня. ':'Зарегистрированная активность совпадает с историческим уровнем. '):'';
+ $('anomaly-context').textContent=conclusion+(!comparisonAvailable(row)?comparisonMessage(row):unvalidated?'Этот месяц не допущен к SP-калибровке. Оперативные и непроверенные периоды доступны в исходном режиме.':row.cells===null?'В этом периоде у выбранной платформы нет доступного продукта.':comparisonMessage(row));
  const aqua=sourceRows('Aqua').find(r=>r.month===month);
  const disagrees=anomalyAvailable&&comparisonAvailable(aqua)&&source!=='Aqua'&&Number.isFinite(aqua?.anomaly_pct)&&row.anomaly_pct*aqua.anomaly_pct<0&&Math.abs(row.anomaly_pct)>1&&Math.abs(aqua.anomaly_pct)>1;
  $('reference-disagreement').hidden=!disagrees;
@@ -504,16 +544,20 @@ async function play(){if(!result||mapMode!=='activity'||mapYear||rangeFocus)retu
 function openMethod(){$('method-dialog').showModal();}
 $('analysis-form').addEventListener('submit',startAnalysis);
 $('preset').addEventListener('change',setPreset);
+$('analysis-territory-find').addEventListener('click',searchTerritory);
+$('analysis-territory-query').addEventListener('input',()=>{cancelTerritorySearch();$('analysis-territory-status').textContent='';if($('analysis-territory-query').value.trim().length>=2)territoryTimer=setTimeout(searchTerritory,260);});
+$('analysis-territory-query').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();searchTerritory();}else if(event.key==='ArrowDown'){event.preventDefault();$('analysis-territory-results').querySelector('button')?.focus();}else if(event.key==='Escape')cancelTerritorySearch();});
+$('analysis-territory-results').addEventListener('keydown',event=>{const buttons=[...$('analysis-territory-results').querySelectorAll('button')],index=buttons.indexOf(document.activeElement);if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();buttons[(index+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}else if(event.key==='Escape'){cancelTerritorySearch();$('analysis-territory-query').focus();}});
 ['start','end','baseline-start','baseline-end','grid','daynight','include-nrt'].forEach(id=>{const events=['grid','daynight','include-nrt'].includes(id)?['change']:['input','change'];for(const event of events)$(id).addEventListener(event,()=>{for(const input of $('analysis-form').querySelectorAll('input'))input.setCustomValidity('');invalidate();publishContext();});});
-$('analysis-form').addEventListener('input',event=>{if(['west','south','east','north'].includes(event.target.id)){event.target.setCustomValidity('');clearShape();$('preset').value='custom';invalidate();publishContext();}});
-$('apply-bounds').addEventListener('click',()=>{clearShape();$('preset').value='custom';showBounds();invalidate();publishContext();});
+$('analysis-form').addEventListener('input',event=>{if(['west','south','east','north'].includes(event.target.id)){event.target.setCustomValidity('');cancelTerritorySearch();territorySelected=true;clearShape();$('preset').value='custom';invalidate();publishContext();}});
+$('apply-bounds').addEventListener('click',()=>{cancelTerritorySearch();territorySelected=true;clearShape();$('preset').value='custom';showBounds();invalidate();publishContext();});
 $('platform').addEventListener('change',()=>{
  source=$('platform').value;stopPlaying();frame=0;mapYear=null;planner.invalidate();++mapGeneration;cellsLayer.clearLayers();$('error-banner').hidden=true;
  if(result&&sameScientificConfig(result.config,formConfig())){
   showResultSurface(source!=='all');
   if(source==='all'){$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=true;$('form-status').textContent='Расчёт сохранён. Выберите один спутник для просмотра; платформы не суммируются.';$('map-count').textContent='Выберите один спутник';$('map-key-text').textContent='Разные платформы не суммируются.';$('map-period').textContent='Область исследования';}
   else{$('export-csv').disabled=$('export-json').disabled=$('export-image').disabled=false;populateCompareYears();renderAll();planner.resultReady({id:jobId,platform:source,month},{navigate:pendingQuestionNavigation});pendingQuestionNavigation=false;updateMap();$('form-status').textContent='Открыт исходный ряд выбранного спутника из готового расчёта.';}
- }else{invalidate();if(source==='all')$('form-status').textContent='Для ручного анализа выберите один спутник или получите предложение условий.';}
+ }else{invalidate();if(source==='all')$('form-status').textContent='Подберите условия или выберите один спутник для ручного анализа.';}
  matrixPanel.refresh();revisions.refresh();publishContext();
 });
 $('focus-month').addEventListener('change',()=>selectMonth($('focus-month').value));
@@ -539,13 +583,13 @@ $('share').addEventListener('click',async()=>{try{await bridge.navigate?.('analy
 $('study-config-retry').addEventListener('click',async()=>{const snapshot=getState();$('study-config-retry').disabled=true;try{await activate({state:snapshot,context:snapshot.context,run:false});}finally{$('study-config-retry').disabled=false;}});
 $('show-atlas').addEventListener('click',()=>bridge.navigate?.('atlas',{context:getState().context,from:'analysis',analysisState:getState()}));
 $('draw-area').addEventListener('click',()=>{if(busy)return;drawing=!drawing;drawStart=null;$('draw-instruction').hidden=!drawing;map.getContainer().style.cursor=drawing?'crosshair':'';if(drawing){$('analysis-map').focus({preventScroll:true});$('analysis-map').scrollIntoView({block:'center'});}});
-map.on('click',event=>{if(!active||busy||!drawing)return;const point=event.latlng;if(!drawStart){drawStart=point;return;}const a=drawStart,b=point;const bbox=[Math.min(a.lng,b.lng),Math.min(a.lat,b.lat),Math.max(a.lng,b.lng),Math.max(a.lat,b.lat)];['west','south','east','north'].forEach((k,i)=>$(k).value=bbox[i].toFixed(5));clearShape();$('preset').value='custom';drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';showBounds(false);invalidate();publishContext();});
+map.on('click',event=>{if(!active||busy||!drawing)return;const point=event.latlng;if(!drawStart){drawStart=point;return;}const a=drawStart,b=point;const bbox=[Math.min(a.lng,b.lng),Math.min(a.lat,b.lat),Math.max(a.lng,b.lng),Math.max(a.lat,b.lat)];['west','south','east','north'].forEach((k,i)=>$(k).value=bbox[i].toFixed(5));cancelTerritorySearch();territorySelected=true;clearShape();$('preset').value='custom';drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';showBounds(false);invalidate();publishContext();});
 root.addEventListener('keydown',event=>{if(event.key==='Escape'){drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';}});
 let resizeTimer;new ResizeObserver(()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(active&&result)renderAll();},120);}).observe($('workbench'));
 
 async function initialize(){
  if(settings)return;
- if(!settingsPromise)settingsPromise=request('/api/v1/config').then(value=>{settings=value;$('end').max=settings.end;$('archive-info').textContent=`${n(settings.rows/1e6)} млн записей · архив с 2000 года`;const preset=selectedPreset();if(preset)['west','south','east','north'].forEach((key,i)=>$(key).value=preset.bbox[i]);showBounds();}).catch(error=>{settingsPromise=null;throw error;});
+ if(!settingsPromise)settingsPromise=request('/api/v1/config').then(value=>{settings=value;$('end').max=settings.end;$('archive-info').textContent=`${n(settings.rows/1e6)} млн записей · архив с 2000 года`;const preset=selectedPreset();if(territorySelected&&preset)['west','south','east','north'].forEach((key,i)=>$(key).value=preset.bbox[i]);showBounds();}).catch(error=>{settingsPromise=null;throw error;});
  return settingsPromise;
 }
 function displayBounds(roi){
@@ -561,11 +605,11 @@ function applyContext(context){
  if(busy){++generation;setBusy(false);pendingAnalysis=null;}
  const roi=context.roi;
  if(roi){
-  clearShape();const preset=roi.preset&&[...$('preset').options].some(option=>option.value===roi.preset)?roi.preset:'custom';$('preset').value=preset;
+  cancelTerritorySearch();territorySelected=true;clearShape();const preset=roi.preset&&[...$('preset').options].some(option=>option.value===roi.preset)?roi.preset:'custom';$('preset').value=preset;
   const bbox=preset==='sko'?settings?.presets.find(item=>item.id==='sko')?.bbox:displayBounds(roi);
   if(Array.isArray(bbox)&&bbox.length===4)['west','south','east','north'].forEach((key,i)=>$(key).value=bbox[i]);
   if(preset!=='sko'){roiGeometry=clone(roi.geometry?.type==='Feature'?roi.geometry.geometry:roi.geometry)||null;roiCircle=roiGeometry?null:clone(roi.circle)||null;roiName=String(roi.name||'');roiSource=String(roi.source||'');}
- }
+ }else if(Object.hasOwn(context,'roi')){cancelTerritorySearch();territorySelected=false;clearShape();$('preset').value='custom';['west','south','east','north'].forEach((key,i)=>$(key).value=[-180,-85,180,85][i]);$('analysis-territory-query').value='';$('analysis-territory-status').textContent='';}
  if(context.history){if(context.history.start)$('start').value=context.history.start;if(context.history.end)$('end').value=context.history.end;}
  if(context.baseline){if(context.baseline.start!==undefined)$('baseline-start').value=context.baseline.start;if(context.baseline.end!==undefined)$('baseline-end').value=context.baseline.end;}
  if(context.grid_km!==undefined&&[2,5,10,20].includes(Number(context.grid_km)))$('grid').value=context.grid_km;
@@ -594,7 +638,7 @@ function getState(){
  const config=result?.config||formConfig(),geometry=config.circle?null:config.geometry||(config.preset==='sko'?(roiGeometry||settings?.region_geometry):roiGeometry),circle=config.circle||roiCircle;
  const matrix=matrixPanel.getState();
  const study=planner.getState();
- return {context:{roi:{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')},history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km,study},study,revisions:revisions.getState(),tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
+ return {context:{roi:territorySelected?{preset:config.preset,name:areaName(config),bbox:clone(config.bbox),...(geometry?{geometry:clone(geometry.type==='Feature'?geometry.geometry:geometry)}:{}),...(circle?{circle:clone(circle)}:{}),source:config.roi_source||roiSource||(config.preset==='sko'?'canonical-sko':'user')}:null,history:{start:config.start,end:config.end},baseline:{start:config.baseline_start,end:config.baseline_end},focus:focusState(),platform:source,quality:config.quality,daynight:config.daynight,grid_km:config.grid_km,study},study,revisions:revisions.getState(),tab:view,step,month,mapMode,mapYear,compareYearA,compareYearB,seriesMode:$('series-mode').value,analysisId:result?jobId:null,matrixId:matrix.result?matrix.id:null,matrixState:{platform:matrix.platform,mode:matrix.mode,pair:matrix.pair}};
 }
 async function activate(options={}){
  const current=++activation;active=true;
@@ -618,7 +662,7 @@ async function activate(options={}){
   if(options.tab||saved.tab)activateTab(options.tab||saved.tab);
   map.invalidateSize({pan:false});
   let residentReused=false;
-  if(!result&&residentResult&&(!saved.analysisId||saved.analysisId===residentId)&&sameScientificConfig(residentResult.config,formConfig())){
+  if(territorySelected&&!result&&residentResult&&(!saved.analysisId||saved.analysisId===residentId)&&sameScientificConfig(residentResult.config,formConfig())){
    result=residentResult;jobId=residentId;residentReused=true;
    pendingViewState={...residentView,...saved};
    if(incoming?.focus&&JSON.stringify(incoming.focus)!==JSON.stringify(residentView?.context?.focus)){delete pendingViewState.month;delete pendingViewState.mapYear;}
@@ -626,18 +670,19 @@ async function activate(options={}){
   }
   if(saved.analysisId&&!result){
    const restoringGeneration=generation;
-   const intended=clone(formConfig());
-   try{const job=await request(`/api/v1/analyses/${encodeURIComponent(saved.analysisId)}`);if(current!==activation||!active||restoringGeneration!==generation)return;if(job.status!=='done'||!job.result)throw new Error('Сохранённый расчёт ещё не готов.');if(!sameScientificConfig(job.result.config,intended)||!sameScientificConfig(formConfig(),intended)){rejectCachedResult('Сохранённый расчёт относится к другой территории или другим научным параметрам. Данные не показаны; выполните новый расчёт.');return getState();}jobId=saved.analysisId;acceptResult(job.result);await displayResult();if(!active||current!==activation||restoringGeneration!==generation)return getState();$('form-status').textContent='Восстановлен сохранённый расчёт; новый запрос не выполнялся.';}
+   const intended=territorySelected?clone(formConfig()):null;
+   try{const job=await request(`/api/v1/analyses/${encodeURIComponent(saved.analysisId)}`);if(current!==activation||!active||restoringGeneration!==generation)return;if(job.status!=='done'||!job.result)throw new Error('Сохранённый расчёт ещё не готов.');if(intended&&(!sameScientificConfig(job.result.config,intended)||!sameScientificConfig(formConfig(),intended))){rejectCachedResult('Сохранённый расчёт относится к другой территории или другим научным параметрам. Данные не показаны; выполните новый расчёт.');return getState();}jobId=saved.analysisId;acceptResult(job.result);await displayResult();if(!active||current!==activation||restoringGeneration!==generation)return getState();$('form-status').textContent='Восстановлен сохранённый расчёт; новый запрос не выполнялся.';}
    catch(error){if(current===activation){$('form-status').textContent='Сохранённый расчёт недоступен. Параметры восстановлены; нажмите «Построить анализ», чтобы рассчитать заново.';$('error-banner').hidden=false;$('error-banner').textContent=error.message;}}
   }
   else if(options.run===true&&!result){pendingAnalysis=startAnalysis();await pendingAnalysis;}
   else if(result&&!residentReused&&source!=='all'){showResultSurface(true);renderAll();planner.resultReady({id:jobId,platform:source,month});await updateMap();}
-  else if(!result&&source!=='all')$('form-status').textContent='Получите условия по архиву либо запустите расчёт с ручными настройками.';
+  else if(!result&&source!=='all')$('form-status').textContent=territorySelected?'Подберите условия по архиву либо запустите расчёт с ручными настройками.':'Найдите территорию или выделите область на карте.';
   if(current!==activation||!active)return;
   const matrixId=saved.matrixId||(residentReused?residentView?.matrixId:null),matrixState=saved.matrixState||(residentReused?residentView?.matrixState:null);
   if(matrixId&&result&&matrixId!==matrixPanel.getState().id)await matrixPanel.restore(matrixId,matrixState);
   await revisions.restore(saved.revisions||(residentReused?residentView?.revisions:null));
   matrixPanel.setVisible(view==='matrix');
+  syncTerritoryControls();
   return getState();
  }catch(error){if(current===activation&&active){if(!settings&&intended&&!contextApplied){applyContext(intended);planner.restore(intended.study||options.state?.study||planner.getState());}planner.resume();setBootstrapPending(false);$('error-banner').hidden=false;$('error-banner').textContent='Сервис анализа недоступен: '+error.message;$('study-config-retry').hidden=Boolean(settings);$('form-status').textContent='Территория и условия сохранены. Повторите подключение к архиву.';if(!settings)$('archive-info').textContent='Подключение к архиву недоступно';}return getState();}
 }
@@ -651,7 +696,7 @@ function restoreView(state){
  if(['raw','calibrated'].includes(state.seriesMode))$('series-mode').value=state.seriesMode;
 }
 function deactivate(){
- active=false;++activation;++generation;analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);planner.pause();revisions.pause();stopPlaying();++mapGeneration;drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';$('method-dialog').close();matrixPanel.pause();
+ active=false;++activation;++generation;cancelTerritorySearch();analysisAbort?.abort();analysisAbort=null;if(busy)setBusy(false);planner.pause();revisions.pause();stopPlaying();++mapGeneration;drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';$('method-dialog').close();matrixPanel.pause();
 }
 
 /* Lifecycle is owned by the application shell; importing this module is inert. */

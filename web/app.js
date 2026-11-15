@@ -177,7 +177,7 @@ function createMap(basemap, boundary, closePanel) {
   for (const offset of [-360, 0, 360]) {
     if (offset) makeRegion(offset);
     L.marker([center.lat, center.lng + offset], {
-      interactive: false, keyboard: false,
+      interactive: false, keyboard: false, pane: 'selected-region',
       icon: L.divIcon({ className: 'region-badge', html: 'СКО', iconSize: [32, 19], iconAnchor: [-7, 22] }),
     }).addTo(map);
   }
@@ -221,6 +221,7 @@ function createMap(basemap, boundary, closePanel) {
   });
   areaClip = createAreaLayerClip(map);
   const scopedLayers = (roi) => {
+    $('map').classList.toggle('show-sko-context', roi?.preset === 'sko');
     areaClip.select(roi);
     const scopeName = roi?.name || 'Весь мир';
     $('layer-scope').textContent = roi ? `Наложения внутри границы · ${scopeName}` : 'Слои на всей карте';
@@ -246,7 +247,7 @@ function createMap(basemap, boundary, closePanel) {
     },
   });
   $('world-view').addEventListener('click', () => {
-    if (areaAnalysis.getSelection()) areaAnalysis.clearSelection();
+    if (areaAnalysis.getSelection()?.preset === 'sko') areaAnalysis.clearSelection();
   });
   $('reset-map').addEventListener('click', () => {
     areaAnalysis.setSelection({ preset: 'sko', source: boundary.properties?.source || 'Граница СКО · geoBoundaries' });
@@ -289,9 +290,11 @@ function createMap(basemap, boundary, closePanel) {
   }
   L.control.scale({ metric: true, imperial: false, position: 'bottomleft', maxWidth: 88 }).addTo(map);
   const reset = () => {
+    $('map').classList.add('show-sko-context');
     map.fitBounds(regionalBounds, { padding: [30, Math.min(180, map.getSize().y * .23)], animate: false });
   };
   const showWorld = () => {
+    $('map').classList.remove('show-sko-context');
     map.setView([22, 0], map.getMinZoom(), { animate: false });
   };
   const fitViewport = () => {
@@ -401,6 +404,7 @@ function prepareDayWeather(day, previousDayAllowed) {
 }
 
 async function renderLayers(day = $('world-date').value) {
+  syncWeatherOff();
   const request = ++layerRequest;
   const date = typeof day === 'string' ? day : $('world-date').value;
   if (!date || !active) return;
@@ -775,6 +779,29 @@ function toggleWeatherPlayback() {
   }
 }
 
+function weatherLayerFields() {
+  return ['world-wind-flow', 'overlay-world-clouds', 'overlay-world-precip', 'overlay-world-temperature', 'overlay-world-wind'].map($).filter(Boolean);
+}
+
+function syncWeatherOff() {
+  const enabled = weatherLayerFields().some(field => field.checked) || Boolean($('weather-field').value);
+  $('weather-off').hidden = !enabled;
+  $('weather-off').disabled = !enabled;
+}
+
+function disableWeatherLayers() {
+  stopPlayback();
+  const changed = weatherLayerFields().filter(field => field.checked);
+  for (const field of changed) field.checked = false;
+  if ($('weather-field').value) {
+    $('weather-field').value = '';
+    changed.push($('weather-field'));
+  }
+  for (const field of changed) field.dispatchEvent(new Event('change', { bubbles: true }));
+  syncWeatherOff();
+  if (document.activeElement === $('weather-off')) $('play-weather').focus({ preventScroll: true });
+}
+
 function valueFor(row) {
   const platform = monthSource(row);
   return row.raw[platform] * calendar.factors[platform];
@@ -958,6 +985,7 @@ function setupPanels() {
   }
   function openAnalysis(hash) {
     currentPanel = hash;
+    if (['#season-calendar', '#correlations', '#kishkenekol-case'].includes(hash)) $('map')?.classList.add('show-sko-context');
     if (hash === '#selected-area' || hash === '#layers') {
       const isArea = hash === '#selected-area';
       area.hidden = !isArea;
@@ -1115,6 +1143,7 @@ async function start() {
       if (!worldArchive) return;
       stopPlayback();
       closePanel();
+      $('map').classList.add('show-sko-context');
       dailySatellite = String(worldArchive.platforms.indexOf('NOAA-20'));
       $('world-satellite').value = dailySatellite;
       $('fire-layer').checked = true;
@@ -1125,6 +1154,7 @@ async function start() {
     $('local-layers').addEventListener('change', renderLayers);
     $('world-wind-flow').addEventListener('change', renderLayers);
     $('play-weather').addEventListener('click', toggleWeatherPlayback);
+    $('weather-off').addEventListener('click', disableWeatherLayers);
     $('fire-layer').addEventListener('change', loadWorldFrame);
     $('fire-detail-retry').addEventListener('click', () => {
       if ($('fire-detail-retry').getAttribute('aria-disabled') !== 'true') fireViewport.retry();

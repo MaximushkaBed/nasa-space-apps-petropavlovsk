@@ -144,6 +144,22 @@ button:hover:not(:disabled) { background: var(--app-hover); }
 dialog::backdrop { background: #020918b8; }
 }
 
+/* Territory lookup uses the atlas boundary catalogue and the existing controls. */
+:where(.analysis-workbench) {
+  #preset[hidden] { display:none!important; }
+  .territory-search>label { display:block; font-size:10px; margin-bottom:7px; }
+  .territory-search-input { display:flex; align-items:stretch; gap:6px; }
+  .territory-search-input input { flex:1; min-width:0; margin-bottom:0; font-size:11px; }
+  .territory-search-input button { flex:0 0 auto; min-height:38px; padding:8px 10px; font-size:10px; }
+  .territory-search-results { display:grid; gap:4px; max-height:260px; overflow-y:auto; margin:8px 0; }
+  .territory-search-results[hidden] { display:none; }
+  .territory-search-results button { text-align:left; background:var(--app-control); border:1px solid var(--app-control-line); border-radius:4px; padding:9px 10px; color:var(--app-ink); font-size:11px; line-height:1.5; min-height:38px; overflow-wrap:anywhere; }
+  .territory-selected { color:var(--app-accent); font-size:11px; line-height:1.6; margin:10px 0; overflow-wrap:anywhere; }
+  &[data-territory-selected=false] .territory-selected { color:var(--app-muted); }
+  #analysis-territory-status:empty { display:none; }
+  #draw-area { width:100%; margin-top:3px; }
+}
+
 /* The study planner follows the existing atlas panels and control palette. */
 :where(.analysis-workbench) {
   .study-revisions { background:var(--app-surface); border:1px solid var(--line); border-radius:5px; padding:13px 16px; min-width:0; }
