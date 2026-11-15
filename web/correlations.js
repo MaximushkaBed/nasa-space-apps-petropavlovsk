@@ -1,10 +1,11 @@
+import { numberFormat } from './i18n.js';
 export async function mountCorrelations(root = document) {
 const byId = (id) => root.querySelector('#' + id);
 const sensor = byId('factor-sensor');
 const buttons = [...root.querySelectorAll('.factor-view button')];
 const table = byId('factor-matrix');
-const count = new Intl.NumberFormat('ru');
-const coefficient = new Intl.NumberFormat('ru', {
+const count = numberFormat();
+const coefficient = numberFormat({
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
   signDisplay: 'exceptZero',

@@ -1,4 +1,5 @@
-const number = new Intl.NumberFormat('ru', { maximumFractionDigits: 2 });
+import { numberFormat, registerBoundaryNames, uiLanguage } from './i18n.js';
+const number = numberFormat({ maximumFractionDigits: 2 });
 const normalize = (name) => name.toLocaleLowerCase().replace(/ё/g, 'е').normalize('NFD')
   .replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const earthRadius = 6371.0088;
@@ -319,6 +320,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
     try {
       boundaryIndex ??= getJSON('data/atlas-boundaries/index.json');
       const index = await boundaryIndex;
+      registerBoundaryNames(index);
       if (revision !== searchRevision) return;
       const countryEntry = countryQuery && index.find((entry) => !entry[5] && namesFor(entry).includes(countryQuery));
       const candidates = countryEntry ? index.filter((entry) => entry[3] === countryEntry[3] && entry[5] > 0) : index;
@@ -353,7 +355,7 @@ export function createAreaAnalysis(map, onActivate, getJSON, skoGeometry, { scop
       if (revision !== searchRevision) return;
       results.replaceChildren(...matches);
       if (!matches.length) {
-        const params = new URLSearchParams({ name: countryEntry ? text.split(',')[0].trim() : text, count: 6, language: 'ru' });
+        const params = new URLSearchParams({ name: countryEntry ? text.split(',')[0].trim() : text, count: 6, language: uiLanguage() });
         const places = await getJSON(`https://geocoding-api.open-meteo.com/v1/search?${params}`);
         if (revision !== searchRevision) return;
         results.replaceChildren(...(places.results ?? []).filter((place) => !countryEntry || namesFor(countryEntry).includes(normalize(place.country ?? ''))).map((place) => {

@@ -1,7 +1,8 @@
+import { numberFormat } from './i18n.js';
 export function mountBurnCase(root = document) {
 const byId = (id) => root.querySelector('#' + id);
 const base = 'data/cases/kishkenekol-2025-04-12/';
-const number = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
+const number = numberFormat({ maximumFractionDigits: 1 });
 
 async function json(file) {
   const response = await fetch(base + file);

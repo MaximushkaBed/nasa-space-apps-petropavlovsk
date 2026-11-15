@@ -1,3 +1,4 @@
+import { numberFormat, dateFormat } from './i18n.js';
 'use strict';
 
 import { createExtraLayers } from './map-layers.js?v=atlas-polish';
@@ -31,9 +32,9 @@ const mercatorLimit = 85.0511287798;
 const kishkenekolDay = '2025-04-12';
 const monthNames = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 const fullMonths = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
-const number = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
-const percent = new Intl.NumberFormat('ru', { style: 'percent', maximumFractionDigits: 0, signDisplay: 'exceptZero' });
-const unsignedPercent = new Intl.NumberFormat('ru', { style: 'percent', maximumFractionDigits: 0 });
+const number = numberFormat({ maximumFractionDigits: 1 });
+const percent = numberFormat({ style: 'percent', maximumFractionDigits: 0, signDisplay: 'exceptZero' });
+const unsignedPercent = numberFormat({ style: 'percent', maximumFractionDigits: 0 });
 const activityKey = [['activity-0', '0'], ['activity-1', 'до 10'], ['activity-2', '10–49'], ['activity-3', '50–149'], ['activity-4', '150–399'], ['activity-5', '400+']];
 const deviationKey = [['below-2', '−50% и ниже'], ['below-1', 'ниже нормы'], ['near-norm', 'в пределах ±10%'], ['above-1', 'выше нормы'], ['above-2', '+50% и выше']];
 
@@ -78,7 +79,7 @@ function periodLabel(key) {
   return `${fullMonths[Number(month) - 1]} ${year}`;
 }
 
-const dayFormatter = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const dayFormatter = dateFormat({ day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 function frameDate(month, day) {
   return `${month}-${String(day).padStart(2, '0')}`;
@@ -644,7 +645,7 @@ async function loadWorldFrame() {
   return request.promise;
 }
 
-const shortDate = new Intl.DateTimeFormat('ru', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
+const shortDate = dateFormat({ day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
 
 function firePeriodLabel({ start, end }) {
   const first = shortDate.format(new Date(start));

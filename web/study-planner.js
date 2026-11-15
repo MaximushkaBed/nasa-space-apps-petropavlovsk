@@ -47,7 +47,8 @@ export function mountStudyPlanner(root, {request,getInput,validate,applyOption,o
     if(running)$('study-plan-status').textContent='Расчёт запущен с выбранными условиями.';
     else if(state.stage==='result')$('study-plan-status').textContent='Условия использованы в расчёте. Пригодность сравнения показана рядом с результатом.';
     $('study-next-title').textContent=running?'Рассчитываем активность территории':applied?'Условия готовы к расчёту':plan?'Выберите условия расчёта':questions[state.question].title;
-    $('study-next-note').textContent=running?'Прогресс показан над картой. Расчёт использует выбранную границу, историю, сетку и фильтры.':applied?'Проверьте историю, базовые годы и спутник в выбранных условиях. Кнопка «Построить анализ» запустит расчёт.':plan?'Варианты показывают доступную историю, спутник и базу сравнения. Примените подходящие условия, затем запустите расчёт.':questions[state.question].note+' Подберите условия по доступному архиву, затем запустите расчёт.';
+    const nextNote=running?'Прогресс показан над картой. Расчёт использует выбранную границу, историю, сетку и фильтры.':applied?'Проверьте историю, базовые годы и спутник в выбранных условиях. Кнопка «Построить анализ» запустит расчёт.':plan?'Варианты показывают доступную историю, спутник и базу сравнения. Примените подходящие условия, затем запустите расчёт.':null;
+    $('study-next-note').replaceChildren(...(nextNote?[nextNote]:[questions[state.question].note,' ','Подберите условия по доступному архиву, затем запустите расчёт.']));
     $('study-next-action').textContent=running?'К прогрессу расчёта ↑':applied?'К запуску расчёта ↑':plan?'К вариантам условий ↑':'Подобрать условия ↑';
     $('study-next-action').hidden=Boolean(plan&&wideLayout.matches);
     $('study-existing-result').hidden=!resultRef||state.stage==='result'||running;

@@ -1,3 +1,4 @@
+import { numberFormat } from './i18n.js';
 const paletteHost = 'https://gibs.earthdata.nasa.gov/colormaps/v1.3/';
 const temperatureStops = [
   [-45, [93, 74, 170]], [-20, [66, 144, 221]], [0, [62, 191, 207]],
@@ -64,7 +65,7 @@ export function formatPixel(values, spec) {
   const [value] = values;
   if (spec.classes) return spec.classes[value] ?? 'Нет данных';
   const unit = spec.unit ? ` ${spec.unit}` : '';
-  const format = new Intl.NumberFormat('ru', { maximumFractionDigits: spec.decimals });
+  const format = numberFormat({ maximumFractionDigits: spec.decimals });
   const converted = n => format.format(Number(n) + (spec.offset ?? 0));
   const range = value.match(/^[[\(]([^,]+),([^\])]+)[\])]$/);
   if (!range) return Number.isFinite(Number(value)) ? `${converted(value)}${unit}` : 'Нет данных';

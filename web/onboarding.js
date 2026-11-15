@@ -1,3 +1,5 @@
+import { preserveLanguage } from './i18n.js';
+
 const seenKey = 'nasa-space-apps-onboarding-v1';
 const resumeKey = 'nasa-space-apps-tour-v1';
 const exampleId = '7ad1819ace34dfa2fd5a498a7eda3db7';
@@ -97,7 +99,7 @@ card.querySelector('#onboarding-next').addEventListener('click',()=>{if(current.
 welcome.querySelector('#onboarding-own').addEventListener('click',ownStudy);
 welcome.querySelector('#onboarding-skip').addEventListener('click',finish);
 document.querySelector('#app-tour-open').addEventListener('click',showWelcome);
-document.addEventListener('pointerdown',event=>{if(!welcome.hidden&&!welcome.contains(event.target)&&!event.target.closest('#app-tour-open'))finish();});
+document.addEventListener('pointerdown',event=>{if(!welcome.hidden&&!welcome.contains(event.target)&&!event.target.closest('#app-tour-open, #app-language'))finish();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&(!card.hidden||!welcome.hidden))finish();});
 document.addEventListener('click',event=>{if(current&&event.target.closest('#app-header a[data-app-view]'))finish();});
 addEventListener('resize',place);addEventListener('scroll',place,{capture:true,passive:true});
@@ -121,7 +123,7 @@ welcome.querySelector('#onboarding-demo').addEventListener('click', async event 
     const url = new URL(location.href); url.search = ''; url.hash = '';
     url.searchParams.set('view','analysis'); url.searchParams.set('analysis_id',exampleId); url.searchParams.set('state',JSON.stringify(state));
     write(localStorage, seenKey, true); write(sessionStorage, resumeKey, {flow:'demo',index:0,navigation:true});
-    location.assign(url);
+    location.assign(preserveLanguage(url));
   } catch (error) { if(error.name!=='AbortError'&&!welcome.hidden){status.className = 'onboarding-error'; status.textContent = error.message;} }
   finally { if(demoRequest===controller)demoRequest=null;button.disabled = false; }
 });

@@ -1,6 +1,10 @@
+import { numberFormat } from './i18n.js';
 import { createGibsDates } from './gibs-dates.js?v=world-layers';
 import { colorKey, floodClasses, formatPixel, loadPalette, paletteLayers, temperatureBin, temperatureColor } from './layer-values.js?v=atlas-polish';
 import { setLayerBusy } from './layer-status.js';
+
+const floodShare = numberFormat({ maximumFractionDigits: 2 });
+const floodCoverage = numberFormat({ maximumFractionDigits: 1 });
 
 function externalLink(url, label) {
   try {
@@ -373,7 +377,7 @@ export async function createExtraLayers(map, controls, getJSON, onChange) {
           return `${prefix} · за этот день нет покрытия.`;
         }
         const [value, coverage] = observations[date];
-        return `${prefix} · ${value.toLocaleString('ru', { maximumFractionDigits: 2 })}% обследованных ячеек с сигналом затопления, охват СКО ${coverage.toLocaleString('ru', { maximumFractionDigits: 1 })}%.`;
+        return `${prefix} · ${floodShare.format(value)}% обследованных ячеек с сигналом затопления, охват СКО ${floodCoverage.format(coverage)}%.`;
       }
       const records = new Set(active.map(({ properties }) => properties.id)).size;
       return `${prefix} · ${records ? `записей о событиях — ${records}` : 'в каталоге за период записей нет'}.`;

@@ -1,3 +1,4 @@
+import { numberFormat } from './i18n.js';
 const source = 'Mapzen Terrain Tiles';
 const sourceUrl = 'https://registry.opendata.aws/terrain-tiles/';
 const palette = [
@@ -8,7 +9,7 @@ const palette = [
   [2500, [239, 122, 78], '2 500 м'],
   [5000, [190, 44, 57], '5 000+ м'],
 ];
-const format = new Intl.NumberFormat('ru', { maximumFractionDigits: 0 });
+const format = numberFormat({ maximumFractionDigits: 0 });
 
 function elevation(r, g, b) {
   return r * 256 + g + b / 256 - 32768;

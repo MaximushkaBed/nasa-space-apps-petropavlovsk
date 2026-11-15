@@ -1,3 +1,4 @@
+import { dateFormat, localizeTree, numberFormat, setLocalizedInputValue, translate } from './i18n.js';
 import { mountMatrixPanel } from './matrix-panel.js?v=dark';
 import { sameScientificConfig, scientificSignature } from './scientific-context.js';
 import { mountStudyPlanner } from './study-planner.js';
@@ -13,7 +14,7 @@ const ns = 'http://www.w3.org/2000/svg';
 const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
 const longMonths = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 const labels = {'Aqua':'Aqua / MODIS','Terra':'Terra / MODIS','Suomi-NPP':'Suomi-NPP / VIIRS','NOAA-20':'NOAA-20 / VIIRS','NOAA-21':'NOAA-21 / VIIRS'};
-const num = new Intl.NumberFormat('ru', { maximumFractionDigits:1 });
+const num = numberFormat({ maximumFractionDigits:1 });
 let settings, result, jobId, source='NOAA-20', view='calendar', step='month', month, generation=0, mapGeneration=0;
 let drawStart=null, drawing=false, roiLayer, cellsLayer, frame=0, playing=false, busy=false;
 let mapMode='activity', mapYear=null, compareYearA=null, compareYearB=null;
@@ -22,7 +23,8 @@ let analysisAbort=null,pendingQuestionNavigation=false,bootstrapPending=true;
 let roiGeometry=null, roiCircle=null, roiName='', roiSource='', retainedFocus=null, rangeFocus=null;
 let territorySelected=false, territoryRevision=0, territoryTimer;
 const clone=value=>value==null?value:structuredClone(value);
-const formatMonth = (key) => `${longMonths[Number(key.slice(5))-1]} ${key.slice(0,4)}`;
+const monthFormat = dateFormat({ month: 'long', year: 'numeric', timeZone: 'UTC' });
+const formatMonth = (key) => monthFormat.format(new Date(`${key}-01`));
 const n = (value) => value===null || value===undefined ? '—' : num.format(value);
 const map = L.map($('analysis-map'), {preferCanvas:true, minZoom:1, maxZoom:17, worldCopyJump:false}).setView([18,0],1);
 map.attributionControl.setPrefix(false);
@@ -95,7 +97,7 @@ async function searchTerritory(){
      const roi=await match.load();if(revision!==territoryRevision||!active)return;
      territorySelected=true;clearShape();$('preset').value=roi.preset||'custom';roiGeometry=clone(roi.geometry)||null;roiCircle=clone(roi.circle)||null;roiName=roi.name;roiSource=roi.source;
      ['west','south','east','north'].forEach((key,i)=>$(key).value=roi.bbox[i]);
-     cancelTerritorySearch();$('analysis-territory-query').value=roi.name;$('analysis-territory-status').textContent=roi.source;
+     cancelTerritorySearch();setLocalizedInputValue($('analysis-territory-query'),roi.name);$('analysis-territory-status').textContent=roi.source;
      drawing=false;drawStart=null;$('draw-instruction').hidden=true;map.getContainer().style.cursor='';showBounds(false);if(roiGeometry)fitTerritory(map,roiGeometry);else showBounds();invalidate();publishContext();
     }catch(error){if(revision===territoryRevision)$('analysis-territory-status').textContent='Не удалось загрузить границу. Повторите поиск или выделите область на карте.';}
    });results.append(button);
@@ -210,7 +212,7 @@ async function displayResult({navigate=false}={}){
 function calibrated(){return $('series-mode').value==='calibrated';}
 function monthlyValue(row){return !row?null:calibrated()?(row.model_valid===true&&Number.isFinite(row.aqua_equivalent)?row.aqua_equivalent:null):row.cells;}
 function monthlyBaseline(row){return !row?null:calibrated()?(row.model_valid===true&&Number.isFinite(row.baseline_equivalent)?row.baseline_equivalent:null):row.baseline;}
-function coefficient(value){return Number.isFinite(value)?new Intl.NumberFormat('ru',{maximumSignificantDigits:4}).format(value):'—';}
+function coefficient(value){return Number.isFinite(value)?numberFormat({maximumSignificantDigits:4}).format(value):'—';}
 function comparisonAvailable(row){return row&&(!row.comparison_status||row.comparison_status==='ok');}
 function comparisonMessage(row){
  if(row?.comparison_status==='incomplete_utc_day'){
@@ -271,7 +273,8 @@ function renderInsights(){
  $('reference-disagreement').hidden=!disagrees;
  if(disagrees)$('reference-disagreement').textContent=`Спутники расходятся: Aqua ${aqua.anomaly_pct>0?'+':''}${n(aqua.anomaly_pct)}% к своей базе. Направление изменения не подтверждается обоими приборами.`;
  const high=result.profiles[source]?.high_activity_months||[];
- $('season-months').textContent=high.length?high.map(m=>longMonths[m-1]).join(', '):'Недостаточно базовых лет';
+ const peakMonths=high.flatMap((month,index)=>index?[', ',longMonths[month-1]]:[longMonths[month-1]]);
+ $('season-months').replaceChildren(...(peakMonths.length?peakMonths:['Недостаточно базовых лет']));
 }
 function chart(id, series, options={}){
  const host=$(id);host.replaceChildren();const width=Math.max(290,host.clientWidth),height=host.clientHeight||183,left=47,right=13,top=14,bottom=29;
@@ -338,7 +341,7 @@ function renderCalendar(){
     if(value===0)button.classList.add('zero-detections');
    }
    if(key===month)button.classList.add('focus');
-   button.disabled=!row;button.setAttribute('aria-label',`${formatMonth(key)}: ${button.title}`);
+   button.disabled=!row;button.setAttribute('aria-label',button.title||formatMonth(key));
    button.dataset.month=key;
    button.addEventListener('click',()=>{selectMonth(key);step='week';syncStepControls();activateTab('series');$('tab-series').focus({preventScroll:true});});
    host.append(button);
@@ -531,11 +534,12 @@ function exportImage(){
  }
  const height=headerHeight+contentHeight+footerHeight;root.setAttribute('height',height);root.setAttribute('viewBox',`0 0 ${width} ${height}`);
  wrapSvgText(root,'Локальная облачность и пригодность пролётов неизвестны. Детекции и ячейко-дни не равны числу пожаров или выгоревшей площади. Недельные сравнения и карты остаются в исходной шкале. NASA FIRMS / ESDIS через Portolan / Source Cooperative.',30,height-44,width-60,11);
+ localizeTree(root);
  const blob=new Blob([new XMLSerializer().serializeToString(root)],{type:'image/svg+xml;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
  link.href=url;link.download=`nasa-space-apps-${view}-${source.replace(/[^a-z0-9-]/gi,'-')}-${month||'history'}.svg`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function wrapSvgText(svg,text,x,y,width,fontSize){
- const max=Math.max(20,Math.floor(width/(fontSize*.55))),words=text.split(/\s+/);let line='',row=0;
+ const max=Math.max(20,Math.floor(width/(fontSize*.55))),words=translate(text).split(/\s+/);let line='',row=0;
  for(const word of words){if((line+' '+word).length>max&&line){svg.append(svgElement('text',{x,y:y+row*17,'font-size':fontSize},line));row++;line=word;}else line+=(line?' ':'')+word;}
  if(line)svg.append(svgElement('text',{x,y:y+row*17,'font-size':fontSize},line));
 }

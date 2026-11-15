@@ -1,3 +1,4 @@
+import { numberFormat } from './i18n.js';
 import { loadGfsWind, sampleWind, windArchiveStart } from './gfs-wind.js?v=weather-motion';
 
 const dayBefore = (day) => new Date(Date.parse(day) - 86400000).toISOString().slice(0, 10);
@@ -119,7 +120,7 @@ export function createWorldWind(map, status) {
       const [east, north] = sampleWind(wind, lat, lng);
       const speed = Math.hypot(east, north);
       const direction = ((Math.atan2(-east, -north) * 180 / Math.PI) + 360) % 360;
-      const format = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
+      const format = numberFormat({ maximumFractionDigits: 1 });
       return { label: 'Ветер на высоте 10 м', value: `${format.format(speed)} м/с${speed >= .5 ? ` · от ${Math.round(direction) % 360}°` : ''}`,
         source: 'NOAA GFS · 1°', date: `${wind.day} 00:00 UTC` };
     },

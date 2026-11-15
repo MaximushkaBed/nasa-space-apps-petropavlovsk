@@ -1,6 +1,7 @@
+import { numberFormat } from './i18n.js';
 import { loadGfsSurfaceTemp, sampleGrid, windArchiveStart } from './gfs-wind.js?v=surface-temperature';
 import { temperatureColor } from './layer-values.js?v=atlas-polish';
-const format = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
+const format = numberFormat({ maximumFractionDigits: 1 });
 
 export function createTemperatureBackground(map, caption, setBusy) {
   const pane = map.createPane('temperature-background');

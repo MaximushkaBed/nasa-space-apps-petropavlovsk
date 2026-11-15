@@ -54,6 +54,12 @@ button, a, select, input { font: inherit; }
 .app-header .app-nav a[aria-current=page] { color: var(--app-accent); border-color: currentColor; }
 .app-context { margin-left: auto; max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--app-muted); font-size: 10px; }
 .app-header .app-utility { padding: 7px 9px; font-size: 10px; white-space: nowrap; }
+.app-actions { margin-inline-start: auto; display: flex; align-items: center; gap: 7px; }
+.app-context + .app-actions { margin-inline-start: 0; }
+.app-language { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--app-control-line); border-radius: 5px; background: var(--app-control); }
+.app-language button { min-width: 29px; min-height: 24px; padding: 2px 4px; border: 0; border-radius: 3px; background: transparent; color: var(--app-muted); font-size: 10px; font-weight: 650; line-height: 1.2; cursor: pointer; }
+.app-language button[aria-pressed="true"] { color: var(--app-bg); background: var(--app-primary); }
+.app-utility-icon { display: none; }
 
 .app-outlet { position: relative; margin-top: var(--app-header-height); min-height: calc(100dvh - var(--app-header-height)); outline: none; }
 .app-view { position: relative; min-height: calc(100dvh - var(--app-header-height)); }
@@ -134,8 +140,14 @@ button, a, select, input { font: inherit; }
   .app-header .app-nav a { font-size: 11px; padding: 8px 0 9px; }
   .app-context { display: none; }
   .app-header .app-utility { margin-left: auto; font-size: 9px; }
+  .app-context + .app-actions { margin-inline-start: auto; }
   .atlas-view .topbar { top: 7px; }
   .atlas-view .tool-nav .quiet-button { font-size: 10px; }
+}
+@media (max-width: 540px) {
+  .app-utility-icon { display: inline; font-size: 15px; line-height: 1; }
+  .app-utility-label { display: none; }
+  .app-header .app-utility { width: 29px; height: 29px; padding: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .app-outlet * { scroll-behavior: auto !important; }

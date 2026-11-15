@@ -1,3 +1,4 @@
+import { dateFormat } from './i18n.js';
 const dayMs = 86400000;
 const iso = (date) => date.toISOString().slice(0, 10);
 export const addDays = (day, amount) => iso(new Date(Date.parse(day) + amount * dayMs));
@@ -12,7 +13,7 @@ export function createPeriodPicker(archive, active, onSelect, scope = document) 
   const yearInput = $('period-year');
   const from = $('period-start');
   const to = $('period-end');
-  const shortDate = new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeZone: 'UTC' });
+  const shortDate = dateFormat({ dateStyle: 'medium', timeZone: 'UTC' });
   const detailedDays = archive.periodDetailDays ?? 31;
   let mode;
 

@@ -1,3 +1,4 @@
+import { numberFormat } from './i18n.js';
 const fields = {
   temperature: { title: 'Макс. температура', unit: '°C', ticks: [-10, 0, 10, 20, 30, 40],
     colors: ['#5657c5', '#278bf1', '#22d2e2', '#6ce2a2', '#ffd16b', '#f47465'], index: 0 },
@@ -9,7 +10,7 @@ const fields = {
 const palettes = Object.fromEntries(Object.entries(fields).map(([key, field]) => [
   key, field.colors.map((hex) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16))),
 ]));
-const measure = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
+const measure = numberFormat({ maximumFractionDigits: 1 });
 const radians = Math.PI / 180;
 const radiusKm = 160;
 const step = 6;

@@ -1,4 +1,7 @@
+import { initializeLocalization, preserveLanguage } from './i18n.js';
+
 const $ = id => document.getElementById(id);
+await initializeLocalization();
 const views = new Map();
 const controllers = new Map();
 const loading = new Map();
@@ -95,7 +98,7 @@ function visibility() {
   renderHeaderContext();
   $('shell-loading').hidden=views.has(atlas?'atlas':'analysis');
 }
-function urlFor(view) {const url=new URL(location.href);url.search='';url.searchParams.set('view',view);url.hash=view==='cases'?'kishkenekol-case':'';return url;}
+function urlFor(view) {const url=new URL(location.href);url.search='';url.searchParams.set('view',view);url.hash=view==='cases'?'kishkenekol-case':'';return preserveLanguage(url);}
 async function navigate(view,payload={}) {
   if(!viewNames.has(view))return;
   if(payload.share)return share(view,payload.state);

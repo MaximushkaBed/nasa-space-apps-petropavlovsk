@@ -1,3 +1,5 @@
+import { registerBoundaryNames } from './i18n.js';
+
 // The atlas boundary catalogue, ranking and boundary sources are shared with
 // area-analysis.js. Loading a result never simplifies or rewrites its geometry.
 const normalize = name => String(name || '').toLocaleLowerCase().replace(/ё/g, 'е').normalize('NFD')
@@ -48,6 +50,7 @@ export function createTerritorySearch(getJSON, getSkoGeometry) {
       if (!query) return [];
       indexPromise ??= getJSON('data/atlas-boundaries/index.json').catch(error => {indexPromise = null;throw error;});
       const index = await indexPromise;
+      registerBoundaryNames(index);
       const countryEntry = countryQuery && index.find(entry => !entry[5] && namesFor(entry).includes(countryQuery));
       const candidates = countryEntry ? index.filter(entry => entry[3] === countryEntry[3] && entry[5] > 0) : index;
       const words = query.split(' ');

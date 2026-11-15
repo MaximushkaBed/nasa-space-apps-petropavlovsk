@@ -1,3 +1,4 @@
+import { numberFormat, dateFormat } from './i18n.js';
 import { mountMatrixPanel } from './matrix-panel.js?v=file-matrix';
 import { mountFileMatrix } from './matrix-file-panel.js?v=file-matrix';
 import { sameScientificConfig } from './scientific-context.js';
@@ -5,9 +6,9 @@ import { sameScientificConfig } from './scientific-context.js';
 const sources = ['Aqua', 'Terra', 'Suomi-NPP', 'NOAA-20', 'NOAA-21'];
 const preferred = ['NOAA-20', 'NOAA-21', 'Suomi-NPP', 'Aqua', 'Terra'];
 const defaultStudyDates = { start: '2022-01-01', end: '2025-12-31', baseline_start: 2022, baseline_end: 2024 };
-const number = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
-const compactCount = new Intl.NumberFormat('ru', { notation: 'compact', maximumSignificantDigits: 3 });
-const monthName = new Intl.DateTimeFormat('ru', { month: 'short', timeZone: 'UTC' });
+const number = numberFormat({ maximumFractionDigits: 1 });
+const compactCount = numberFormat({ notation: 'compact', maximumSignificantDigits: 3 });
+const monthName = dateFormat({ month: 'short', timeZone: 'UTC' });
 
 async function request(path, options) {
   const response = await fetch(path, options);

@@ -1,9 +1,10 @@
+import { numberFormat } from './i18n.js';
 import { dateKey, fileMatrix, numericValue } from './matrix-file-data.js';
 import { mountMatrixPanel } from './matrix-panel.js?v=file-matrix';
 
 const maxFileBytes = 10 * 1024 * 1024;
 const maxFactors = 12;
-const number = new Intl.NumberFormat('ru');
+const number = numberFormat();
 
 export function mountFileMatrix(root) {
   root.className = 'matrix-import';
@@ -12,7 +13,11 @@ export function mountFileMatrix(root) {
     <p>В первой строке укажите названия столбцов. Файл читается на устройстве.</p>
     <form class="matrix-import-form">
       <div class="matrix-import-fields">
-        <label>Файл<input type="file" class="matrix-file" accept=".csv,.xlsx,.xls"></label>
+        <label class="matrix-file-picker">
+          <span class="matrix-file-button">Выбрать файл</span>
+          <input type="file" class="matrix-file" accept=".csv,.xlsx,.xls" aria-label="Выбрать файл">
+          <span class="matrix-file-name">Файл не выбран</span>
+        </label>
         <label class="matrix-sheet-field" hidden>Лист Excel<select class="matrix-sheet"></select></label>
       </div>
       <div class="matrix-import-settings" hidden>
@@ -103,12 +108,20 @@ export function mountFileMatrix(root) {
     columns.replaceChildren(...fields.map(({ name, index, example }) => {
       const label = document.createElement('label');
       const input = Object.assign(document.createElement('input'), { type: 'checkbox', value: String(index) });
-      label.append(input, document.createTextNode(name));
-      label.title = `${name} · пример ${number.format(example)}`;
+      const heading = document.createElement('span');
+      heading.translate = false;
+      heading.textContent = name;
+      label.append(input, heading);
+      heading.title = `${name} · ${number.format(example)}`;
       return label;
     }));
     columns.closest('fieldset').hidden = fields.length === 0;
-    date.replaceChildren(new Option('Выберите столбец', ''), ...names.map((name, index) => new Option(name, index)));
+    const options = names.map((name, index) => {
+      const option = new Option(name, index);
+      option.translate = false;
+      return option;
+    });
+    date.replaceChildren(new Option('Выберите столбец', ''), ...options);
     const suggested = names.findIndex((_, i) => rows.slice(0, 30).some(row => dateKey(row[i])));
     date.value = suggested < 0 ? '' : String(suggested);
     guessGrain();
@@ -135,6 +148,9 @@ export function mountFileMatrix(root) {
     worker = undefined;
     revision++;
     file = fileInput.files[0];
+    const fileName = $('.matrix-file-name');
+    fileName.translate = !file;
+    fileName.textContent = file?.name || 'Файл не выбран';
     sheet.closest('label').hidden = true;
     clearResult();
     settings.hidden = true;
@@ -148,7 +164,11 @@ export function mountFileMatrix(root) {
       if (data.request !== revision) return;
       activeSheet = data.name;
       if (data.sheets?.length > 1) {
-        sheet.replaceChildren(...data.sheets.map(name => new Option(name, name)));
+        sheet.replaceChildren(...data.sheets.map(name => {
+          const option = new Option(name, name);
+          option.translate = false;
+          return option;
+        }));
         sheet.value = activeSheet;
         sheet.closest('label').hidden = false;
       }
