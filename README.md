@@ -8,22 +8,39 @@ Local challenge label supplied by the team: `15 - Harmonization of MODIS and VII
 
 The repository includes a NASA FIRMS downloader, a global historical archive, and an interactive temporal-analysis web application.
 
-The project scope is **global**. North Kazakhstan Region (Северо-Казахстанская область, СКО) is the existing validation case; the USA, Brazil and Canada are planned independent research/validation regions. Large datasets will live on the shared `unik` server.
+The project scope is **global**. North Kazakhstan Region (Северо-Казахстанская область, СКО) is the prepared demonstration and validation case. California and Mato Grosso also have regional implementation and holdout checks; validation against independent national fire registries remains unfinished. Large datasets live on the shared `unik` server, outside Git.
 
-## Web MVP
+## Application
 
-The [development goal](docs/development-goal.md) defines the ordered worldwide
-study journey. The [study planner](docs/study-planner.md) proposes comparison
-conditions before computation and assesses their suitability against the completed
-regional result; the existing atlas, calendar, maps and exports remain its tools.
+[Open the application](https://nasa.aican.cloud/) · [Prepared SKO example](https://nasa.aican.cloud/?view=atlas&demo=sko)
 
-Shared-server deployment, global dataset paths and Komodo autodeploy are documented in [deploy/README.md](deploy/README.md). Large world archives are downloaded on `unik`, not on the laptop.
+The persistent header connects **Atlas**, **Area Analysis** and **Cases**. The interface supports Russian, English and Kazakh, detects the initial language from the browser and allows switching without reloading. Phone and tablet layouts support touch selection, drawing, scrolling calendars and matrices, and portrait/landscape use. A first-use tour introduces the tools.
 
-The application shares a persistent header and study context across Atlas, Area Analysis and Cases. It selects an exact area and dates, builds a years-by-month calendar and weekly seasonal profile, compares years, maps monthly deviations, and exports CSV, JSON and SVG. A bounded asynchronous API queries real archive files on the shared server. See [workbench/API documentation](docs/workbench.md) for setup, units, validation and current scientific limits.
+The main workflow is:
 
-[Global factor matrices](docs/global-matrix.md) calculate numerical weather and landscape relationships for the selected territory using ERA5, WorldCover, GLO-90 and GeoNames. They preserve missing values, pair counts and source provenance; the separate fixed SKO study is retained.
+1. **Choose an area.** Search for a country, region or city, select nested boundaries, or draw a rectangle, polygon or point/radius area. City search resolves an available municipal boundary before offering a radius fallback. The selected geometry is carried into the analysis.
+2. **Choose the question and period.** Investigate a seasonal anomaly, compare activity across years, or examine sensor comparability.
+3. **Check available data and explicitly select conditions.** The [study planner](docs/study-planner.md) proposes satellites, historical periods and reference years from archive metadata. This preflight does not scan the spatial archive or establish local observation coverage. Manual settings remain available.
+4. **Run and inspect the result.** Read the years-by-month calendar, weekly seasonal profile, monthly anomaly map, year comparison and held-out calibration checks. The result assessment explains which comparisons are supported. Export numerical results as CSV/JSON and visualizations as SVG.
 
-Oksana's full-screen atlas and case studies are integrated into the shared application. Existing `/atlas.html` links redirect to the corresponding view and preserve case anchors. A static local server can preview the interface; live analysis requires the API. See the [atlas documentation](web/README.md).
+Selecting an area alone does not launch a hidden regional calculation. Atlas calendars and factor matrices calculate when their panels are opened. Identical scientific inputs reuse an existing running or completed analysis/matrix job; source versions and filters participate in the cache identity. See the [workbench and API](docs/workbench.md) and the [development goal](docs/development-goal.md).
+
+Additional tools:
+
+- **Factor matrices:** numerical weather and landscape relationships for the selected area using ERA5, WorldCover, GLO-90 and GeoNames, with missing values, pair counts and provenance preserved. [Method and sources](docs/global-matrix.md).
+- **Your own factors:** import CSV, XLSX or XLS in the atlas matrix panel, select numeric columns and an optional date column, and compare file-only factors or align them with atlas periods. Files are processed on the device. Limits are 10 MiB, 10,000 data rows, 120 columns and 12 selected factors.
+- **Saved research versions:** explicitly pin completed results and compare what changed in conditions, observations, reference periods or methods. Saved numerical snapshots are separate from the disposable computation cache; old map files may still expire. [Retention, comparison and API](docs/revisions.md).
+- **Prepared examples:** a world calendar over the available archive, a separate world factor snapshot for 2022–2025, an SKO calendar/matrix for 2022–2025, and the Kishkenekol before/after imagery case. Their dates, grids and provenance are displayed; they are not interchangeable datasets.
+
+Oksana's atlas, layers and case studies are integrated into the application. Existing `/atlas.html` links redirect to the corresponding view and preserve case anchors. Overview markers may combine detections; detailed views request original positions. The number of visible markers is not the number of fires. See the [atlas guide](web/README.md).
+
+Shared-server data paths and the existing Komodo push-to-`main` deployment are documented in [deploy/README.md](deploy/README.md). World archives are downloaded and processed on `unik`, not on the laptop.
+
+## Scientific scope
+
+A hot-spot detection is not an individual fire, and a detection pixel is not burned area. The harmonized indicator is an experimental estimate on the Aqua MODIS scale, available only when the regional held-out checks and the selected period pass the implementation's eligibility rules.
+
+Local overpass/cloud masks are not yet ingested: product availability does not prove a clear-sky observation of the selected area. Independent US/Canada fire-registry validation, full uncertainty estimates and global transfer accuracy remain open. ERA5 cloud cover is contextual data, not a satellite visibility mask; factor correlations are descriptive, not causal explanations or fire forecasts. See the [scientific limits](docs/workbench.md#открытые-научные-ограничения).
 
 ## Research
 
@@ -37,10 +54,10 @@ Oksana's full-screen atlas and case studies are integrated into the shared appli
 
 ## Next steps
 
-1. Register each participant on the official Space Apps website and select the local event.
-2. Register the team with the selected challenge.
-3. Define a focused prototype for harmonizing MODIS and VIIRS hotspot observations.
-4. Build the prototype, document data sources and any AI tools used, and prepare the submission.
+1. Ingest local observation and cloud masks to distinguish missing observations from observed periods without detections.
+2. Validate against independent registered-fire datasets and test transfer to additional regions.
+3. Extend uncertainty assessment beyond variation in the calibration coefficient.
+4. Prepare a reproducible demonstration, explain the validation limits, and maintain source attribution and the [generative AI disclosure](DATA_USAGE.md).
 
 ## Official resources
 
@@ -53,7 +70,29 @@ Oksana's full-screen atlas and case studies are integrated into the shared appli
 
 ## Development
 
-The downloader requires Python 3.10 or newer and no external packages.
+### Application and API
+
+CI uses Python 3.13. For the full analysis dependencies and spatial tests:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-analysis.txt
+python -c "import duckdb; c=duckdb.connect(); c.execute('INSTALL spatial'); c.execute('LOAD spatial')"
+python -m unittest discover -s tests -v
+```
+
+`requirements-global.txt` contains the core DuckDB dependency; `requirements-analysis.txt` also installs NumPy and Rasterio for the analysis service. For a static interface preview:
+
+```bash
+python -m http.server 8000 --bind 127.0.0.1 --directory web
+```
+
+Open <http://127.0.0.1:8000/>. This previews the interface and bundled examples; live maps, archive checks, new regional analyses and saved versions need the backend on the same origin. See the [local API instructions](docs/workbench.md#запуск-и-данные) and [server deployment](deploy/README.md). Existing shared-server data does not require each teammate to download the archive or provide a FIRMS key to the browser.
+
+### FIRMS downloader
+
+The standalone downloader requires Python 3.10 or newer and no external packages.
 
 1. Obtain a free [FIRMS MAP_KEY](https://firms.modaps.eosdis.nasa.gov/api/map_key/).
 2. Copy `.env.example` to `.env` and fill in `FIRMS_MAP_KEY`. An environment variable with the same name takes precedence.
@@ -75,11 +114,22 @@ For another rectangle, use `--bbox west,south,east,north` instead of `--region s
 
 For recent observations, select sources such as `MODIS_NRT VIIRS_NOAA20_NRT` and use dates covered by those feeds. Check [current product availability](https://firms.modaps.eosdis.nasa.gov/api/data_availability/) before choosing dates. For large historical exports, use the FIRMS archive download service.
 
+### Verification
+
+Unit and integration tests cover downloads, geometry, temporal comparisons, study planning, saved revisions, and analysis/matrix cache reuse. DuckDB's `spatial` extension is required for the spatial checks; live FIRMS downloads require a valid MAP_KEY.
+
+Optional browser checks require Playwright and Chromium. The study-planner and cache-reuse harnesses use local synthetic API fixtures; they test behavior rather than scientific accuracy:
+
 ```bash
-python3 -m unittest discover -s tests -v
+python -m pip install playwright
+python -m playwright install chromium
+python tests/e2e_study_planner.py
+python tests/e2e_result_reuse.py
+python tests/e2e_language.py --local-web
+python tests/e2e_matrix_file.py --local-web
 ```
 
-Tests cover download contracts, temporal regressions, and real DuckDB spatial queries. Install `requirements-global.txt` and DuckDB's `spatial` extension before running the integration tests. Live FIRMS downloads require a valid MAP_KEY. The optional real-browser check is `python3 tests/e2e_workbench.py --base-url https://nasa.aican.cloud` (Playwright + Chromium).
+The separate live workbench check is `python tests/e2e_workbench.py --base-url URL`; it uses the supplied analysis service. CI runs the Python suite, checks Compose configurations, and builds/scans the application images.
 
 [Agent workflow](docs/agent-workflow.md) records the coordinator → UI worker hierarchy and independent review gates; [feature acceptance](docs/workbench-features.json) records verified capabilities and unfinished data integrations.
 
@@ -96,6 +146,14 @@ systemctl --user stop nasa-space-apps-github-monitor.timer
 The user systemd timer in `ops/` checks every **20 seconds** and starts again at login when enabled. With `--sync`, it fetches origin, records changed file paths, saves documentation/research diffs in `data/monitor/github/latest-research.md`, and fast-forwards the current branch when Git can preserve local edits. Conflicting local edits or diverged branches are reported for manual integration; it never resets, discards edits, or pushes. The installed service sends **no desktop notifications**. During active development, the agent reads these local updates to incorporate teammates' research; the service itself does not run an AI agent or update conversation context. This polling monitor is not a complete GitHub audit log: activity created and removed between polls may be missed, and GitHub's recent-event feed has retention limits.
 
 ## Complete historical database
+
+### Global archive
+
+The shared archive contains Terra/Aqua MODIS and Suomi-NPP, NOAA-20 and NOAA-21 VIIRS over their available dates, beginning in 2000. Annual observations are combined with a deduplicated live tail; availability differs by platform. The [live catalog](https://nasa.aican.cloud/datasets/catalog.json) and [manifest](https://nasa.aican.cloud/datasets/manifest.json) describe actual coverage, checksums and freshness.
+
+For a fixed downloadable snapshot, use the [global data release](https://github.com/MaximushkaBed/nasa-space-apps-petropavlovsk/releases/tag/data-global-2026-11-14). Individual assets can be downloaded by year; `release-manifest.json` and `SHA256SUMS` describe their paths and checksums. This fixed release and the continuously updated server archive have separate lifecycles. [Archive guide](data/global/README.md).
+
+### Reproduce the SKO history
 
 ```bash
 python3 -u -m scripts.build_history --region sko --start 2000-11-01
