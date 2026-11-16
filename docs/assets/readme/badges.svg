@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="46" viewBox="0 0 1040 46" role="img" aria-labelledby="title">
+  <title id="title">Global coverage · MODIS and VIIRS · Russian, English, Kazakh · Python and DuckDB · Leaflet</title>
+  <g font-family="Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle">
+    <rect x="1" y="3" width="194" height="38" rx="6" fill="#11263f" stroke="#2b4a69"/><text x="98" y="27" fill="#b7d8fa">GLOBAL COVERAGE</text>
+    <rect x="207" y="3" width="210" height="38" rx="6" fill="#11263f" stroke="#2b4a69"/><text x="312" y="27" fill="#f5ba98">MODIS + VIIRS</text>
+    <rect x="429" y="3" width="164" height="38" rx="6" fill="#11263f" stroke="#2b4a69"/><text x="511" y="27" fill="#d9e87e">RU / EN / KK</text>
+    <rect x="605" y="3" width="240" height="38" rx="6" fill="#11263f" stroke="#2b4a69"/><text x="725" y="27" fill="#b7d8fa">PYTHON + DUCKDB</text>
+    <rect x="857" y="3" width="182" height="38" rx="6" fill="#11263f" stroke="#2b4a69"/><text x="948" y="27" fill="#b7d8fa">LEAFLET / JS</text>
+  </g>
+</svg>
